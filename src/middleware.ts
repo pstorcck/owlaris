@@ -10,11 +10,11 @@ export async function middleware(request: NextRequest) {
     {
       cookies: {
         getAll() { return request.cookies.getAll() },
-        setAll(cookiesToSet) {
+        setAll(cookiesToSet: { name: string; value: string; options?: Record<string, unknown> }[]) {
           cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value))
           supabaseResponse = NextResponse.next({ request })
           cookiesToSet.forEach(({ name, value, options }) =>
-            supabaseResponse.cookies.set(name, value, options)
+            supabaseResponse.cookies.set(name, value, options as Parameters<typeof supabaseResponse.cookies.set>[2])
           )
         },
       },
@@ -24,10 +24,8 @@ export async function middleware(request: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser()
   const { pathname } = request.nextUrl
 
-  // Rutas públicas — no requieren login
   const publicRoutes = ['/login', '/']
   if (publicRoutes.includes(pathname)) {
-    // Si ya está logueado, redirigir según rol
     if (user) {
       const { data: perfil } = await supabase
         .from('usuarios')
@@ -44,7 +42,6 @@ export async function middleware(request: NextRequest) {
     return supabaseResponse
   }
 
-  // Rutas protegidas — requieren login
   if (!user) {
     return NextResponse.redirect(new URL('/login', request.url))
   }
@@ -56,7 +53,7 @@ function getRutaPorRol(rol: string): string {
   switch (rol) {
     case 'alumno':     return '/chat'
     case 'maestro':    return '/teacher'
-    case 'admin':      return '/admin'
+    case 'admin':
     case 'superadmin': return '/admin'
     default:           return '/login'
   }
