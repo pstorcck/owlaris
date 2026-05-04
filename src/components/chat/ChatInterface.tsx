@@ -10,32 +10,60 @@ interface Props {
   materias: Materia[]
 }
 
+const GRADOS_GUATEMALA = [
+  'Preparatoria',
+  'Parvulos',
+  'Primero Primaria',
+  'Segundo Primaria',
+  'Tercero Primaria',
+  'Cuarto Primaria',
+  'Quinto Primaria',
+  'Sexto Primaria',
+  'Primero Basico',
+  'Segundo Basico',
+  'Tercero Basico',
+  'Cuarto Bachillerato',
+  'Quinto Bachillerato',
+]
+
 export default function ChatInterface({ usuario, materias }: Props) {
-  const [mensajes, setMensajes]         = useState<MensajeChat[]>([])
-  const [pregunta, setPregunta]         = useState('')
-  const [materiaId, setMateriaId]       = useState(materias[0]?.id || '')
-  const [cargando, setCargando]         = useState(false)
-  const [error, setError]               = useState('')
+  const [mensajes, setMensajes]       = useState<MensajeChat[]>([])
+  const [pregunta, setPregunta]       = useState('')
+  const [materiaId, setMateriaId]     = useState(materias[0]?.id || '')
+  const [grado, setGrado]             = useState(usuario.grado || 'Primero Basico')
+  const [cargando, setCargando]       = useState(false)
+  const [guardandoGrado, setGuardandoGrado] = useState(false)
+  const [error, setError]             = useState('')
+  const [menuAbierto, setMenuAbierto] = useState(false)
   const finalRef  = useRef<HTMLDivElement>(null)
   const router    = useRouter()
   const supabase  = createClient()
 
-  // Scroll automático al último mensaje
   useEffect(() => {
     finalRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [mensajes])
 
-  // Mensaje de bienvenida al cargar
   useEffect(() => {
     const nombre = usuario.nombre_completo.split(' ')[0]
     const materiaNombre = materias.find(m => m.id === materiaId)?.nombre || 'tu materia'
     setMensajes([{
       id: 'bienvenida',
       rol: 'asistente',
-      contenido: `¡Hola, ${nombre}! 👋 Soy Owlaris, tu tutor académico.\n\nEstoy aquí para ayudarte a **entender**, no solo a darte respuestas. Cuando tienes una duda, aprenderás mucho más si trabajamos juntos en encontrar la solución.\n\n¿Sobre qué tema de **${materiaNombre}** tienes dudas hoy?`,
+      contenido: `¡Hola, ${nombre}! 👋 Soy Owlaris, tu tutor académico.\n\nEstoy aquí para ayudarte a **entender**, no solo a darte respuestas.\n\n¿Sobre qué tema de **${materiaNombre}** tienes dudas hoy?`,
       timestamp: new Date(),
     }])
   }, [materiaId])
+
+  async function cambiarGrado(nuevoGrado: string) {
+    setGrado(nuevoGrado)
+    setGuardandoGrado(true)
+    await supabase
+      .from('usuarios')
+      .update({ grado: nuevoGrado })
+      .eq('id', usuario.id)
+    setGuardandoGrado(false)
+    setMenuAbierto(false)
+  }
 
   async function enviarPregunta(e: React.FormEvent) {
     e.preventDefault()
@@ -45,7 +73,6 @@ export default function ChatInterface({ usuario, materias }: Props) {
     setPregunta('')
     setError('')
 
-    // Agregar mensaje del usuario inmediatamente
     const msgUsuario: MensajeChat = {
       id: Date.now().toString(),
       rol: 'usuario',
@@ -62,6 +89,7 @@ export default function ChatInterface({ usuario, materias }: Props) {
         body: JSON.stringify({
           pregunta: textoPregunta,
           materia_id: materiaId,
+          grado_override: grado,
           historial: mensajes.slice(-6).map(m => ({
             rol: m.rol,
             contenido: m.contenido,
@@ -70,7 +98,6 @@ export default function ChatInterface({ usuario, materias }: Props) {
       })
 
       if (!res.ok) throw new Error('Error al consultar al tutor')
-
       const data = await res.json()
 
       const msgAsistente: MensajeChat = {
@@ -93,49 +120,91 @@ export default function ChatInterface({ usuario, materias }: Props) {
   async function cerrarSesion() {
     await supabase.auth.signOut()
     router.push('/login')
+    router.refresh()
   }
 
   const materiaNombre = materias.find(m => m.id === materiaId)?.nombre
 
   return (
     <div className="min-h-screen bg-owlaris-light flex flex-col">
+
       {/* Header */}
-      <header className="bg-owlaris-dark text-white px-4 py-3 flex items-center justify-between shadow-lg">
-        <div className="flex items-center gap-3">
-          <span className="text-2xl">🦉</span>
-          <div>
-            <h1 className="font-bold text-sm">Owlaris</h1>
-            <p className="text-xs text-gray-400">{usuario.colegio?.nombre}</p>
-          </div>
-        </div>
+      <header className="bg-owlaris-dark text-white px-4 py-3 shadow-lg">
+        <div className="max-w-3xl mx-auto flex items-center justify-between gap-3">
 
-        {/* Selector de materia */}
-        <select
-          value={materiaId}
-          onChange={e => setMateriaId(e.target.value)}
-          className="bg-white/10 text-white text-sm rounded-lg px-3 py-1.5 border border-white/20
-                     focus:outline-none focus:ring-2 focus:ring-owlaris-secondary"
-        >
-          {materias.map(m => (
-            <option key={m.id} value={m.id} className="text-gray-900">{m.nombre}</option>
-          ))}
-        </select>
-
-        <div className="flex items-center gap-3">
-          <div className="text-right hidden sm:block">
-            <p className="text-xs font-medium">{usuario.nombre_completo}</p>
-            <p className="text-xs text-gray-400">{usuario.grado}</p>
+          {/* Logo */}
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <span className="text-xl">🦉</span>
+            <div className="hidden sm:block">
+              <p className="font-bold text-xs leading-tight">Owlaris</p>
+              <p className="text-gray-400 text-xs">{usuario.colegio?.nombre}</p>
+            </div>
           </div>
-          <button
-            onClick={cerrarSesion}
-            className="text-xs text-gray-400 hover:text-white transition-colors px-2 py-1"
-          >
-            Salir
-          </button>
+
+          {/* Centro: Grado + Materia */}
+          <div className="flex items-center gap-2 flex-1 justify-center">
+
+            {/* Dropdown Grado */}
+            <div className="relative">
+              <select
+                value={grado}
+                onChange={e => cambiarGrado(e.target.value)}
+                disabled={guardandoGrado}
+                className="bg-white/10 text-white text-xs rounded-lg px-2 py-1.5 border border-white/20
+                           focus:outline-none focus:ring-2 focus:ring-owlaris-secondary appearance-none
+                           pr-6 cursor-pointer disabled:opacity-50"
+              >
+                {GRADOS_GUATEMALA.map(g => (
+                  <option key={g} value={g} className="text-gray-900">{g}</option>
+                ))}
+              </select>
+              <span className="absolute right-1.5 top-1/2 -translate-y-1/2 text-white/60 text-xs pointer-events-none">▾</span>
+              {guardandoGrado && (
+                <span className="absolute -top-1 -right-1 w-2 h-2 bg-owlaris-secondary rounded-full animate-pulse"/>
+              )}
+            </div>
+
+            {/* Dropdown Materia */}
+            <div className="relative">
+              <select
+                value={materiaId}
+                onChange={e => setMateriaId(e.target.value)}
+                className="bg-owlaris-primary text-white text-xs rounded-lg px-2 py-1.5 border border-purple-400/30
+                           focus:outline-none focus:ring-2 focus:ring-owlaris-secondary appearance-none
+                           pr-6 cursor-pointer"
+              >
+                {materias.map(m => (
+                  <option key={m.id} value={m.id} className="text-gray-900">{m.nombre}</option>
+                ))}
+              </select>
+              <span className="absolute right-1.5 top-1/2 -translate-y-1/2 text-white/60 text-xs pointer-events-none">▾</span>
+            </div>
+          </div>
+
+          {/* Derecha: nombre + cerrar sesión */}
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <p className="text-xs text-gray-400 hidden sm:block">{usuario.nombre_completo.split(' ')[0]}</p>
+            <button
+              onClick={cerrarSesion}
+              className="bg-white/10 hover:bg-white/20 text-white text-xs px-3 py-1.5 rounded-lg
+                         border border-white/20 transition-all duration-200 flex items-center gap-1"
+            >
+              <span>↩</span>
+              <span className="hidden sm:inline">Salir</span>
+            </button>
+          </div>
         </div>
       </header>
 
-      {/* Área de mensajes */}
+      {/* Info de contexto */}
+      <div className="bg-owlaris-primary/5 border-b border-purple-100 px-4 py-2">
+        <p className="text-xs text-center text-owlaris-primary max-w-3xl mx-auto">
+          📚 Tutorando: <strong>{grado}</strong> · <strong>{materiaNombre}</strong>
+          {guardandoGrado && <span className="ml-2 text-gray-400">Guardando grado...</span>}
+        </p>
+      </div>
+
+      {/* Mensajes */}
       <main className="flex-1 overflow-y-auto px-4 py-6 max-w-3xl mx-auto w-full">
         <div className="space-y-4">
           {mensajes.map(msg => (
@@ -162,23 +231,19 @@ export default function ChatInterface({ usuario, materias }: Props) {
               {error}
             </div>
           )}
-
           <div ref={finalRef} />
         </div>
       </main>
 
-      {/* Input de pregunta */}
+      {/* Input */}
       <div className="border-t border-gray-200 bg-white px-4 py-4">
         <form onSubmit={enviarPregunta} className="max-w-3xl mx-auto flex gap-3 items-end">
           <div className="flex-1">
-            <p className="text-xs text-gray-400 mb-1">
-              Preguntando sobre: <span className="font-medium text-owlaris-primary">{materiaNombre}</span>
-            </p>
             <textarea
               value={pregunta}
               onChange={e => setPregunta(e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); enviarPregunta(e) } }}
-              placeholder="Escribe tu duda aquí... (Enter para enviar)"
+              placeholder={`Escribe tu duda de ${materiaNombre}... (Enter para enviar)`}
               rows={2}
               className="input-base resize-none"
               disabled={cargando}
@@ -187,7 +252,7 @@ export default function ChatInterface({ usuario, materias }: Props) {
           <button
             type="submit"
             disabled={cargando || !pregunta.trim()}
-            className="btn-primary px-4 py-3 flex-shrink-0 mb-0"
+            className="btn-primary px-4 py-3 flex-shrink-0"
           >
             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
@@ -204,25 +269,19 @@ export default function ChatInterface({ usuario, materias }: Props) {
 
 function MensajeBurbuja({ mensaje }: { mensaje: MensajeChat }) {
   const esAlumno = mensaje.rol === 'usuario'
-
   return (
     <div className={`flex items-start gap-3 ${esAlumno ? 'flex-row-reverse' : ''}`}>
-      {/* Avatar */}
       <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-sm
         ${esAlumno ? 'bg-owlaris-secondary text-white' : 'bg-owlaris-primary text-white'}`}>
         {esAlumno ? '👤' : '🦉'}
       </div>
-
-      {/* Burbuja */}
       <div className={`max-w-[80%] px-4 py-3 rounded-2xl shadow-sm
         ${esAlumno
           ? 'bg-owlaris-primary text-white rounded-tr-none'
           : 'bg-white text-gray-800 rounded-tl-none'}`}>
         <p className="text-sm whitespace-pre-wrap leading-relaxed">{mensaje.contenido}</p>
         {mensaje.documento_fuente && (
-          <p className="text-xs mt-2 opacity-60">
-            📄 Fuente: {mensaje.documento_fuente}
-          </p>
+          <p className="text-xs mt-2 opacity-60">📄 {mensaje.documento_fuente}</p>
         )}
         <p className={`text-xs mt-1 ${esAlumno ? 'text-purple-200' : 'text-gray-400'}`}>
           {mensaje.timestamp.toLocaleTimeString('es-GT', { hour: '2-digit', minute: '2-digit' })}

@@ -1,33 +1,42 @@
 import { NextRequest, NextResponse } from 'next/server'
 
-// Cache simple en memoria para no llamar SharePoint en cada pregunta
 const cache = new Map<string, { contenido: string; archivo: string; timestamp: number }>()
-const CACHE_TTL = 1000 * 60 * 30 // 30 minutos
+const CACHE_TTL = 1000 * 60 * 30
+
+const COLEGIOS_SHAREPOINT: Record<string, string> = {
+  'escolaris':       'Escolaris',
+  'colegio-montano': 'Colegio Montano',
+  'Escolaris':       'Escolaris',
+  'Colegio Montano': 'Colegio Montano',
+}
 
 export async function POST(req: NextRequest) {
   try {
     const { colegio_slug, grado, materia, pregunta } = await req.json()
-
     if (!colegio_slug || !grado || !materia) {
       return NextResponse.json({ contenido: '', archivo: null })
     }
 
-    // Construir clave de cache
-    const cacheKey = `${colegio_slug}/${grado}/${materia}`
+    const colegioSP = COLEGIOS_SHAREPOINT[colegio_slug] || colegio_slug
+    // Usar grado y materia EXACTAMENTE como vienen — sin transformar
+    const gradoSP   = grado
+    const materiaSP = materia
+
+    const cacheKey = `${colegioSP}/${gradoSP}/${materiaSP}`
     const cached = cache.get(cacheKey)
     if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
       return NextResponse.json({ contenido: cached.contenido, archivo: cached.archivo })
     }
 
-    // Obtener token de Microsoft Graph
     const token = await obtenerTokenMicrosoft()
     if (!token) {
+      console.log('❌ No se pudo obtener token de Microsoft')
       return NextResponse.json({ contenido: '', archivo: null })
     }
 
-    // Buscar archivos en la carpeta correcta de SharePoint
-    const carpeta = `Owlaris/${colegio_slug}/${grado}/${materia}`
-    const siteId = process.env.SHAREPOINT_SITE_ID
+    const carpeta = `Owlaris/${colegioSP}/01_Contenido_Vigente/${gradoSP}/${materiaSP}`
+    const siteId  = process.env.SHAREPOINT_SITE_ID
+    console.log(`🔍 Buscando en SharePoint: ${carpeta}`)
 
     const resArchivos = await fetch(
       `https://graph.microsoft.com/v1.0/sites/${siteId}/drive/root:/${encodeURIComponent(carpeta)}:/children`,
@@ -35,44 +44,35 @@ export async function POST(req: NextRequest) {
     )
 
     if (!resArchivos.ok) {
-      // Carpeta no existe — registrar como pendiente
+      const err = await resArchivos.json()
+      console.log(`❌ Carpeta no encontrada: ${carpeta}`, JSON.stringify(err))
       return NextResponse.json({ contenido: '', archivo: null })
     }
 
     const dataArchivos = await resArchivos.json()
     const archivos = dataArchivos.value || []
+    console.log(`📁 Archivos encontrados: ${archivos.length}`)
 
     if (archivos.length === 0) {
       return NextResponse.json({ contenido: '', archivo: null })
     }
 
-    // Encontrar el archivo más relevante según la pregunta
-    const archivoElegido = encontrarArchivoRelevante(archivos, pregunta, materia)
+    const archivoElegido = encontrarArchivoRelevante(archivos, pregunta)
     if (!archivoElegido) {
       return NextResponse.json({ contenido: '', archivo: null })
     }
 
-    // Descargar y extraer texto del .docx
+    console.log(`✅ Archivo elegido: ${archivoElegido.name}`)
     const resContenido = await fetch(archivoElegido['@microsoft.graph.downloadUrl'])
     const buffer = await resContenido.arrayBuffer()
-
     const mammoth = await import('mammoth')
     const { value: texto } = await mammoth.extractRawText({ buffer: Buffer.from(buffer) })
 
-    // Guardar en cache
-    cache.set(cacheKey, {
-      contenido: texto,
-      archivo: archivoElegido.name,
-      timestamp: Date.now(),
-    })
-
-    return NextResponse.json({
-      contenido: texto,
-      archivo: archivoElegido.name,
-    })
+    cache.set(cacheKey, { contenido: texto, archivo: archivoElegido.name, timestamp: Date.now() })
+    return NextResponse.json({ contenido: texto, archivo: archivoElegido.name })
 
   } catch (err) {
-    console.error('Error en /api/contenido:', err)
+    console.error('❌ Error en /api/contenido:', err)
     return NextResponse.json({ contenido: '', archivo: null })
   }
 }
@@ -93,30 +93,30 @@ async function obtenerTokenMicrosoft(): Promise<string | null> {
       }
     )
     const data = await res.json()
+    if (!data.access_token) console.log('❌ Token error:', JSON.stringify(data))
     return data.access_token || null
-  } catch {
+  } catch (e) {
+    console.error('❌ Error obteniendo token:', e)
     return null
   }
 }
 
 function encontrarArchivoRelevante(
   archivos: { name: string; '@microsoft.graph.downloadUrl': string }[],
-  pregunta: string,
-  materia: string
+  pregunta: string
 ): { name: string; '@microsoft.graph.downloadUrl': string } | null {
-  const docsWord = archivos.filter(a => a.name.endsWith('.docx'))
+  const docsWord = archivos.filter(a => a.name.endsWith('.docx') && !a.name.startsWith('~$'))
   if (docsWord.length === 0) return null
   if (docsWord.length === 1) return docsWord[0]
 
-  // Buscar el más relevante según palabras clave en el nombre
-  const palabrasPregunta = pregunta.toLowerCase().split(' ').filter(p => p.length > 3)
+  const palabras = pregunta.toLowerCase().split(/\s+/).filter(p => p.length > 3)
   let mejorPuntaje = -1
   let mejorArchivo = docsWord[0]
 
   for (const archivo of docsWord) {
     const nombreLower = archivo.name.toLowerCase()
     let puntaje = 0
-    for (const palabra of palabrasPregunta) {
+    for (const palabra of palabras) {
       if (nombreLower.includes(palabra)) puntaje++
     }
     if (puntaje > mejorPuntaje) {
@@ -124,6 +124,5 @@ function encontrarArchivoRelevante(
       mejorArchivo = archivo
     }
   }
-
   return mejorArchivo
 }
