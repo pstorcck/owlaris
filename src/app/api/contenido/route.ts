@@ -3,13 +3,7 @@ import { NextRequest, NextResponse } from 'next/server'
 const cache = new Map<string, { contenido: string; archivo: string; timestamp: number }>()
 const CACHE_TTL = 1000 * 60 * 30
 
-const GRADOS_CON_MINEDUC = ['3ro Básico', '5to Bachillerato']
-
-const MATERIAS_MINEDUC: Record<string, string> = {
-  'Lenguaje':   'Mineduc - Lenguaje',
-  'Matematica': 'Mineduc - Matemática',
-  'Matemática': 'Mineduc - Matemática',
-}
+const GRADOS_CON_MINEDUC = ['3ero Básico', '5to Bachillerato']
 
 const COLEGIOS_SHAREPOINT: Record<string, string> = {
   'escolaris':       'Escolaris',
@@ -24,11 +18,8 @@ export async function POST(req: NextRequest) {
     if (!colegio_slug || !grado || !materia) return NextResponse.json({ contenido: '', archivo: null })
 
     const colegioSP = COLEGIOS_SHAREPOINT[colegio_slug] || colegio_slug
-    const gradoSP   = grado
-    const materiaSP = materia
-
-    const cacheKey = `${colegioSP}/${gradoSP}/${materiaSP}`
-    const cached = cache.get(cacheKey)
+    const cacheKey  = `${colegioSP}/${grado}/${materia}`
+    const cached    = cache.get(cacheKey)
     if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
       return NextResponse.json({ contenido: cached.contenido, archivo: cached.archivo })
     }
@@ -36,12 +27,12 @@ export async function POST(req: NextRequest) {
     const token = await obtenerTokenMicrosoft()
     if (!token) return NextResponse.json({ contenido: '', archivo: null })
 
-    const siteId = process.env.SHAREPOINT_SITE_ID
+    const siteId  = process.env.SHAREPOINT_SITE_ID
     let contenido = ''
-    let archivo = null
+    let archivo   = null
 
     // 1. Contenido del colegio
-    const carpeta = `Owlaris/${colegioSP}/01_Contenido_Vigente/${gradoSP}/${materiaSP}`
+    const carpeta = `Owlaris/${colegioSP}/01_Contenido_Vigente/${grado}/${materia}`
     console.log(`Buscando: ${carpeta}`)
 
     const resArchivos = await fetch(
@@ -50,43 +41,46 @@ export async function POST(req: NextRequest) {
     )
 
     if (resArchivos.ok) {
-      const data = await resArchivos.json()
-      const archivos = (data.value || []).filter((a: {name:string}) => a.name.endsWith('.docx') && !a.name.startsWith('~$'))
+      const data     = await resArchivos.json()
+      const archivos = (data.value || []).filter((a: {name:string}) =>
+        a.name.endsWith('.docx') && !a.name.startsWith('~$')
+      )
       const elegido = encontrarArchivoRelevante(archivos, pregunta)
       if (elegido) {
-        const r = await fetch(elegido['@microsoft.graph.downloadUrl'])
+        const r   = await fetch(elegido['@microsoft.graph.downloadUrl'])
         const buf = await r.arrayBuffer()
         const mammoth = await import('mammoth')
         const { value } = await mammoth.extractRawText({ buffer: Buffer.from(buf) })
         contenido = value
-        archivo = elegido.name
+        archivo   = elegido.name
         console.log(`✅ Encontrado: ${elegido.name}`)
       }
+    } else {
+      console.log(`❌ No encontrado: ${carpeta}`)
     }
 
-    // 2. Contenido Mineduc (solo 3ro Básico y 5to Bachillerato)
-    if (GRADOS_CON_MINEDUC.includes(gradoSP)) {
-      const carpetaMineduc = MATERIAS_MINEDUC[materiaSP]
-      if (carpetaMineduc) {
-        const rutaM = `Owlaris/${colegioSP}/01_Contenido_Vigente/${gradoSP}/${carpetaMineduc}`
-        console.log(`Buscando Mineduc: ${rutaM}`)
-        const resM = await fetch(
-          `https://graph.microsoft.com/v1.0/sites/${siteId}/drive/root:/${encodeURIComponent(rutaM)}:/children`,
-          { headers: { Authorization: `Bearer ${token}` } }
+    // 2. Mineduc solo para 3ero Básico y 5to Bachillerato
+    if (GRADOS_CON_MINEDUC.includes(grado) && (materia === 'Mineduc - Lenguaje' || materia === 'Mineduc - Matemática')) {
+      const rutaM = `Owlaris/${colegioSP}/01_Contenido_Vigente/${grado}/${materia}`
+      console.log(`Buscando Mineduc: ${rutaM}`)
+      const resM = await fetch(
+        `https://graph.microsoft.com/v1.0/sites/${siteId}/drive/root:/${encodeURIComponent(rutaM)}:/children`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      )
+      if (resM.ok) {
+        const dataM     = await resM.json()
+        const archivosM = (dataM.value || []).filter((a: {name:string}) =>
+          a.name.endsWith('.docx') && !a.name.startsWith('~$')
         )
-        if (resM.ok) {
-          const dataM = await resM.json()
-          const archivosM = (dataM.value || []).filter((a: {name:string}) => a.name.endsWith('.docx') && !a.name.startsWith('~$'))
-          const elegidoM = encontrarArchivoRelevante(archivosM, pregunta)
-          if (elegidoM) {
-            const r = await fetch(elegidoM['@microsoft.graph.downloadUrl'])
-            const buf = await r.arrayBuffer()
-            const mammoth = await import('mammoth')
-            const { value } = await mammoth.extractRawText({ buffer: Buffer.from(buf) })
-            contenido += `\n\n--- Contenido Mineduc ---\n${value}`
-            archivo = archivo || elegidoM.name
-            console.log(`✅ Mineduc: ${elegidoM.name}`)
-          }
+        const elegidoM = encontrarArchivoRelevante(archivosM, pregunta)
+        if (elegidoM) {
+          const r   = await fetch(elegidoM['@microsoft.graph.downloadUrl'])
+          const buf = await r.arrayBuffer()
+          const mammoth = await import('mammoth')
+          const { value } = await mammoth.extractRawText({ buffer: Buffer.from(buf) })
+          contenido += `\n\n--- Contenido Mineduc ---\n${value}`
+          archivo    = archivo || elegidoM.name
+          console.log(`✅ Mineduc: ${elegidoM.name}`)
         }
       }
     }
@@ -127,12 +121,12 @@ function encontrarArchivoRelevante(
   if (archivos.length === 0) return null
   if (archivos.length === 1) return archivos[0]
   const palabras = pregunta.toLowerCase().split(/\s+/).filter(p => p.length > 3)
-  let mejor = -1
-  let archivo = archivos[0]
+  let mejor  = -1
+  let elegido = archivos[0]
   for (const a of archivos) {
     let p = 0
     for (const w of palabras) if (a.name.toLowerCase().includes(w)) p++
-    if (p > mejor) { mejor = p; archivo = a }
+    if (p > mejor) { mejor = p; elegido = a }
   }
-  return archivo
+  return elegido
 }

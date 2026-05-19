@@ -11,19 +11,23 @@ interface Props {
 }
 
 const GRADOS_GUATEMALA = [
-  'Primero Primaria', 'Segundo Primaria', 'Tercero Primaria',
-  'Cuarto Primaria', 'Quinto Primaria', 'Sexto Primaria',
-  '1ero Básico', '2do Básico', '3ro Básico',
-  '4to Bachillerato', '5to Bachillerato',
+  '4to Primaria',
+  '5to Primaria',
+  '6to Primaria',
+  '1ero Básico',
+  '2do Básico',
+  '3ero Básico',
+  '4to Bachillerato',
+  '5to Bachillerato',
 ]
 
-const GRADOS_CON_MINEDUC = ['3ro Básico', '5to Bachillerato']
+const GRADOS_CON_MINEDUC = ['3ero Básico', '5to Bachillerato']
 
 export default function ChatInterface({ usuario, materias }: Props) {
   const [mensajes, setMensajes]             = useState<MensajeChat[]>([])
   const [pregunta, setPregunta]             = useState('')
   const [materiaId, setMateriaId]           = useState('')
-  const [grado, setGrado]                   = useState(usuario.grado || 'Cuarto Primaria')
+  const [grado, setGrado]                   = useState(usuario.grado || '4to Primaria')
   const [cargando, setCargando]             = useState(false)
   const [guardandoGrado, setGuardandoGrado] = useState(false)
   const [error, setError]                   = useState('')
@@ -31,30 +35,23 @@ export default function ChatInterface({ usuario, materias }: Props) {
   const router   = useRouter()
   const supabase = createClient()
 
-  // Filtrar materias según el grado
   const materiasVisibles = materias.filter(m => {
     const esMineduc = m.nombre.startsWith('Mineduc')
     if (esMineduc) return GRADOS_CON_MINEDUC.includes(grado)
     return true
   })
 
-  // Ajustar materia seleccionada cuando cambia el grado
   useEffect(() => {
     const primera = materiasVisibles[0]?.id || ''
     setMateriaId(primera)
   }, [grado])
 
   useEffect(() => {
-    if (!materiaId && materiasVisibles.length > 0) {
-      setMateriaId(materiasVisibles[0].id)
-    }
-  }, [materiasVisibles])
-
-  useEffect(() => {
     finalRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [mensajes])
 
   useEffect(() => {
+    if (!materiaId) return
     const nombre = usuario.nombre_completo.split(' ')[0]
     const materiaNombre = materiasVisibles.find(m => m.id === materiaId)?.nombre || 'tu materia'
     setMensajes([{
