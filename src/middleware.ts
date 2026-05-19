@@ -24,7 +24,8 @@ export async function middleware(request: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser()
   const { pathname } = request.nextUrl
 
-  const publicRoutes = ['/login', '/']
+  // Rutas públicas — no requieren login
+  const publicRoutes = ['/login', '/signup', '/']
   if (publicRoutes.includes(pathname)) {
     if (user) {
       const { data: perfil } = await supabase
@@ -42,6 +43,7 @@ export async function middleware(request: NextRequest) {
     return supabaseResponse
   }
 
+  // Rutas protegidas
   if (!user) {
     return NextResponse.redirect(new URL('/login', request.url))
   }
