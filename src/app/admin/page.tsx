@@ -16,31 +16,29 @@ export default async function AdminPage() {
 
   if (!perfil || !['admin', 'superadmin'].includes(perfil.rol)) redirect('/login')
 
-  const { count: totalUsuarios } = await supabase
-    .from('usuarios').select('*', { count: 'exact', head: true })
-    .eq('colegio_id', perfil.colegio_id)
+  // Superadmin ve todos los colegios, admin solo el suyo
+  const esSuperAdmin = perfil.rol === 'superadmin'
 
-  const { count: totalPreguntas } = await supabase
-    .from('interacciones').select('*', { count: 'exact', head: true })
-    .eq('colegio_id', perfil.colegio_id)
+  // Métricas del colegio
+  let queryUsuarios = supabase.from('usuarios').select('*', { count: 'exact', head: true }).eq('rol', 'alumno')
+  let queryPreguntas = supabase.from('interacciones').select('*', { count: 'exact', head: true })
+  let queryPendientes = supabase.from('pendientes').select('*', { count: 'exact', head: true }).eq('resuelto', false)
 
-  const { data: costoData } = await supabase
-    .from('interacciones').select('costo_usd').eq('colegio_id', perfil.colegio_id)
-  const costoTotal = costoData?.reduce((sum, i) => sum + (i.costo_usd || 0), 0) || 0
+  if (!esSuperAdmin) {
+    queryUsuarios  = queryUsuarios.eq('colegio_id', perfil.colegio_id)
+    queryPreguntas = queryPreguntas.eq('colegio_id', perfil.colegio_id)
+    queryPendientes = queryPendientes.eq('colegio_id', perfil.colegio_id)
+  }
 
-  const { count: pendientesCount } = await supabase
-    .from('pendientes').select('*', { count: 'exact', head: true })
-    .eq('colegio_id', perfil.colegio_id).eq('resuelto', false)
-
-  const { count: sospechasCount } = await supabase
-    .from('interacciones').select('*', { count: 'exact', head: true })
-    .eq('colegio_id', perfil.colegio_id).eq('sospecha_copia', true)
+  const { count: totalAlumnos }   = await queryUsuarios
+  const { count: totalPreguntas } = await queryPreguntas
+  const { count: pendientesCount } = await queryPendientes
 
   const menus = [
-    { href: '/admin/usuarios',      icon: '👥', titulo: 'Usuarios',           desc: 'Crear, editar, desactivar, importar' },
-    { href: '/admin/metricas',      icon: '📈', titulo: 'Métricas',           desc: 'Uso, costos, actividad' },
-    { href: '/admin/chats',         icon: '💬', titulo: 'Historial de chats', desc: 'Ver conversaciones de alumnos' },
-    { href: '/admin/configuracion', icon: '⚙️', titulo: 'Configuración',      desc: 'Prompt, límites, mantenimiento, sync' },
+    { href: '/admin/usuarios',      icon: '👥', titulo: 'Usuarios',           desc: 'Crear, importar, gestionar alumnos' },
+    { href: '/admin/metricas',      icon: '📈', titulo: 'Métricas',           desc: 'Uso y actividad' },
+    { href: '/admin/chats',         icon: '💬', titulo: 'Historial de chats', desc: 'Ver conversaciones' },
+    { href: '/admin/configuracion', icon: '⚙️', titulo: 'Configuración',      desc: 'Prompt, límites, mantenimiento' },
   ]
 
   return (
@@ -48,10 +46,12 @@ export default async function AdminPage() {
       <header className="border-b border-white/10 px-6 py-4">
         <div className="max-w-6xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <img src="/buho.png" alt="Owlaris" className="w-6 h-6 object-contain"/>
+            <img src="/buho.png" alt="Owlaris" className="w-8 h-8 object-contain"/>
             <div>
               <h1 className="font-bold">Owlaris Admin</h1>
-              <p className="text-xs text-gray-400">{perfil.colegio?.nombre} · {perfil.rol}</p>
+              <p className="text-xs text-gray-400">
+                {esSuperAdmin ? 'Super Admin — Todos los colegios' : perfil.colegio?.nombre}
+              </p>
             </div>
           </div>
           <div className="flex items-center gap-3">
@@ -62,21 +62,24 @@ export default async function AdminPage() {
       </header>
 
       <main className="max-w-6xl mx-auto px-6 py-8">
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
-          {[
-            { label: 'Usuarios',      valor: totalUsuarios || 0,          color: 'text-purple-400' },
-            { label: 'Preguntas',     valor: totalPreguntas || 0,         color: 'text-blue-400' },
-            { label: 'Costo total',   valor: `$${costoTotal.toFixed(2)}`, color: 'text-green-400' },
-            { label: 'Pendientes',    valor: pendientesCount || 0,        color: 'text-yellow-400' },
-            { label: 'Alertas copia', valor: sospechasCount || 0,         color: 'text-red-400' },
-          ].map((m, i) => (
-            <div key={i} className="bg-white/5 rounded-xl p-4 border border-white/10">
-              <p className="text-xs text-gray-400 mb-1">{m.label}</p>
-              <p className={`text-2xl font-bold ${m.color}`}>{m.valor}</p>
-            </div>
-          ))}
+
+        {/* Métricas — sin costos */}
+        <div className="grid grid-cols-3 gap-4 mb-8">
+          <div className="bg-white/5 rounded-xl p-5 border border-white/10 text-center">
+            <p className="text-xs text-gray-400 mb-1">Alumnos</p>
+            <p className="text-3xl font-bold text-purple-400">{totalAlumnos || 0}</p>
+          </div>
+          <div className="bg-white/5 rounded-xl p-5 border border-white/10 text-center">
+            <p className="text-xs text-gray-400 mb-1">Preguntas totales</p>
+            <p className="text-3xl font-bold text-blue-400">{totalPreguntas || 0}</p>
+          </div>
+          <div className="bg-white/5 rounded-xl p-5 border border-white/10 text-center">
+            <p className="text-xs text-gray-400 mb-1">Temas pendientes</p>
+            <p className="text-3xl font-bold text-yellow-400">{pendientesCount || 0}</p>
+          </div>
         </div>
 
+        {/* Menú */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
           {menus.map((m, i) => (
             <Link key={i} href={m.href}
@@ -92,6 +95,7 @@ export default async function AdminPage() {
           ))}
         </div>
 
+        {/* Estado */}
         <div className="bg-white/5 rounded-2xl p-6 border border-white/10">
           <h2 className="font-semibold mb-4">Estado del sistema</h2>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -101,9 +105,9 @@ export default async function AdminPage() {
               { ok: true,  texto: 'IA conectada' },
               { ok: true,  texto: 'SharePoint' },
               { ok: true,  texto: 'owlaris.app' },
+              { ok: true,  texto: 'Email Resend' },
               { ok: false, texto: 'Panel maestro' },
-              { ok: false, texto: 'Reportes automáticos' },
-              { ok: false, texto: 'Colegio Montano' },
+              { ok: false, texto: 'Dashboard financiero' },
             ].map((item, i) => (
               <div key={i} className="flex items-center gap-2">
                 <span className={`w-2 h-2 rounded-full flex-shrink-0 ${item.ok ? 'bg-green-400' : 'bg-gray-600'}`}/>
