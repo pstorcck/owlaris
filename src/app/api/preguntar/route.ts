@@ -7,25 +7,44 @@ Tu función no es dar respuestas rápidas para copiar. Tu función es enseñar, 
 
 Regla pedagógica central: ayuda al alumno a llegar a la respuesta por sí mismo. Nunca des directamente la respuesta final cuando sea tarea, ejercicio evaluable o el alumno lo pida para copiar.
 
-Método obligatorio:
+Método obligatorio para temas académicos:
 1. Detecta qué no entiende el alumno.
 2. Explica una sola idea.
 3. Da un ejemplo corto.
 4. Pide que el alumno lo intente.
 5. Cierra con una pregunta de comprobación.
 
+BIENVENIDA INTELIGENTE:
+Cuando el alumno saluda por primera vez o escribe "hola", "buenos días" o similar, responde con:
+- Saludo personalizado con su nombre
+- Pregunta de diagnóstico: si tiene duda específica o quiere que propongas un tema
+- NO muestres lista de temas todavía
+- Si el alumno dice "propón algo" o "no sé qué estudiar", entonces lista los temas disponibles del documento de SharePoint
+
+DETECCIÓN DE TIPO DE PREGUNTA:
+Antes de responder, clasifica la pregunta en una de estas categorías:
+
+1. ACADÉMICA — sobre contenido curricular (matemática, lenguaje, ciencias, etc.)
+   → Usa el contenido de SharePoint del grado/materia seleccionada
+   → Aplica el método pedagógico obligatorio
+
+2. FORMATIVA — sobre familia, valores, convivencia, disciplina, hábitos de estudio
+   → NO uses el documento académico de SharePoint
+   → Usa los documentos de configuración: Politica Pedagogica, Documento Maestro, Videos
+   → Recomienda videos de Eduardo Montano con link directo cuando aplique
+
+3. CRISIS — salud mental, autolesión, violencia, abuso, "me quiero matar", amenazas
+   → NO busques ningún documento
+   → Responde con empatía breve y recomienda hablar con un adulto responsable, orientador o profesional
+   → No profundices ni improvises en estos temas
+
 Grados disponibles: 4to Primaria, 5to Primaria, 6to Primaria, 1ero Básico, 2do Básico, 3ero Básico, 4to Bachillerato, 5to Bachillerato.
-Para 3ero Básico y 5to Bachillerato también existe contenido Mineduc en: Mineduc - Lenguaje y Mineduc - Matemática.
+Para 3ero Básico y 5to Bachillerato también existe: Mineduc - Lenguaje y Mineduc - Matemática.
 
-Usa el contenido institucional de SharePoint como fuente principal. Si no encuentras contenido, dilo con claridad y recomienda consultar al profesor.
-
-Regla anti-copia: si el alumno pide dame la respuesta, hazme la tarea, solo dime qué va o algo equivalente, responde con negativa pedagógica y guía paso a paso.
-
-Alcance: eres principalmente un tutor académico. Puedes apoyar en hábitos de estudio, disciplina, responsabilidad, familia, valores y convivencia. Cuando el tema toque estas áreas recomienda videos del canal oficial de Eduardo Montano con su link directo. Si el tema toca salud mental, crisis emocional, violencia, abuso, autolesión u otro riesgo personal, recomienda hablar con un adulto responsable.
+Regla anti-copia: si el alumno pide dame la respuesta, hazme la tarea, solo dime qué va, responde con negativa pedagógica y guía paso a paso.
 
 Cada interacción debe lograr al menos una de estas cosas: el alumno entiende mejor, practica, avanza o sabe qué hacer después.`
 
-// Cache compartido
 const cacheContenido = new Map<string, { contenido: string; archivo: string; timestamp: number }>()
 const cacheConfig    = new Map<string, { contenido: string; timestamp: number }>()
 const CACHE_TTL      = 1000 * 60 * 30
@@ -44,6 +63,31 @@ const DOCS_CONFIG = [
   'Videos Español.docx',
   'Videos Inglés.docx',
 ]
+
+// Palabras clave para detectar temas formativos vs crisis
+const PALABRAS_CRISIS = [
+  'me quiero matar', 'suicidar', 'quitarme la vida', 'hacerme daño',
+  'autolesion', 'no quiero vivir', 'me voy a matar', 'quiero morir'
+]
+
+const PALABRAS_FORMATIVAS = [
+  'mi papá', 'mi mamá', 'mis padres', 'mi familia', 'pelea', 'problema en casa',
+  'me siento mal', 'triste', 'solo', 'amigos', 'bullying', 'me molestan',
+  'valores', 'convivencia', 'disciplina', 'hábitos', 'motivación'
+]
+
+function detectarTipoPregunta(pregunta: string): 'crisis' | 'formativa' | 'academica' {
+  const p = pregunta.toLowerCase()
+  if (PALABRAS_CRISIS.some(w => p.includes(w))) return 'crisis'
+  if (PALABRAS_FORMATIVAS.some(w => p.includes(w))) return 'formativa'
+  return 'academica'
+}
+
+function esSaludo(pregunta: string): boolean {
+  const saludos = ['hola', 'buenos días', 'buenas tardes', 'buenas noches', 'hi', 'hello', 'buenas', 'hey']
+  const p = pregunta.toLowerCase().trim()
+  return saludos.some(s => p === s || p.startsWith(s + ' ') || p.startsWith(s + ','))
+}
 
 async function getToken(): Promise<string | null> {
   try {
@@ -89,29 +133,27 @@ async function buscarContenido(colegio_slug: string, grado: string, materia: str
     return { contenido: cached.contenido, archivo: cached.archivo }
   }
 
-  const token   = await getToken()
+  const token    = await getToken()
   if (!token) return { contenido: '', archivo: null }
 
-  const driveId  = process.env.SHAREPOINT_DRIVE_ID!
+  const driveId   = process.env.SHAREPOINT_DRIVE_ID!
   const colegioSP = COLEGIOS_SP[colegio_slug] || colegio_slug
-  let contenido  = ''
-  let archivo    = null
 
   console.log(`Buscando: Owlaris/${colegioSP}/${grado}/${materia}`)
-
   const archivos = await listarArchivos(driveId, token, 'Owlaris', colegioSP, grado, materia)
   const elegido  = elegirArchivo(archivos, pregunta)
 
-  if (elegido) {
-    contenido = await extraerTexto(elegido['@microsoft.graph.downloadUrl'])
-    archivo   = elegido.name
-    console.log(`✅ Encontrado: ${elegido.name}`)
-  } else {
+  if (!elegido) {
     console.log(`❌ No encontrado: ${colegioSP}/${grado}/${materia}`)
+    return { contenido: '', archivo: null }
   }
 
-  if (contenido) cacheContenido.set(cacheKey, { contenido, archivo: archivo!, timestamp: Date.now() })
-  return { contenido, archivo }
+  const contenido = await extraerTexto(elegido['@microsoft.graph.downloadUrl'])
+  archivo = elegido.name
+  console.log(`✅ Encontrado: ${elegido.name}`)
+
+  if (contenido) cacheContenido.set(cacheKey, { contenido, archivo: elegido.name, timestamp: Date.now() })
+  return { contenido, archivo: elegido.name }
 }
 
 async function leerConfig(): Promise<string> {
@@ -218,7 +260,7 @@ export async function POST(req: NextRequest) {
         .select('*', { count: 'exact', head: true })
         .eq('usuario_id', user.id).gte('creado_en', `${hoy}T00:00:00`)
       if ((count || 0) >= limite) {
-        return NextResponse.json({ error: `Límite de ${limite} preguntas alcanzado.` }, { status: 429 })
+        return NextResponse.json({ error: `Limite de ${limite} preguntas alcanzado.` }, { status: 429 })
       }
     }
 
@@ -226,26 +268,50 @@ export async function POST(req: NextRequest) {
     const gradoEfectivo = grado_override || perfil.grado
     const colegioSlug   = perfil.colegio?.sharepoint_folder || perfil.colegio?.slug
 
-    // Buscar contenido directamente sin llamada interna
-    const { contenido: contenidoCurricular, archivo: documentoFuente } =
-      await buscarContenido(colegioSlug, gradoEfectivo, materia?.nombre || '', pregunta)
+    // Detectar tipo de pregunta
+    const tipoPregunta = detectarTipoPregunta(pregunta)
+    const esBienvenida = esSaludo(pregunta) && (!historial || historial.length === 0)
 
+    let contenidoCurricular = ''
+    let documentoFuente     = null
+
+    // Solo buscar contenido académico si la pregunta es académica y no es saludo inicial
+    if (tipoPregunta === 'academica' && !esBienvenida) {
+      const result = await buscarContenido(colegioSlug, gradoEfectivo, materia?.nombre || '', pregunta)
+      contenidoCurricular = result.contenido
+      documentoFuente     = result.archivo
+    }
+
+    // Siempre leer docs de configuración (tienen videos y política pedagógica)
     const docsConfig = await leerConfig()
     const promptBase = cfg.prompt_personalizado || PROMPT_BASE
+
+    // Contexto según tipo de pregunta
+    let contextoContenido = ''
+
+    if (esBienvenida) {
+      contextoContenido = `El alumno acaba de saludar. Responde con bienvenida personalizada y pregunta de diagnóstico. NO muestres lista de temas todavía.`
+    } else if (tipoPregunta === 'crisis') {
+      contextoContenido = `ALERTA: El alumno toca un tema de crisis personal. NO busques documentos académicos. Responde con empatía breve y recomienda hablar con un adulto responsable, orientador o profesional. No profundices.`
+    } else if (tipoPregunta === 'formativa') {
+      contextoContenido = `El alumno toca un tema formativo (familia, valores, convivencia). Usa los documentos de configuración para orientarlo. Recomienda videos de Eduardo Montano si aplica.`
+    } else if (contenidoCurricular) {
+      contextoContenido = `CONTENIDO ACADEMICO (fuente principal):\n---\n${contenidoCurricular.substring(0, 3000)}\n---`
+    } else {
+      contextoContenido = `No se encontró contenido en SharePoint para ${gradoEfectivo} / ${materia?.nombre}. Responde con conocimiento general apropiado e indica consultar al profesor.`
+    }
 
     const systemPrompt = `${promptBase}
 
 CONTEXTO DEL ALUMNO:
+- Nombre: ${perfil.nombre_completo.split(' ')[0]}
 - Colegio: ${perfil.colegio?.nombre}
 - Grado: ${gradoEfectivo}
-- Materia: ${materia?.nombre || 'General'}
+- Materia seleccionada: ${materia?.nombre || 'General'}
 
 ${docsConfig ? `DOCUMENTOS DE CONFIGURACION OFICIAL:\n${docsConfig}\n` : ''}
 
-${contenidoCurricular
-  ? `CONTENIDO ACADEMICO (fuente principal):\n---\n${contenidoCurricular.substring(0, 3000)}\n---`
-  : `NOTA: No se encontró contenido en SharePoint para ${gradoEfectivo} / ${materia?.nombre}. Responde con conocimiento general e indica consultar al profesor.`
-}`
+${contextoContenido}`
 
     const mensajesOpenAI: { role: 'user' | 'assistant' | 'system'; content: string }[] = [
       { role: 'system', content: systemPrompt },
@@ -274,7 +340,7 @@ ${contenidoCurricular
       sospecha_copia: detectarCopia(pregunta),
     })
 
-    if (!contenidoCurricular && materia) {
+    if (tipoPregunta === 'academica' && !contenidoCurricular && materia) {
       await registrarPendiente(supabase, perfil, materia, pregunta)
     }
 

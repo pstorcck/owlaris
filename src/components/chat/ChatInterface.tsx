@@ -118,7 +118,7 @@ export default function ChatInterface({ usuario, materias }: Props) {
     setMensajes([{
       id: 'bienvenida',
       rol: 'asistente',
-      contenido: `Hola, ${nombre}. Soy Owlaris, tu tutor academico. Estoy aqui para ayudarte a entender, no solo a darte respuestas. Sobre que tema de ${materiaNombre} tienes dudas hoy?`,
+      contenido: `Hola, ${nombre}. Soy Owlaris, tu tutor de ${grado}. Estoy aquí para ayudarte a entender y aprender. ¿Tienes una duda específica en ${materiaNombre} o quieres que te proponga un tema para practicar hoy?`,
       timestamp: new Date(),
     }])
   }, [materiaId])
