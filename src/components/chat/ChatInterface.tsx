@@ -11,30 +11,44 @@ interface Props {
 }
 
 const GRADOS_GUATEMALA = [
-  'Primero Primaria',
-  'Segundo Primaria',
-  'Tercero Primaria',
-  'Cuarto Primaria',
-  'Quinto Primaria',
-  'Sexto Primaria',
-  '1ero Básico',
-  '2do Básico',
-  '3ro Básico',
-  '4to Bachillerato',
-  '5to Bachillerato',
+  'Primero Primaria', 'Segundo Primaria', 'Tercero Primaria',
+  'Cuarto Primaria', 'Quinto Primaria', 'Sexto Primaria',
+  '1ero Básico', '2do Básico', '3ro Básico',
+  '4to Bachillerato', '5to Bachillerato',
 ]
+
+const GRADOS_CON_MINEDUC = ['3ro Básico', '5to Bachillerato']
 
 export default function ChatInterface({ usuario, materias }: Props) {
   const [mensajes, setMensajes]             = useState<MensajeChat[]>([])
   const [pregunta, setPregunta]             = useState('')
-  const [materiaId, setMateriaId]           = useState(materias[0]?.id || '')
+  const [materiaId, setMateriaId]           = useState('')
   const [grado, setGrado]                   = useState(usuario.grado || 'Cuarto Primaria')
   const [cargando, setCargando]             = useState(false)
   const [guardandoGrado, setGuardandoGrado] = useState(false)
   const [error, setError]                   = useState('')
-  const finalRef   = useRef<HTMLDivElement>(null)
-  const router     = useRouter()
-  const supabase   = createClient()
+  const finalRef = useRef<HTMLDivElement>(null)
+  const router   = useRouter()
+  const supabase = createClient()
+
+  // Filtrar materias según el grado
+  const materiasVisibles = materias.filter(m => {
+    const esMineduc = m.nombre.startsWith('Mineduc')
+    if (esMineduc) return GRADOS_CON_MINEDUC.includes(grado)
+    return true
+  })
+
+  // Ajustar materia seleccionada cuando cambia el grado
+  useEffect(() => {
+    const primera = materiasVisibles[0]?.id || ''
+    setMateriaId(primera)
+  }, [grado])
+
+  useEffect(() => {
+    if (!materiaId && materiasVisibles.length > 0) {
+      setMateriaId(materiasVisibles[0].id)
+    }
+  }, [materiasVisibles])
 
   useEffect(() => {
     finalRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -42,7 +56,7 @@ export default function ChatInterface({ usuario, materias }: Props) {
 
   useEffect(() => {
     const nombre = usuario.nombre_completo.split(' ')[0]
-    const materiaNombre = materias.find(m => m.id === materiaId)?.nombre || 'tu materia'
+    const materiaNombre = materiasVisibles.find(m => m.id === materiaId)?.nombre || 'tu materia'
     setMensajes([{
       id: 'bienvenida',
       rol: 'asistente',
@@ -113,12 +127,10 @@ export default function ChatInterface({ usuario, materias }: Props) {
     router.refresh()
   }
 
-  const materiaNombre = materias.find(m => m.id === materiaId)?.nombre
+  const materiaNombre = materiasVisibles.find(m => m.id === materiaId)?.nombre
 
   return (
     <div className="min-h-screen bg-owlaris-light flex flex-col">
-
-      {/* Header */}
       <header className="bg-owlaris-dark text-white px-4 py-3 shadow-lg">
         <div className="max-w-3xl mx-auto flex items-center justify-between gap-3">
           <div className="flex items-center gap-2 flex-shrink-0">
@@ -131,14 +143,10 @@ export default function ChatInterface({ usuario, materias }: Props) {
 
           <div className="flex items-center gap-2 flex-1 justify-center">
             <div className="relative">
-              <select
-                value={grado}
-                onChange={e => cambiarGrado(e.target.value)}
-                disabled={guardandoGrado}
+              <select value={grado} onChange={e => cambiarGrado(e.target.value)} disabled={guardandoGrado}
                 className="bg-white/10 text-white text-xs rounded-lg px-2 py-1.5 border border-white/20
                            focus:outline-none focus:ring-2 focus:ring-owlaris-secondary appearance-none
-                           pr-6 cursor-pointer disabled:opacity-50"
-              >
+                           pr-6 cursor-pointer disabled:opacity-50">
                 {GRADOS_GUATEMALA.map(g => (
                   <option key={g} value={g} className="text-gray-900">{g}</option>
                 ))}
@@ -147,14 +155,11 @@ export default function ChatInterface({ usuario, materias }: Props) {
             </div>
 
             <div className="relative">
-              <select
-                value={materiaId}
-                onChange={e => setMateriaId(e.target.value)}
+              <select value={materiaId} onChange={e => setMateriaId(e.target.value)}
                 className="bg-owlaris-primary text-white text-xs rounded-lg px-2 py-1.5 border border-purple-400/30
                            focus:outline-none focus:ring-2 focus:ring-owlaris-secondary appearance-none
-                           pr-6 cursor-pointer"
-              >
-                {materias.map(m => (
+                           pr-6 cursor-pointer">
+                {materiasVisibles.map(m => (
                   <option key={m.id} value={m.id} className="text-gray-900">{m.nombre}</option>
                 ))}
               </select>
@@ -173,7 +178,6 @@ export default function ChatInterface({ usuario, materias }: Props) {
         </div>
       </header>
 
-      {/* Info contexto */}
       <div className="bg-owlaris-primary/5 border-b border-purple-100 px-4 py-2">
         <p className="text-xs text-center text-owlaris-primary max-w-3xl mx-auto">
           Tutorando: <strong>{grado}</strong> · <strong>{materiaNombre}</strong>
@@ -181,12 +185,9 @@ export default function ChatInterface({ usuario, materias }: Props) {
         </p>
       </div>
 
-      {/* Mensajes */}
       <main className="flex-1 overflow-y-auto px-4 py-6 max-w-3xl mx-auto w-full">
         <div className="space-y-4">
-          {mensajes.map(msg => (
-            <MensajeBurbuja key={msg.id} mensaje={msg} />
-          ))}
+          {mensajes.map(msg => <MensajeBurbuja key={msg.id} mensaje={msg} />)}
 
           {cargando && (
             <div className="flex items-start gap-3">
@@ -212,23 +213,17 @@ export default function ChatInterface({ usuario, materias }: Props) {
         </div>
       </main>
 
-      {/* Input */}
       <div className="border-t border-gray-200 bg-white px-4 py-4">
         <form onSubmit={enviarPregunta} className="max-w-3xl mx-auto flex gap-3 items-end">
           <div className="flex-1">
-            <textarea
-              value={pregunta}
-              onChange={e => setPregunta(e.target.value)}
+            <textarea value={pregunta} onChange={e => setPregunta(e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); enviarPregunta(e) } }}
               placeholder={`Escribe tu duda de ${materiaNombre}... (Enter para enviar)`}
-              rows={2}
-              className="input-base resize-none"
-              disabled={cargando}
-            />
+              rows={2} className="input-base resize-none" disabled={cargando}/>
           </div>
           <button type="submit" disabled={cargando || !pregunta.trim()} className="btn-primary px-4 py-3 flex-shrink-0">
             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/>
             </svg>
           </button>
         </form>
