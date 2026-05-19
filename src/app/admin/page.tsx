@@ -48,7 +48,7 @@ export default async function AdminPage() {
       <header className="border-b border-white/10 px-6 py-4">
         <div className="max-w-6xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <span className="text-2xl">🦉</span>
+            <img src="/buho.png" alt="Owlaris" className="w-6 h-6 object-contain"/>
             <div>
               <h1 className="font-bold">Owlaris Admin</h1>
               <p className="text-xs text-gray-400">{perfil.colegio?.nombre} · {perfil.rol}</p>

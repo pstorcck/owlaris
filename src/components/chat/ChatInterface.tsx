@@ -192,7 +192,7 @@ export default function ChatInterface({ usuario, materias }: Props) {
       <header className="bg-owlaris-dark text-white px-4 py-3 shadow-lg">
         <div className="max-w-3xl mx-auto flex items-center justify-between gap-3">
           <div className="flex items-center gap-2 flex-shrink-0">
-            <span className="text-xl">🦉</span>
+            <img src="/buho.png" alt="Owlaris" className="w-6 h-6 object-contain"/>
             <div className="hidden sm:block">
               <p className="font-bold text-xs leading-tight">Owlaris</p>
               <p className="text-gray-400 text-xs">{usuario.colegio?.nombre}</p>
@@ -299,7 +299,7 @@ function MensajeBurbuja({ mensaje }: { mensaje: MensajeChat }) {
     <div className={`flex items-start gap-3 ${esAlumno ? 'flex-row-reverse' : ''}`}>
       <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-sm
         ${esAlumno ? 'bg-owlaris-secondary text-white' : 'bg-owlaris-primary text-white'}`}>
-        {esAlumno ? '👤' : '🦉'}
+        {esAlumno ? "👤" : <img src="/buho.png" alt="Owlaris" className="w-4 h-4 object-contain"/>}
       </div>
       <div className={`max-w-[80%] px-4 py-3 rounded-2xl shadow-sm
         ${esAlumno ? 'bg-owlaris-primary text-white rounded-tr-none' : 'bg-white text-gray-800 rounded-tl-none'}`}>
