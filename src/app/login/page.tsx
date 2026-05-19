@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import Image from 'next/image'
 
 export default function LoginPage() {
   const [email, setEmail]       = useState('')
@@ -17,15 +18,12 @@ export default function LoginPage() {
     e.preventDefault()
     setLoading(true)
     setError('')
-
     const { error } = await supabase.auth.signInWithPassword({ email, password })
-
     if (error) {
       setError('Correo o contraseña incorrectos. Intenta de nuevo.')
       setLoading(false)
       return
     }
-
     router.push('/')
     router.refresh()
   }
@@ -39,8 +37,8 @@ export default function LoginPage() {
 
       <div className="relative w-full max-w-md">
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-owlaris-primary rounded-2xl mb-4 shadow-lg">
-            <span className="text-3xl">🦉</span>
+          <div className="inline-flex items-center justify-center w-24 h-24 bg-owlaris-primary rounded-2xl mb-4 shadow-lg overflow-hidden">
+            <Image src="/buho.png" alt="Owlaris" width={96} height={96} className="object-contain p-1"/>
           </div>
           <h1 className="text-3xl font-bold text-white">Owlaris</h1>
           <p className="text-gray-400 mt-1">Tu tutor académico inteligente</p>
@@ -48,26 +46,20 @@ export default function LoginPage() {
 
         <div className="bg-white rounded-2xl shadow-2xl p-8">
           <h2 className="text-xl font-semibold text-gray-800 mb-6">Iniciar sesión</h2>
-
           <form onSubmit={handleLogin} className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Correo electrónico</label>
               <input type="email" value={email} onChange={e => setEmail(e.target.value)}
                 placeholder="tu@colegio.edu.gt" required className="input-base"/>
             </div>
-
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Contraseña</label>
               <input type="password" value={password} onChange={e => setPassword(e.target.value)}
                 placeholder="••••••••" required className="input-base"/>
             </div>
-
             {error && (
-              <div className="bg-red-50 border border-red-200 text-red-600 text-sm px-4 py-3 rounded-xl">
-                {error}
-              </div>
+              <div className="bg-red-50 border border-red-200 text-red-600 text-sm px-4 py-3 rounded-xl">{error}</div>
             )}
-
             <button type="submit" disabled={loading} className="btn-primary w-full mt-2">
               {loading ? (
                 <span className="flex items-center justify-center gap-2">
@@ -80,20 +72,14 @@ export default function LoginPage() {
               ) : 'Entrar'}
             </button>
           </form>
-
           <div className="mt-6 text-center space-y-2">
-            <p className="text-xs text-gray-400">
-              ¿Olvidaste tu contraseña? Contacta a tu administrador.
-            </p>
+            <p className="text-xs text-gray-400">¿Olvidaste tu contraseña? Contacta a tu administrador.</p>
             <p className="text-sm text-gray-500">
               ¿No tienes cuenta?{' '}
-              <Link href="/signup" className="text-owlaris-primary font-medium hover:underline">
-                Regístrate aquí
-              </Link>
+              <Link href="/signup" className="text-owlaris-primary font-medium hover:underline">Regístrate aquí</Link>
             </p>
           </div>
         </div>
-
         <p className="text-center text-gray-600 text-xs mt-6">
           © {new Date().getFullYear()} Owlaris · Todos los derechos reservados
         </p>
