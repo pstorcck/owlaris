@@ -47,7 +47,7 @@ Cada interacción debe lograr al menos una de estas cosas: el alumno entiende me
 
 const cacheContenido = new Map<string, { contenido: string; archivo: string; timestamp: number }>()
 const cacheConfig    = new Map<string, { contenido: string; timestamp: number }>()
-const CACHE_TTL      = 1000 * 60 * 30
+const CACHE_TTL      = 1000 * 60 * 5
 
 const COLEGIOS_SP: Record<string, string> = {
   'escolaris':       'Escolaris',
