@@ -3,13 +3,14 @@
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 
 export default function LoginPage() {
   const [email, setEmail]       = useState('')
   const [password, setPassword] = useState('')
   const [error, setError]       = useState('')
   const [loading, setLoading]   = useState(false)
-  const router  = useRouter()
+  const router   = useRouter()
   const supabase = createClient()
 
   async function handleLogin(e: React.FormEvent) {
@@ -25,21 +26,18 @@ export default function LoginPage() {
       return
     }
 
-    // El middleware redirige según el rol
     router.push('/')
     router.refresh()
   }
 
   return (
     <div className="min-h-screen bg-owlaris-dark flex items-center justify-center p-4">
-      {/* Fondo decorativo */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute -top-40 -right-40 w-96 h-96 bg-owlaris-primary opacity-10 rounded-full blur-3xl" />
-        <div className="absolute -bottom-40 -left-40 w-96 h-96 bg-owlaris-secondary opacity-10 rounded-full blur-3xl" />
+        <div className="absolute -top-40 -right-40 w-96 h-96 bg-owlaris-primary opacity-10 rounded-full blur-3xl"/>
+        <div className="absolute -bottom-40 -left-40 w-96 h-96 bg-owlaris-secondary opacity-10 rounded-full blur-3xl"/>
       </div>
 
       <div className="relative w-full max-w-md">
-        {/* Logo y título */}
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center w-16 h-16 bg-owlaris-primary rounded-2xl mb-4 shadow-lg">
             <span className="text-3xl">🦉</span>
@@ -48,37 +46,20 @@ export default function LoginPage() {
           <p className="text-gray-400 mt-1">Tu tutor académico inteligente</p>
         </div>
 
-        {/* Card de login */}
         <div className="bg-white rounded-2xl shadow-2xl p-8">
           <h2 className="text-xl font-semibold text-gray-800 mb-6">Iniciar sesión</h2>
 
           <form onSubmit={handleLogin} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Correo electrónico
-              </label>
-              <input
-                type="email"
-                value={email}
-                onChange={e => setEmail(e.target.value)}
-                placeholder="tu@colegio.edu.gt"
-                required
-                className="input-base"
-              />
+              <label className="block text-sm font-medium text-gray-700 mb-1">Correo electrónico</label>
+              <input type="email" value={email} onChange={e => setEmail(e.target.value)}
+                placeholder="tu@colegio.edu.gt" required className="input-base"/>
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Contraseña
-              </label>
-              <input
-                type="password"
-                value={password}
-                onChange={e => setPassword(e.target.value)}
-                placeholder="••••••••"
-                required
-                className="input-base"
-              />
+              <label className="block text-sm font-medium text-gray-700 mb-1">Contraseña</label>
+              <input type="password" value={password} onChange={e => setPassword(e.target.value)}
+                placeholder="••••••••" required className="input-base"/>
             </div>
 
             {error && (
@@ -87,11 +68,7 @@ export default function LoginPage() {
               </div>
             )}
 
-            <button
-              type="submit"
-              disabled={loading}
-              className="btn-primary w-full mt-2"
-            >
+            <button type="submit" disabled={loading} className="btn-primary w-full mt-2">
               {loading ? (
                 <span className="flex items-center justify-center gap-2">
                   <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
@@ -104,9 +81,17 @@ export default function LoginPage() {
             </button>
           </form>
 
-          <p className="text-center text-xs text-gray-400 mt-6">
-            ¿Olvidaste tu contraseña? Contacta a tu administrador.
-          </p>
+          <div className="mt-6 text-center space-y-2">
+            <p className="text-xs text-gray-400">
+              ¿Olvidaste tu contraseña? Contacta a tu administrador.
+            </p>
+            <p className="text-sm text-gray-500">
+              ¿No tienes cuenta?{' '}
+              <Link href="/signup" className="text-owlaris-primary font-medium hover:underline">
+                Regístrate aquí
+              </Link>
+            </p>
+          </div>
         </div>
 
         <p className="text-center text-gray-600 text-xs mt-6">
