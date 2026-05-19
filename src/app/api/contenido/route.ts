@@ -12,6 +12,29 @@ const COLEGIOS_SHAREPOINT: Record<string, string> = {
   'Colegio Montano': 'Colegio Montano',
 }
 
+async function listarArchivos(driveId: string, token: string, ...segmentos: string[]) {
+  const ruta = segmentos.map(s => encodeURIComponent(s)).join('/')
+  const url  = `https://graph.microsoft.com/v1.0/drives/${driveId}/root:/${ruta}:/children`
+  const res  = await fetch(url, { headers: { Authorization: `Bearer ${token}` } })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    console.log(`❌ No encontrado: ${segmentos.join('/')} — ${err?.error?.code || res.status}`)
+    return []
+  }
+  const data = await res.json()
+  return (data.value || []).filter((a: {name:string}) =>
+    a.name.endsWith('.docx') && !a.name.startsWith('~$')
+  )
+}
+
+async function extraerTexto(downloadUrl: string): Promise<string> {
+  const r   = await fetch(downloadUrl)
+  const buf = await r.arrayBuffer()
+  const mammoth = await import('mammoth')
+  const { value } = await mammoth.extractRawText({ buffer: Buffer.from(buf) })
+  return value
+}
+
 export async function POST(req: NextRequest) {
   try {
     const { colegio_slug, grado, materia, pregunta } = await req.json()
@@ -24,64 +47,35 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ contenido: cached.contenido, archivo: cached.archivo })
     }
 
-    const token = await obtenerTokenMicrosoft()
+    const token   = await obtenerTokenMicrosoft()
     if (!token) return NextResponse.json({ contenido: '', archivo: null })
 
-    const siteId  = process.env.SHAREPOINT_SITE_ID
+    const driveId = process.env.SHAREPOINT_DRIVE_ID!
     let contenido = ''
     let archivo   = null
 
-    // 1. Contenido del colegio
-    const carpeta = `Owlaris/${colegioSP}/01_Contenido_Vigente/${grado}/${materia}`
-    console.log(`Buscando: ${carpeta}`)
+    // Estructura real: Owlaris/[Colegio]/[Grado]/[Materia]/
+    console.log(`Buscando: Owlaris/${colegioSP}/${grado}/${materia}`)
 
-    const resArchivos = await fetch(
-      `https://graph.microsoft.com/v1.0/sites/${siteId}/drive/root:/${encodeURIComponent(carpeta)}:/children`,
-      { headers: { Authorization: `Bearer ${token}` } }
-    )
+    const archivos = await listarArchivos(driveId, token, 'Owlaris', colegioSP, grado, materia)
+    const elegido  = encontrarArchivoRelevante(archivos, pregunta)
 
-    if (resArchivos.ok) {
-      const data     = await resArchivos.json()
-      const archivos = (data.value || []).filter((a: {name:string}) =>
-        a.name.endsWith('.docx') && !a.name.startsWith('~$')
-      )
-      const elegido = encontrarArchivoRelevante(archivos, pregunta)
-      if (elegido) {
-        const r   = await fetch(elegido['@microsoft.graph.downloadUrl'])
-        const buf = await r.arrayBuffer()
-        const mammoth = await import('mammoth')
-        const { value } = await mammoth.extractRawText({ buffer: Buffer.from(buf) })
-        contenido = value
-        archivo   = elegido.name
-        console.log(`✅ Encontrado: ${elegido.name}`)
-      }
-    } else {
-      console.log(`❌ No encontrado: ${carpeta}`)
+    if (elegido) {
+      contenido = await extraerTexto(elegido['@microsoft.graph.downloadUrl'])
+      archivo   = elegido.name
+      console.log(`✅ Encontrado: ${elegido.name}`)
     }
 
-    // 2. Mineduc solo para 3ero Básico y 5to Bachillerato
-    if (GRADOS_CON_MINEDUC.includes(grado) && (materia === 'Mineduc - Lenguaje' || materia === 'Mineduc - Matemática')) {
-      const rutaM = `Owlaris/${colegioSP}/01_Contenido_Vigente/${grado}/${materia}`
-      console.log(`Buscando Mineduc: ${rutaM}`)
-      const resM = await fetch(
-        `https://graph.microsoft.com/v1.0/sites/${siteId}/drive/root:/${encodeURIComponent(rutaM)}:/children`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      )
-      if (resM.ok) {
-        const dataM     = await resM.json()
-        const archivosM = (dataM.value || []).filter((a: {name:string}) =>
-          a.name.endsWith('.docx') && !a.name.startsWith('~$')
-        )
-        const elegidoM = encontrarArchivoRelevante(archivosM, pregunta)
-        if (elegidoM) {
-          const r   = await fetch(elegidoM['@microsoft.graph.downloadUrl'])
-          const buf = await r.arrayBuffer()
-          const mammoth = await import('mammoth')
-          const { value } = await mammoth.extractRawText({ buffer: Buffer.from(buf) })
-          contenido += `\n\n--- Contenido Mineduc ---\n${value}`
-          archivo    = archivo || elegidoM.name
-          console.log(`✅ Mineduc: ${elegidoM.name}`)
-        }
+    // Mineduc solo para 3ero Básico y 5to Bachillerato
+    if (GRADOS_CON_MINEDUC.includes(grado) && materia.startsWith('Mineduc')) {
+      console.log(`Buscando Mineduc: ${grado}/${materia}`)
+      const archivosM = await listarArchivos(driveId, token, 'Owlaris', colegioSP, grado, materia)
+      const elegidoM  = encontrarArchivoRelevante(archivosM, pregunta)
+      if (elegidoM) {
+        const textoM = await extraerTexto(elegidoM['@microsoft.graph.downloadUrl'])
+        contenido   += `\n\n--- Contenido Mineduc ---\n${textoM}`
+        archivo      = archivo || elegidoM.name
+        console.log(`✅ Mineduc: ${elegidoM.name}`)
       }
     }
 
@@ -121,7 +115,7 @@ function encontrarArchivoRelevante(
   if (archivos.length === 0) return null
   if (archivos.length === 1) return archivos[0]
   const palabras = pregunta.toLowerCase().split(/\s+/).filter(p => p.length > 3)
-  let mejor  = -1
+  let mejor   = -1
   let elegido = archivos[0]
   for (const a of archivos) {
     let p = 0
