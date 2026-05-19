@@ -5,10 +5,14 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 
 const GRADOS = [
-  'Primero Primaria', 'Segundo Primaria', 'Tercero Primaria',
-  'Cuarto Primaria', 'Quinto Primaria', 'Sexto Primaria',
-  '1ero Básico', '2do Básico', '3ro Básico',
-  '4to Bachillerato', '5to Bachillerato',
+  '4to Primaria',
+  '5to Primaria',
+  '6to Primaria',
+  '1ero Básico',
+  '2do Básico',
+  '3ero Básico',
+  '4to Bachillerato',
+  '5to Bachillerato',
 ]
 
 export default function SignupPage() {
@@ -26,22 +30,27 @@ export default function SignupPage() {
     setError('')
     setExito('')
 
-    const res = await fetch('/api/signup', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ nombre_completo: nombre, email, grado, rol: 'alumno' }),
-    })
+    try {
+      const res = await fetch('/api/signup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nombre_completo: nombre, email, grado, rol: 'alumno' }),
+      })
 
-    const data = await res.json()
-    setLoading(false)
+      const data = await res.json()
+      setLoading(false)
 
-    if (!res.ok) {
-      setError(data.error || 'Error al crear la cuenta')
-      return
+      if (!res.ok) {
+        setError(data.error || 'Error al crear la cuenta')
+        return
+      }
+
+      setExito(data.mensaje)
+      setTimeout(() => router.push('/login'), 4000)
+    } catch {
+      setLoading(false)
+      setError('Error de conexión. Intenta de nuevo.')
     }
-
-    setExito(data.mensaje)
-    setTimeout(() => router.push('/login'), 4000)
   }
 
   return (
@@ -57,11 +66,11 @@ export default function SignupPage() {
             <span className="text-3xl">🦉</span>
           </div>
           <h1 className="text-3xl font-bold text-white">Owlaris</h1>
-          <p className="text-gray-400 mt-1">Crea tu cuenta de tutor</p>
+          <p className="text-gray-400 mt-1">Tu tutor académico inteligente</p>
         </div>
 
         <div className="bg-white rounded-2xl shadow-2xl p-8">
-          <h2 className="text-xl font-semibold text-gray-800 mb-2">Registro</h2>
+          <h2 className="text-xl font-semibold text-gray-800 mb-2">Crear cuenta</h2>
           <p className="text-xs text-gray-400 mb-6">
             Solo para correos <strong>@colegiomontano.edu.gt</strong> y <strong>@escolaris.edu.gt</strong>
           </p>
@@ -75,18 +84,14 @@ export default function SignupPage() {
             <form onSubmit={handleSignup} className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Nombre completo</label>
-                <input
-                  type="text" value={nombre} onChange={e => setNombre(e.target.value)}
-                  placeholder="Juan García López" required className="input-base"
-                />
+                <input type="text" value={nombre} onChange={e => setNombre(e.target.value)}
+                  placeholder="Juan García López" required className="input-base"/>
               </div>
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Correo institucional</label>
-                <input
-                  type="email" value={email} onChange={e => setEmail(e.target.value)}
-                  placeholder="juan@colegiomontano.edu.gt" required className="input-base"
-                />
+                <input type="email" value={email} onChange={e => setEmail(e.target.value)}
+                  placeholder="juan@colegiomontano.edu.gt" required className="input-base"/>
                 <p className="text-xs text-gray-400 mt-1">Debe ser tu correo del colegio</p>
               </div>
 
