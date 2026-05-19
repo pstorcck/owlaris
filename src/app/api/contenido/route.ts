@@ -3,6 +3,14 @@ import { NextRequest, NextResponse } from 'next/server'
 const cache = new Map<string, { contenido: string; archivo: string; timestamp: number }>()
 const CACHE_TTL = 1000 * 60 * 30
 
+const GRADOS_CON_MINEDUC = ['3ro Básico', '5to Bachillerato']
+
+const MATERIAS_MINEDUC: Record<string, string> = {
+  'Lenguaje':   'Mineduc - Lenguaje',
+  'Matematica': 'Mineduc - Matemática',
+  'Matemática': 'Mineduc - Matemática',
+}
+
 const COLEGIOS_SHAREPOINT: Record<string, string> = {
   'escolaris':       'Escolaris',
   'colegio-montano': 'Colegio Montano',
@@ -13,12 +21,9 @@ const COLEGIOS_SHAREPOINT: Record<string, string> = {
 export async function POST(req: NextRequest) {
   try {
     const { colegio_slug, grado, materia, pregunta } = await req.json()
-    if (!colegio_slug || !grado || !materia) {
-      return NextResponse.json({ contenido: '', archivo: null })
-    }
+    if (!colegio_slug || !grado || !materia) return NextResponse.json({ contenido: '', archivo: null })
 
     const colegioSP = COLEGIOS_SHAREPOINT[colegio_slug] || colegio_slug
-    // Usar grado y materia EXACTAMENTE como vienen — sin transformar
     const gradoSP   = grado
     const materiaSP = materia
 
@@ -29,50 +34,68 @@ export async function POST(req: NextRequest) {
     }
 
     const token = await obtenerTokenMicrosoft()
-    if (!token) {
-      console.log('❌ No se pudo obtener token de Microsoft')
-      return NextResponse.json({ contenido: '', archivo: null })
-    }
+    if (!token) return NextResponse.json({ contenido: '', archivo: null })
 
+    const siteId = process.env.SHAREPOINT_SITE_ID
+    let contenido = ''
+    let archivo = null
+
+    // 1. Contenido del colegio
     const carpeta = `Owlaris/${colegioSP}/01_Contenido_Vigente/${gradoSP}/${materiaSP}`
-    const siteId  = process.env.SHAREPOINT_SITE_ID
-    console.log(`🔍 Buscando en SharePoint: ${carpeta}`)
+    console.log(`Buscando: ${carpeta}`)
 
     const resArchivos = await fetch(
       `https://graph.microsoft.com/v1.0/sites/${siteId}/drive/root:/${encodeURIComponent(carpeta)}:/children`,
       { headers: { Authorization: `Bearer ${token}` } }
     )
 
-    if (!resArchivos.ok) {
-      const err = await resArchivos.json()
-      console.log(`❌ Carpeta no encontrada: ${carpeta}`, JSON.stringify(err))
-      return NextResponse.json({ contenido: '', archivo: null })
+    if (resArchivos.ok) {
+      const data = await resArchivos.json()
+      const archivos = (data.value || []).filter((a: {name:string}) => a.name.endsWith('.docx') && !a.name.startsWith('~$'))
+      const elegido = encontrarArchivoRelevante(archivos, pregunta)
+      if (elegido) {
+        const r = await fetch(elegido['@microsoft.graph.downloadUrl'])
+        const buf = await r.arrayBuffer()
+        const mammoth = await import('mammoth')
+        const { value } = await mammoth.extractRawText({ buffer: Buffer.from(buf) })
+        contenido = value
+        archivo = elegido.name
+        console.log(`✅ Encontrado: ${elegido.name}`)
+      }
     }
 
-    const dataArchivos = await resArchivos.json()
-    const archivos = dataArchivos.value || []
-    console.log(`📁 Archivos encontrados: ${archivos.length}`)
-
-    if (archivos.length === 0) {
-      return NextResponse.json({ contenido: '', archivo: null })
+    // 2. Contenido Mineduc (solo 3ro Básico y 5to Bachillerato)
+    if (GRADOS_CON_MINEDUC.includes(gradoSP)) {
+      const carpetaMineduc = MATERIAS_MINEDUC[materiaSP]
+      if (carpetaMineduc) {
+        const rutaM = `Owlaris/${colegioSP}/01_Contenido_Vigente/${gradoSP}/${carpetaMineduc}`
+        console.log(`Buscando Mineduc: ${rutaM}`)
+        const resM = await fetch(
+          `https://graph.microsoft.com/v1.0/sites/${siteId}/drive/root:/${encodeURIComponent(rutaM)}:/children`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        )
+        if (resM.ok) {
+          const dataM = await resM.json()
+          const archivosM = (dataM.value || []).filter((a: {name:string}) => a.name.endsWith('.docx') && !a.name.startsWith('~$'))
+          const elegidoM = encontrarArchivoRelevante(archivosM, pregunta)
+          if (elegidoM) {
+            const r = await fetch(elegidoM['@microsoft.graph.downloadUrl'])
+            const buf = await r.arrayBuffer()
+            const mammoth = await import('mammoth')
+            const { value } = await mammoth.extractRawText({ buffer: Buffer.from(buf) })
+            contenido += `\n\n--- Contenido Mineduc ---\n${value}`
+            archivo = archivo || elegidoM.name
+            console.log(`✅ Mineduc: ${elegidoM.name}`)
+          }
+        }
+      }
     }
 
-    const archivoElegido = encontrarArchivoRelevante(archivos, pregunta)
-    if (!archivoElegido) {
-      return NextResponse.json({ contenido: '', archivo: null })
-    }
-
-    console.log(`✅ Archivo elegido: ${archivoElegido.name}`)
-    const resContenido = await fetch(archivoElegido['@microsoft.graph.downloadUrl'])
-    const buffer = await resContenido.arrayBuffer()
-    const mammoth = await import('mammoth')
-    const { value: texto } = await mammoth.extractRawText({ buffer: Buffer.from(buffer) })
-
-    cache.set(cacheKey, { contenido: texto, archivo: archivoElegido.name, timestamp: Date.now() })
-    return NextResponse.json({ contenido: texto, archivo: archivoElegido.name })
+    if (contenido) cache.set(cacheKey, { contenido, archivo: archivo!, timestamp: Date.now() })
+    return NextResponse.json({ contenido, archivo })
 
   } catch (err) {
-    console.error('❌ Error en /api/contenido:', err)
+    console.error('Error /api/contenido:', err)
     return NextResponse.json({ contenido: '', archivo: null })
   }
 }
@@ -93,36 +116,23 @@ async function obtenerTokenMicrosoft(): Promise<string | null> {
       }
     )
     const data = await res.json()
-    if (!data.access_token) console.log('❌ Token error:', JSON.stringify(data))
     return data.access_token || null
-  } catch (e) {
-    console.error('❌ Error obteniendo token:', e)
-    return null
-  }
+  } catch { return null }
 }
 
 function encontrarArchivoRelevante(
   archivos: { name: string; '@microsoft.graph.downloadUrl': string }[],
   pregunta: string
 ): { name: string; '@microsoft.graph.downloadUrl': string } | null {
-  const docsWord = archivos.filter(a => a.name.endsWith('.docx') && !a.name.startsWith('~$'))
-  if (docsWord.length === 0) return null
-  if (docsWord.length === 1) return docsWord[0]
-
+  if (archivos.length === 0) return null
+  if (archivos.length === 1) return archivos[0]
   const palabras = pregunta.toLowerCase().split(/\s+/).filter(p => p.length > 3)
-  let mejorPuntaje = -1
-  let mejorArchivo = docsWord[0]
-
-  for (const archivo of docsWord) {
-    const nombreLower = archivo.name.toLowerCase()
-    let puntaje = 0
-    for (const palabra of palabras) {
-      if (nombreLower.includes(palabra)) puntaje++
-    }
-    if (puntaje > mejorPuntaje) {
-      mejorPuntaje = puntaje
-      mejorArchivo = archivo
-    }
+  let mejor = -1
+  let archivo = archivos[0]
+  for (const a of archivos) {
+    let p = 0
+    for (const w of palabras) if (a.name.toLowerCase().includes(w)) p++
+    if (p > mejor) { mejor = p; archivo = a }
   }
-  return mejorArchivo
+  return archivo
 }

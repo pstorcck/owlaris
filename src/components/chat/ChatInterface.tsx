@@ -11,33 +11,30 @@ interface Props {
 }
 
 const GRADOS_GUATEMALA = [
-  'Preparatoria',
-  'Parvulos',
   'Primero Primaria',
   'Segundo Primaria',
   'Tercero Primaria',
   'Cuarto Primaria',
   'Quinto Primaria',
   'Sexto Primaria',
-  'Primero Basico',
-  'Segundo Basico',
-  'Tercero Basico',
-  'Cuarto Bachillerato',
-  'Quinto Bachillerato',
+  '1ero Básico',
+  '2do Básico',
+  '3ro Básico',
+  '4to Bachillerato',
+  '5to Bachillerato',
 ]
 
 export default function ChatInterface({ usuario, materias }: Props) {
-  const [mensajes, setMensajes]       = useState<MensajeChat[]>([])
-  const [pregunta, setPregunta]       = useState('')
-  const [materiaId, setMateriaId]     = useState(materias[0]?.id || '')
-  const [grado, setGrado]             = useState(usuario.grado || 'Primero Basico')
-  const [cargando, setCargando]       = useState(false)
+  const [mensajes, setMensajes]             = useState<MensajeChat[]>([])
+  const [pregunta, setPregunta]             = useState('')
+  const [materiaId, setMateriaId]           = useState(materias[0]?.id || '')
+  const [grado, setGrado]                   = useState(usuario.grado || 'Cuarto Primaria')
+  const [cargando, setCargando]             = useState(false)
   const [guardandoGrado, setGuardandoGrado] = useState(false)
-  const [error, setError]             = useState('')
-  const [menuAbierto, setMenuAbierto] = useState(false)
-  const finalRef  = useRef<HTMLDivElement>(null)
-  const router    = useRouter()
-  const supabase  = createClient()
+  const [error, setError]                   = useState('')
+  const finalRef   = useRef<HTMLDivElement>(null)
+  const router     = useRouter()
+  const supabase   = createClient()
 
   useEffect(() => {
     finalRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -49,7 +46,7 @@ export default function ChatInterface({ usuario, materias }: Props) {
     setMensajes([{
       id: 'bienvenida',
       rol: 'asistente',
-      contenido: `¡Hola, ${nombre}! 👋 Soy Owlaris, tu tutor académico.\n\nEstoy aquí para ayudarte a **entender**, no solo a darte respuestas.\n\n¿Sobre qué tema de **${materiaNombre}** tienes dudas hoy?`,
+      contenido: `Hola, ${nombre}. Soy Owlaris, tu tutor académico. Estoy aquí para ayudarte a entender, no solo a darte respuestas. ¿Sobre qué tema de ${materiaNombre} tienes dudas hoy?`,
       timestamp: new Date(),
     }])
   }, [materiaId])
@@ -57,12 +54,8 @@ export default function ChatInterface({ usuario, materias }: Props) {
   async function cambiarGrado(nuevoGrado: string) {
     setGrado(nuevoGrado)
     setGuardandoGrado(true)
-    await supabase
-      .from('usuarios')
-      .update({ grado: nuevoGrado })
-      .eq('id', usuario.id)
+    await supabase.from('usuarios').update({ grado: nuevoGrado }).eq('id', usuario.id)
     setGuardandoGrado(false)
-    setMenuAbierto(false)
   }
 
   async function enviarPregunta(e: React.FormEvent) {
@@ -90,10 +83,7 @@ export default function ChatInterface({ usuario, materias }: Props) {
           pregunta: textoPregunta,
           materia_id: materiaId,
           grado_override: grado,
-          historial: mensajes.slice(-6).map(m => ({
-            rol: m.rol,
-            contenido: m.contenido,
-          })),
+          historial: mensajes.slice(-6).map(m => ({ rol: m.rol, contenido: m.contenido })),
         }),
       })
 
@@ -131,8 +121,6 @@ export default function ChatInterface({ usuario, materias }: Props) {
       {/* Header */}
       <header className="bg-owlaris-dark text-white px-4 py-3 shadow-lg">
         <div className="max-w-3xl mx-auto flex items-center justify-between gap-3">
-
-          {/* Logo */}
           <div className="flex items-center gap-2 flex-shrink-0">
             <span className="text-xl">🦉</span>
             <div className="hidden sm:block">
@@ -141,10 +129,7 @@ export default function ChatInterface({ usuario, materias }: Props) {
             </div>
           </div>
 
-          {/* Centro: Grado + Materia */}
           <div className="flex items-center gap-2 flex-1 justify-center">
-
-            {/* Dropdown Grado */}
             <div className="relative">
               <select
                 value={grado}
@@ -159,12 +144,8 @@ export default function ChatInterface({ usuario, materias }: Props) {
                 ))}
               </select>
               <span className="absolute right-1.5 top-1/2 -translate-y-1/2 text-white/60 text-xs pointer-events-none">▾</span>
-              {guardandoGrado && (
-                <span className="absolute -top-1 -right-1 w-2 h-2 bg-owlaris-secondary rounded-full animate-pulse"/>
-              )}
             </div>
 
-            {/* Dropdown Materia */}
             <div className="relative">
               <select
                 value={materiaId}
@@ -181,26 +162,22 @@ export default function ChatInterface({ usuario, materias }: Props) {
             </div>
           </div>
 
-          {/* Derecha: nombre + cerrar sesión */}
           <div className="flex items-center gap-2 flex-shrink-0">
             <p className="text-xs text-gray-400 hidden sm:block">{usuario.nombre_completo.split(' ')[0]}</p>
-            <button
-              onClick={cerrarSesion}
+            <button onClick={cerrarSesion}
               className="bg-white/10 hover:bg-white/20 text-white text-xs px-3 py-1.5 rounded-lg
-                         border border-white/20 transition-all duration-200 flex items-center gap-1"
-            >
-              <span>↩</span>
-              <span className="hidden sm:inline">Salir</span>
+                         border border-white/20 transition-all duration-200 flex items-center gap-1">
+              <span>↩</span><span className="hidden sm:inline">Salir</span>
             </button>
           </div>
         </div>
       </header>
 
-      {/* Info de contexto */}
+      {/* Info contexto */}
       <div className="bg-owlaris-primary/5 border-b border-purple-100 px-4 py-2">
         <p className="text-xs text-center text-owlaris-primary max-w-3xl mx-auto">
-          📚 Tutorando: <strong>{grado}</strong> · <strong>{materiaNombre}</strong>
-          {guardandoGrado && <span className="ml-2 text-gray-400">Guardando grado...</span>}
+          Tutorando: <strong>{grado}</strong> · <strong>{materiaNombre}</strong>
+          {guardandoGrado && <span className="ml-2 text-gray-400">Guardando...</span>}
         </p>
       </div>
 
@@ -249,18 +226,14 @@ export default function ChatInterface({ usuario, materias }: Props) {
               disabled={cargando}
             />
           </div>
-          <button
-            type="submit"
-            disabled={cargando || !pregunta.trim()}
-            className="btn-primary px-4 py-3 flex-shrink-0"
-          >
+          <button type="submit" disabled={cargando || !pregunta.trim()} className="btn-primary px-4 py-3 flex-shrink-0">
             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
             </svg>
           </button>
         </form>
         <p className="text-center text-xs text-gray-400 mt-2 max-w-3xl mx-auto">
-          Owlaris te guía para que aprendas — no hace tu tarea por ti 🦉
+          Owlaris te guia para que aprendas — no hace tu tarea por ti
         </p>
       </div>
     </div>
@@ -276,12 +249,10 @@ function MensajeBurbuja({ mensaje }: { mensaje: MensajeChat }) {
         {esAlumno ? '👤' : '🦉'}
       </div>
       <div className={`max-w-[80%] px-4 py-3 rounded-2xl shadow-sm
-        ${esAlumno
-          ? 'bg-owlaris-primary text-white rounded-tr-none'
-          : 'bg-white text-gray-800 rounded-tl-none'}`}>
+        ${esAlumno ? 'bg-owlaris-primary text-white rounded-tr-none' : 'bg-white text-gray-800 rounded-tl-none'}`}>
         <p className="text-sm whitespace-pre-wrap leading-relaxed">{mensaje.contenido}</p>
         {mensaje.documento_fuente && (
-          <p className="text-xs mt-2 opacity-60">📄 {mensaje.documento_fuente}</p>
+          <p className="text-xs mt-2 opacity-60">Fuente: {mensaje.documento_fuente}</p>
         )}
         <p className={`text-xs mt-1 ${esAlumno ? 'text-purple-200' : 'text-gray-400'}`}>
           {mensaje.timestamp.toLocaleTimeString('es-GT', { hour: '2-digit', minute: '2-digit' })}
