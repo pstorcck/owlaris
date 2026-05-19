@@ -18,7 +18,6 @@ export default async function AdminPage() {
 
   const esSuperAdmin = perfil.rol === 'superadmin'
 
-  // Métricas — superadmin ve todo, admin ve su colegio
   let qAlumnos    = supabase.from('usuarios').select('*', { count: 'exact', head: true }).eq('rol', 'alumno')
   let qPreguntas  = supabase.from('interacciones').select('*', { count: 'exact', head: true })
   let qPendientes = supabase.from('pendientes').select('*', { count: 'exact', head: true }).eq('resuelto', false)
@@ -36,10 +35,9 @@ export default async function AdminPage() {
   ] = await Promise.all([qAlumnos, qPreguntas, qPendientes])
 
   const menus = [
-    { href: '/admin/usuarios',      icon: '👥', titulo: 'Usuarios',           desc: 'Crear, importar, gestionar alumnos' },
-    { href: '/admin/metricas',      icon: '📈', titulo: 'Métricas',           desc: 'Uso y actividad' },
-    { href: '/admin/chats',         icon: '💬', titulo: 'Historial de chats', desc: 'Ver conversaciones de alumnos' },
-    { href: '/admin/configuracion', icon: '⚙️', titulo: 'Configuración',      desc: 'Prompt, límites, mantenimiento' },
+    { href: '/admin/usuarios',      icon: '👥', titulo: 'Usuarios',         desc: 'Crear, importar, gestionar alumnos' },
+    { href: '/admin/pendientes',    icon: '📋', titulo: 'Temas pendientes', desc: 'Lo que piden sin contenido en SharePoint' },
+    { href: '/admin/configuracion', icon: '⚙️', titulo: 'Configuración',    desc: 'Prompt, límites, mantenimiento, sync' },
   ]
 
   return (
@@ -64,34 +62,36 @@ export default async function AdminPage() {
 
       <main className="max-w-6xl mx-auto px-6 py-8">
 
-        {/* Métricas reales */}
+        {/* Métricas rápidas */}
         <div className="grid grid-cols-3 gap-4 mb-8">
           <div className="bg-white/5 rounded-xl p-5 border border-white/10 text-center">
             <p className="text-xs text-gray-400 mb-1">Alumnos registrados</p>
-            <p className="text-3xl font-bold text-purple-400">{totalAlumnos ?? '—'}</p>
+            <p className="text-3xl font-bold text-purple-400">{totalAlumnos ?? 0}</p>
           </div>
           <div className="bg-white/5 rounded-xl p-5 border border-white/10 text-center">
             <p className="text-xs text-gray-400 mb-1">Preguntas totales</p>
-            <p className="text-3xl font-bold text-blue-400">{totalPreguntas ?? '—'}</p>
+            <p className="text-3xl font-bold text-blue-400">{totalPreguntas ?? 0}</p>
           </div>
           <div className="bg-white/5 rounded-xl p-5 border border-white/10 text-center">
             <p className="text-xs text-gray-400 mb-1">Temas sin contenido</p>
-            <p className="text-3xl font-bold text-yellow-400">{pendientesCount ?? '—'}</p>
+            <p className={`text-3xl font-bold ${(pendientesCount ?? 0) > 0 ? 'text-yellow-400' : 'text-green-400'}`}>
+              {pendientesCount ?? 0}
+            </p>
           </div>
         </div>
 
-        {/* Menú */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+        {/* 3 módulos */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
           {menus.map((m, i) => (
             <Link key={i} href={m.href}
               className="bg-white/5 hover:bg-white/10 rounded-2xl p-6 border border-white/10
-                         transition-all duration-200 flex items-center gap-4 group">
+                         transition-all duration-200 flex flex-col gap-3 group">
               <span className="text-3xl">{m.icon}</span>
               <div>
                 <h3 className="font-semibold group-hover:text-owlaris-secondary transition-colors">{m.titulo}</h3>
                 <p className="text-sm text-gray-400">{m.desc}</p>
               </div>
-              <span className="ml-auto text-gray-600 group-hover:text-white transition-colors">→</span>
+              <span className="text-gray-600 group-hover:text-white transition-colors text-sm">Entrar →</span>
             </Link>
           ))}
         </div>
@@ -100,17 +100,10 @@ export default async function AdminPage() {
         <div className="bg-white/5 rounded-2xl p-6 border border-white/10">
           <h2 className="font-semibold mb-4">Estado del sistema</h2>
           <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-            {[
-              { ok: true,  texto: 'Base de datos' },
-              { ok: true,  texto: 'Login activo' },
-              { ok: true,  texto: 'IA conectada' },
-              { ok: true,  texto: 'SharePoint' },
-              { ok: true,  texto: 'owlaris.app' },
-              { ok: true,  texto: 'Email Resend' },
-            ].map((item, i) => (
+            {['Base de datos', 'Login activo', 'IA conectada', 'SharePoint', 'owlaris.app', 'Email Resend'].map((item, i) => (
               <div key={i} className="flex items-center gap-2">
                 <span className="w-2 h-2 rounded-full flex-shrink-0 bg-green-400"/>
-                <span className="text-sm text-white">{item.texto}</span>
+                <span className="text-sm text-white">{item}</span>
               </div>
             ))}
           </div>
