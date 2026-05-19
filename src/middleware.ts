@@ -24,9 +24,11 @@ export async function middleware(request: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser()
   const { pathname } = request.nextUrl
 
-  // Rutas públicas — no requieren login
-  const publicRoutes = ['/login', '/signup', '/']
-  if (publicRoutes.includes(pathname)) {
+  // Signup siempre accesible — nunca redirigir
+  if (pathname === '/signup') return supabaseResponse
+
+  // Login — si ya está logueado, redirigir según rol
+  if (pathname === '/login' || pathname === '/') {
     if (user) {
       const { data: perfil } = await supabase
         .from('usuarios')
@@ -43,7 +45,7 @@ export async function middleware(request: NextRequest) {
     return supabaseResponse
   }
 
-  // Rutas protegidas
+  // Rutas protegidas — requieren login
   if (!user) {
     return NextResponse.redirect(new URL('/login', request.url))
   }
