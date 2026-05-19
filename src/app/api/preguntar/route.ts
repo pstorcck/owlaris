@@ -37,8 +37,8 @@ const DOCS_CONFIG = [
   'Documento Maestro - Agente Alumno.docx',
   'Instrucciones SharePoint - Agente Alumno.docx',
   'Especificacion Tecnica - Agente Alumno.docx',
-  'Videos_Espan_ol.docx',
-  'Videos_Ingle_s.docx',
+  'Videos Español.docx',
+  'Videos Inglés.docx',
 ]
 
 async function obtenerTokenMicrosoft(): Promise<string | null> {
