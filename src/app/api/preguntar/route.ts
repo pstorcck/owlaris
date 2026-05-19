@@ -173,7 +173,9 @@ async function leerConfig(): Promise<string> {
 
   for (const doc of DOCS_CONFIG) {
     try {
-      const url = `https://graph.microsoft.com/v1.0/drives/${driveId}/root:/${encodeURIComponent('Owlaris')}/${encodeURIComponent('_Configuracion')}/${encodeURIComponent(doc)}`
+      const rutaDoc = `Owlaris/_Configuracion/${doc}`
+      const urlEncoded = rutaDoc.split('/').map((s: string) => encodeURIComponent(s)).join('/')
+      const url = `https://graph.microsoft.com/v1.0/drives/${driveId}/root:/${urlEncoded}`
       const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } })
       if (!res.ok) { console.log(`Config no encontrada: ${doc}`); continue }
       const data = await res.json()
