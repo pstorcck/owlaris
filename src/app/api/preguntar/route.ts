@@ -67,13 +67,18 @@ const DOCS_CONFIG = [
 // Palabras clave para detectar temas formativos vs crisis
 const PALABRAS_CRISIS = [
   'me quiero matar', 'suicidar', 'quitarme la vida', 'hacerme daño',
-  'autolesion', 'no quiero vivir', 'me voy a matar', 'quiero morir'
+  'autolesion', 'no quiero vivir', 'me voy a matar', 'quiero morir',
+  'abuso sexual', 'me violaron', 'me toca'
 ]
 
 const PALABRAS_FORMATIVAS = [
   'mi papá', 'mi mamá', 'mis padres', 'mi familia', 'pelea', 'problema en casa',
   'me siento mal', 'triste', 'solo', 'amigos', 'bullying', 'me molestan',
-  'valores', 'convivencia', 'disciplina', 'hábitos', 'motivación'
+  'valores', 'convivencia', 'disciplina', 'hábitos', 'motivación',
+  'me pega', 'me golpea', 'me grita', 'me insulta', 'violencia en casa',
+  'mis padres pelean', 'me siento solo', 'no tengo amigos', 'me hacen menos',
+  'me discriminan', 'me ignoran', 'no me entienden', 'estoy deprimido',
+  'me preocupa', 'tengo miedo', 'no sé qué hacer', 'necesito ayuda'
 ]
 
 function detectarTipoPregunta(pregunta: string): 'crisis' | 'formativa' | 'academica' {
