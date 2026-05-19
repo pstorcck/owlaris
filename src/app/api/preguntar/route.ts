@@ -149,7 +149,7 @@ async function buscarContenido(colegio_slug: string, grado: string, materia: str
   }
 
   const contenido = await extraerTexto(elegido['@microsoft.graph.downloadUrl'])
-  archivo = elegido.name
+  const archivo = elegido.name
   console.log(`✅ Encontrado: ${elegido.name}`)
 
   if (contenido) cacheContenido.set(cacheKey, { contenido, archivo: elegido.name, timestamp: Date.now() })
