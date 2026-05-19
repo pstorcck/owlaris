@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createAdminClient } from '@/lib/supabase/server'
+import { createClient } from '@supabase/supabase-js'
 
 const DOMINIOS_PERMITIDOS: Record<string, { colegio_slug: string; nombre: string }> = {
   'colegiomontano.edu.gt': { colegio_slug: 'colegio-montano', nombre: 'Colegio Montano' },
@@ -7,7 +7,7 @@ const DOMINIOS_PERMITIDOS: Record<string, { colegio_slug: string; nombre: string
 }
 
 function generarPassword(): string {
-  const chars     = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789'
+  const chars      = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789'
   const especiales = '@#$!'
   let pw = ''
   for (let i = 0; i < 8; i++) pw += chars[Math.floor(Math.random() * chars.length)]
@@ -16,87 +16,25 @@ function generarPassword(): string {
   return pw
 }
 
-async function enviarEmailBienvenida(
-  email: string,
-  nombre: string,
-  password: string,
-  colegio: string
-): Promise<boolean> {
-  try {
-    const res = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${process.env.RESEND_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        from:    'Owlaris <noreply@owlaris.app>',
-        to:      [email],
-        subject: 'Bienvenido a Owlaris — Tu tutor académico',
-        html: `
-<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-
-  <div style="background-color: #1A1A2E; padding: 30px; border-radius: 16px; text-align: center; margin-bottom: 24px;">
-    <h1 style="color: #ffffff; margin: 0; font-size: 28px;">🦉 Owlaris</h1>
-    <p style="color: #9CA3AF; margin: 8px 0 0 0;">Tu tutor académico inteligente</p>
-  </div>
-
-  <h2 style="color: #1A1A2E;">Hola, ${nombre}</h2>
-
-  <p style="color: #333333;">Tu cuenta en <strong>${colegio}</strong> ha sido creada exitosamente.</p>
-
-  <p style="color: #333333;">Estos son tus datos de acceso:</p>
-
-  <div style="background-color: #F3F0FF; border-left: 4px solid #6C3FC5; padding: 16px; border-radius: 8px; margin: 24px 0;">
-    <p style="margin: 0 0 8px 0; color: #333;"><strong>URL:</strong> <a href="https://owlaris.app" style="color: #6C3FC5;">owlaris.app</a></p>
-    <p style="margin: 0 0 8px 0; color: #333;"><strong>Email:</strong> ${email}</p>
-    <p style="margin: 0; color: #333;"><strong>Contraseña temporal:</strong> <code style="background: #E9E3FF; padding: 2px 8px; border-radius: 4px;">${password}</code></p>
-  </div>
-
-  <div style="text-align: center; margin: 32px 0;">
-    <a href="https://owlaris.app/login"
-       style="background-color: #6C3FC5; color: white; padding: 14px 32px; border-radius: 12px; text-decoration: none; font-weight: bold; font-size: 16px;">
-      Entrar a Owlaris
-    </a>
-  </div>
-
-  <p style="color: #6B7280; font-size: 13px;">Te recomendamos cambiar tu contraseña después de tu primer ingreso.</p>
-
-  <hr style="border: none; border-top: 1px solid #E5E7EB; margin: 24px 0;">
-
-  <p style="color: #9CA3AF; font-size: 12px; text-align: center;">
-    Este correo fue enviado automáticamente por Owlaris · ${colegio}<br>
-    Si no solicitaste esta cuenta, ignora este mensaje.
-  </p>
-
-</div>`,
-      }),
-    })
-
-    if (!res.ok) {
-      const err = await res.json()
-      console.error('Error Resend:', err)
-      return false
-    }
-
-    console.log(`✅ Email enviado a ${email}`)
-    return true
-  } catch (err) {
-    console.error('Error enviando email:', err)
-    return false
-  }
-}
-
 export async function POST(req: NextRequest) {
   try {
-    const admin = createAdminClient()
-    const { nombre_completo, email, grado, rol } = await req.json()
+    // Usar cliente admin directo sin cookies
+    const admin = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!,
+      { auth: { autoRefreshToken: false, persistSession: false } }
+    )
+
+    const body = await req.json()
+    const { nombre_completo, email, grado, rol } = body
+
+    console.log('Signup request:', { nombre_completo, email, grado })
 
     if (!nombre_completo?.trim() || !email?.trim()) {
       return NextResponse.json({ error: 'Nombre y email son requeridos' }, { status: 400 })
     }
 
-    const dominio    = email.split('@')[1]?.toLowerCase()
+    const dominio     = email.split('@')[1]?.toLowerCase()
     const colegioInfo = DOMINIOS_PERMITIDOS[dominio]
 
     if (!colegioInfo) {
@@ -116,42 +54,92 @@ export async function POST(req: NextRequest) {
     }
 
     const passwordTemporal = generarPassword()
+    console.log('Creando usuario:', email)
 
     const { data: authData, error: authError } = await admin.auth.admin.createUser({
-      email:         email.toLowerCase(),
+      email:         email.toLowerCase().trim(),
       password:      passwordTemporal,
       email_confirm: true,
     })
 
     if (authError) {
-      if (authError.message.includes('already registered')) {
+      console.error('Auth error:', authError)
+      if (authError.message.includes('already registered') || authError.message.includes('already been registered')) {
         return NextResponse.json({ error: 'Este correo ya está registrado' }, { status: 409 })
       }
-      throw authError
+      return NextResponse.json({ error: authError.message }, { status: 400 })
     }
 
+    console.log('Usuario creado en Auth:', authData.user.id)
+
     const { error: perfilError } = await admin.from('usuarios').insert({
-      id:             authData.user.id,
-      colegio_id:     colegio.id,
+      id:              authData.user.id,
+      colegio_id:      colegio.id,
       nombre_completo: nombre_completo.trim(),
-      email:          email.toLowerCase(),
-      rol:            rol || 'alumno',
-      grado:          grado || null,
-      activo:         true,
+      email:           email.toLowerCase().trim(),
+      rol:             rol || 'alumno',
+      grado:           grado || null,
+      activo:          true,
     })
 
-    if (perfilError) throw perfilError
+    if (perfilError) {
+      console.error('Perfil error:', perfilError)
+      return NextResponse.json({ error: perfilError.message }, { status: 500 })
+    }
 
-    await enviarEmailBienvenida(email, nombre_completo, passwordTemporal, colegio.nombre)
+    console.log('Perfil creado, enviando email...')
+
+    // Enviar email con Resend
+    try {
+      const resEmail = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${process.env.RESEND_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          from:    'Owlaris <noreply@owlaris.app>',
+          to:      [email.toLowerCase().trim()],
+          subject: 'Bienvenido a Owlaris — Tu tutor académico',
+          html: `
+<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+  <div style="background-color: #1A1A2E; padding: 30px; border-radius: 16px; text-align: center; margin-bottom: 24px;">
+    <h1 style="color: #ffffff; margin: 0; font-size: 28px;">🦉 Owlaris</h1>
+    <p style="color: #9CA3AF; margin: 8px 0 0 0;">Tu tutor académico inteligente</p>
+  </div>
+  <h2 style="color: #1A1A2E;">Hola, ${nombre_completo.trim()}</h2>
+  <p style="color: #333333;">Tu cuenta en <strong>${colegio.nombre}</strong> ha sido creada.</p>
+  <div style="background-color: #F3F0FF; border-left: 4px solid #6C3FC5; padding: 16px; border-radius: 8px; margin: 24px 0;">
+    <p style="margin: 0 0 8px 0;"><strong>URL:</strong> <a href="https://owlaris.app" style="color: #6C3FC5;">owlaris.app</a></p>
+    <p style="margin: 0 0 8px 0;"><strong>Email:</strong> ${email}</p>
+    <p style="margin: 0;"><strong>Contraseña temporal:</strong> <code style="background: #E9E3FF; padding: 2px 8px; border-radius: 4px;">${passwordTemporal}</code></p>
+  </div>
+  <div style="text-align: center; margin: 32px 0;">
+    <a href="https://owlaris.app/login" style="background-color: #6C3FC5; color: white; padding: 14px 32px; border-radius: 12px; text-decoration: none; font-weight: bold;">
+      Entrar a Owlaris
+    </a>
+  </div>
+  <p style="color: #9CA3AF; font-size: 12px; text-align: center;">
+    Owlaris · ${colegio.nombre}
+  </p>
+</div>`,
+        }),
+      })
+      const emailResult = await resEmail.json()
+      console.log('Email result:', emailResult)
+    } catch (emailErr) {
+      console.error('Email error:', emailErr)
+      // No falla el signup si el email falla
+    }
 
     return NextResponse.json({
       ok: true,
-      mensaje: `Cuenta creada. Te enviamos tu contraseña temporal a ${email}.`,
+      mensaje: `Cuenta creada exitosamente. Revisa tu correo ${email} para obtener tu contraseña temporal.`,
     })
 
   } catch (err: unknown) {
-    console.error('Error en /api/signup:', err)
-    const msg = err instanceof Error ? err.message : 'Error interno'
+    console.error('Error general signup:', err)
+    const msg = err instanceof Error ? err.message : 'Error interno del servidor'
     return NextResponse.json({ error: msg }, { status: 500 })
   }
 }
