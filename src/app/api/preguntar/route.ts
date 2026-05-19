@@ -18,26 +18,16 @@ Estructura de contenido en SharePoint: Colegio → Grado → Materia → Archivo
 Grados disponibles: 4to Primaria, 5to Primaria, 6to Primaria, 1ero Básico, 2do Básico, 3ero Básico, 4to Bachillerato, 5to Bachillerato.
 Para 3ero Básico y 5to Bachillerato también existe contenido Mineduc en carpetas: Mineduc - Lenguaje y Mineduc - Matemática.
 
-Documentos de configuración oficial del agente (consultar siempre):
-- Prompt Principal - Agente Alumno.docx
-- Politica Pedagogica Oficial - Agente Alumno.docx
-- Documento Maestro - Agente Alumno.docx
-- Instrucciones SharePoint - Agente Alumno.docx
-- Especificacion Tecnica - Agente Alumno.docx
-- Dashboard y Metricas - Agente Alumno.docx
-- Exclusiones y Adjuntos Permitidos - Agente Alumno.docx
-- Guia de Configuracion OpenAI - Agente Alumno.docx
-- Indice del Paquete - Agente Alumno.docx
-
 Usa el contenido institucional de SharePoint como fuente principal. Si no encuentras contenido, dilo con claridad y recomienda consultar al profesor.
 
-Regla anti-copia: si el alumno pide "dame la respuesta", "hazme la tarea", "solo dime qué va" o algo equivalente, responde con negativa pedagógica y guía paso a paso.
+Regla anti-copia: si el alumno pide dame la respuesta, hazme la tarea, solo dime qué va o algo equivalente, responde con negativa pedagógica y guía paso a paso.
 
-Alcance: eres principalmente un tutor académico. Puedes apoyar de forma limitada en hábitos de estudio, disciplina, responsabilidad, familia, valores y convivencia, siempre con base en contenido autorizado. Si el tema toca salud mental, crisis emocional, violencia, abuso, autolesión, sexualidad delicada u otro riesgo personal, no profundices ni improvises; recomienda hablar con un adulto responsable, orientador o profesional adecuado.
+Alcance formativo limitado: puedes apoyar en hábitos de estudio, disciplina, responsabilidad, familia, valores y convivencia. Cuando el tema toque estas áreas, puedes recomendar videos de Eduardo Montano que son recursos oficiales del colegio. Si el tema toca salud mental, crisis emocional, violencia, abuso, autolesión, sexualidad delicada u otro riesgo personal, no profundices ni improvises; recomienda hablar con un adulto responsable, orientador o profesional adecuado.
+
+Uso de videos: cuando el tema sea de familia, valores, convivencia, disciplina, hábitos o desinformación, puedes recomendar videos del canal oficial de Eduardo Montano. Los links están en los documentos de configuración Videos_Español y Videos_Inglés. Incluye el link directamente en tu respuesta cuando sea relevante.
 
 Cada interacción debe lograr al menos una de estas cosas: el alumno entiende mejor, practica, avanza o sabe qué hacer después.`
 
-// Cache de docs de configuracion de Eduardo
 const cacheConfig = new Map<string, { contenido: string; timestamp: number }>()
 const CACHE_CONFIG_TTL = 1000 * 60 * 30
 
@@ -47,6 +37,8 @@ const DOCS_CONFIG = [
   'Documento Maestro - Agente Alumno.docx',
   'Instrucciones SharePoint - Agente Alumno.docx',
   'Especificacion Tecnica - Agente Alumno.docx',
+  'Videos_Espan_ol.docx',
+  'Videos_Ingle_s.docx',
 ]
 
 async function obtenerTokenMicrosoft(): Promise<string | null> {
@@ -71,24 +63,20 @@ async function obtenerTokenMicrosoft(): Promise<string | null> {
 
 async function leerDocsConfiguracion(): Promise<string> {
   const cached = cacheConfig.get('config')
-  if (cached && Date.now() - cached.timestamp < CACHE_CONFIG_TTL) {
-    return cached.contenido
-  }
+  if (cached && Date.now() - cached.timestamp < CACHE_CONFIG_TTL) return cached.contenido
 
   try {
-    const token  = await obtenerTokenMicrosoft()
+    const token   = await obtenerTokenMicrosoft()
     if (!token) return ''
-    const siteId = process.env.SHAREPOINT_SITE_ID
+    const driveId = process.env.SHAREPOINT_DRIVE_ID!
     let contenido = ''
 
     for (const doc of DOCS_CONFIG) {
       try {
         const ruta = `Owlaris/_Configuracion/${doc}`
-        const res  = await fetch(
-          `https://graph.microsoft.com/v1.0/sites/${siteId}/drive/root:/${encodeURIComponent(ruta)}`,
-          { headers: { Authorization: `Bearer ${token}` } }
-        )
-        if (!res.ok) continue
+        const url  = `https://graph.microsoft.com/v1.0/drives/${driveId}/root:/${encodeURIComponent('Owlaris')}/${encodeURIComponent('_Configuracion')}/${encodeURIComponent(doc)}`
+        const res  = await fetch(url, { headers: { Authorization: `Bearer ${token}` } })
+        if (!res.ok) { console.log(`Config no encontrada: ${doc}`); continue }
         const data        = await res.json()
         const downloadUrl = data['@microsoft.graph.downloadUrl']
         if (!downloadUrl) continue
@@ -96,18 +84,16 @@ async function leerDocsConfiguracion(): Promise<string> {
         const buffer  = await resDoc.arrayBuffer()
         const mammoth = await import('mammoth')
         const { value } = await mammoth.extractRawText({ buffer: Buffer.from(buffer) })
-        contenido += `\n\n=== ${doc} ===\n${value.substring(0, 1500)}`
+        contenido += `\n\n=== ${doc} ===\n${value.substring(0, 2000)}`
         console.log(`✅ Config leída: ${doc}`)
       } catch (e) {
-        console.log(`Error leyendo config ${doc}:`, e)
+        console.log(`Error config ${doc}:`, e)
       }
     }
 
     cacheConfig.set('config', { contenido, timestamp: Date.now() })
     return contenido
-  } catch {
-    return ''
-  }
+  } catch { return '' }
 }
 
 export async function POST(req: NextRequest) {
@@ -130,7 +116,6 @@ export async function POST(req: NextRequest) {
 
     if (!perfil) return NextResponse.json({ error: 'Perfil no encontrado' }, { status: 404 })
 
-    // Leer configuracion del colegio
     const { data: configs } = await supabase
       .from('configuracion')
       .select('clave, valor')
@@ -139,12 +124,10 @@ export async function POST(req: NextRequest) {
     const cfg: Record<string, string> = {}
     configs?.forEach(c => { cfg[c.clave] = c.valor })
 
-    // Modo mantenimiento
     if (cfg.modo_mantenimiento === 'true') {
       return NextResponse.json({ error: 'El tutor está en mantenimiento. Intenta más tarde.' }, { status: 503 })
     }
 
-    // Limite diario
     const limite = parseInt(cfg.limite_preguntas_diarias || '999')
     if (limite < 999) {
       const hoy = new Date().toISOString().split('T')[0]
@@ -163,7 +146,6 @@ export async function POST(req: NextRequest) {
 
     const gradoEfectivo = grado_override || perfil.grado
 
-    // Buscar contenido academico en SharePoint
     let contenidoCurricular = ''
     let documentoFuente     = null
 
@@ -179,21 +161,17 @@ export async function POST(req: NextRequest) {
         }),
       })
       if (resContenido.ok) {
-        const dataContenido   = await resContenido.json()
-        contenidoCurricular   = dataContenido.contenido || ''
-        documentoFuente       = dataContenido.archivo   || null
+        const dataContenido = await resContenido.json()
+        contenidoCurricular = dataContenido.contenido || ''
+        documentoFuente     = dataContenido.archivo   || null
       }
     } catch {
       console.log('SharePoint contenido no disponible')
     }
 
-    // Leer docs de configuracion de Eduardo desde _Configuracion
     const docsConfig = await leerDocsConfiguracion()
-
-    // Usar prompt personalizado de Supabase si existe, si no el base
     const promptBase = cfg.prompt_personalizado || PROMPT_BASE
 
-    // Armar system prompt completo
     const systemPrompt = `${promptBase}
 
 CONTEXTO DEL ALUMNO:
@@ -201,16 +179,16 @@ CONTEXTO DEL ALUMNO:
 - Grado: ${gradoEfectivo}
 - Materia: ${materia?.nombre || 'General'}
 
-${docsConfig ? `DOCUMENTOS DE CONFIGURACION OFICIAL DEL AGENTE:
+${docsConfig ? `DOCUMENTOS DE CONFIGURACION OFICIAL (incluye links de videos):
 ${docsConfig}
 ` : ''}
 
 ${contenidoCurricular
-  ? `CONTENIDO ACADEMICO DEL COLEGIO (fuente principal para esta consulta):
+  ? `CONTENIDO ACADEMICO DEL COLEGIO (fuente principal):
 ---
 ${contenidoCurricular.substring(0, 3000)}
 ---`
-  : `NOTA: No se encontró contenido específico en SharePoint para este tema en ${gradoEfectivo} / ${materia?.nombre}. Responde con conocimiento general apropiado para el nivel pero indica al alumno que consulte con su profesor para el material oficial del colegio.`
+  : `NOTA: No se encontró contenido en SharePoint para ${gradoEfectivo} / ${materia?.nombre}. Responde con conocimiento general apropiado e indica al alumno que consulte con su profesor.`
 }`
 
     const mensajesOpenAI: { role: 'user' | 'assistant' | 'system'; content: string }[] = [
@@ -231,28 +209,28 @@ ${contenidoCurricular.substring(0, 3000)}
     const completion = await openai.chat.completions.create({
       model:       'gpt-4o-mini',
       messages:    mensajesOpenAI,
-      max_tokens:  600,
+      max_tokens:  700,
       temperature: 0.7,
     })
 
-    const respuesta    = completion.choices[0].message.content || 'No pude generar una respuesta.'
-    const tokensUsados = completion.usage?.total_tokens || 0
-    const costoUSD     = tokensUsados * 0.00000015
+    const respuesta     = completion.choices[0].message.content || 'No pude generar una respuesta.'
+    const tokensUsados  = completion.usage?.total_tokens || 0
+    const costoUSD      = tokensUsados * 0.00000015
     const sospechaCopia = detectarCopia(pregunta)
 
     await supabase.from('interacciones').insert({
-      usuario_id:      user.id,
-      colegio_id:      perfil.colegio_id,
-      materia_id:      materia_id || null,
-      grado:           gradoEfectivo,
-      tema_detectado:  pregunta.substring(0, 100),
+      usuario_id:       user.id,
+      colegio_id:       perfil.colegio_id,
+      materia_id:       materia_id || null,
+      grado:            gradoEfectivo,
+      tema_detectado:   pregunta.substring(0, 100),
       pregunta,
       respuesta,
-      tokens_usados:   tokensUsados,
-      costo_usd:       costoUSD,
-      modelo_usado:    'gpt-4o-mini',
+      tokens_usados:    tokensUsados,
+      costo_usd:        costoUSD,
+      modelo_usado:     'gpt-4o-mini',
       documento_fuente: documentoFuente,
-      sospecha_copia:  sospechaCopia,
+      sospecha_copia:   sospechaCopia,
     })
 
     if (!contenidoCurricular && materia) {
@@ -293,12 +271,12 @@ async function registrarPendiente(
       .eq('id', existente.id)
   } else {
     await supabase.from('pendientes').insert({
-      colegio_id:      perfil.colegio_id,
-      grado:           perfil.grado || '',
-      materia:         materia.nombre,
-      tema_solicitado: tema,
+      colegio_id:       perfil.colegio_id,
+      grado:            perfil.grado || '',
+      materia:          materia.nombre,
+      tema_solicitado:  tema,
       veces_solicitado: 1,
-      resuelto:        false,
+      resuelto:         false,
     })
   }
 }
