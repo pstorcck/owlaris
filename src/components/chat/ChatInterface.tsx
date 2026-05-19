@@ -11,17 +11,78 @@ interface Props {
 }
 
 const GRADOS_GUATEMALA = [
-  '4to Primaria',
-  '5to Primaria',
-  '6to Primaria',
-  '1ero Básico',
-  '2do Básico',
-  '3ero Básico',
-  '4to Bachillerato',
-  '5to Bachillerato',
+  '4to Primaria', '5to Primaria', '6to Primaria',
+  '1ero Básico', '2do Básico', '3ero Básico',
+  '4to Bachillerato', '5to Bachillerato',
 ]
 
 const GRADOS_CON_MINEDUC = ['3ero Básico', '5to Bachillerato']
+
+function renderTexto(texto: string): React.ReactNode[] {
+  // Convierte markdown links [texto](url) a <a> clickeables
+  // También convierte URLs sueltas a links
+  const partes = texto.split(/(\[([^\]]+)\]\((https?:\/\/[^\)]+)\)|https?:\/\/\S+)/g)
+  const resultado: React.ReactNode[] = []
+  let i = 0
+
+  const lineas = texto.split('\n')
+  return lineas.map((linea, lineaIdx) => {
+    const segmentos: React.ReactNode[] = []
+    let resto = linea
+    let key = 0
+
+    // Buscar links markdown [texto](url)
+    const mdLinkRegex = /\[([^\]]+)\]\((https?:\/\/[^\)]+)\)/g
+    let lastIndex = 0
+    let match
+
+    mdLinkRegex.lastIndex = 0
+    while ((match = mdLinkRegex.exec(resto)) !== null) {
+      if (match.index > lastIndex) {
+        segmentos.push(<span key={key++}>{resto.slice(lastIndex, match.index)}</span>)
+      }
+      segmentos.push(
+        <a key={key++} href={match[2]} target="_blank" rel="noopener noreferrer"
+           className="text-owlaris-secondary underline hover:text-teal-300 transition-colors">
+          {match[2]}
+        </a>
+      )
+      lastIndex = match.index + match[0].length
+    }
+
+    if (lastIndex < resto.length) {
+      // Buscar URLs sueltas en el resto
+      const urlRegex = /(https?:\/\/\S+)/g
+      const parteResto = resto.slice(lastIndex)
+      let lastUrl = 0
+      let urlMatch
+
+      urlRegex.lastIndex = 0
+      while ((urlMatch = urlRegex.exec(parteResto)) !== null) {
+        if (urlMatch.index > lastUrl) {
+          segmentos.push(<span key={key++}>{parteResto.slice(lastUrl, urlMatch.index)}</span>)
+        }
+        segmentos.push(
+          <a key={key++} href={urlMatch[1]} target="_blank" rel="noopener noreferrer"
+             className="text-owlaris-secondary underline hover:text-teal-300 transition-colors">
+            {urlMatch[1]}
+          </a>
+        )
+        lastUrl = urlMatch.index + urlMatch[0].length
+      }
+      if (lastUrl < parteResto.length) {
+        segmentos.push(<span key={key++}>{parteResto.slice(lastUrl)}</span>)
+      }
+    }
+
+    return (
+      <span key={lineaIdx}>
+        {segmentos.length > 0 ? segmentos : linea}
+        {lineaIdx < lineas.length - 1 && <br/>}
+      </span>
+    )
+  })
+}
 
 export default function ChatInterface({ usuario, materias }: Props) {
   const [mensajes, setMensajes]             = useState<MensajeChat[]>([])
@@ -57,7 +118,7 @@ export default function ChatInterface({ usuario, materias }: Props) {
     setMensajes([{
       id: 'bienvenida',
       rol: 'asistente',
-      contenido: `Hola, ${nombre}. Soy Owlaris, tu tutor académico. Estoy aquí para ayudarte a entender, no solo a darte respuestas. ¿Sobre qué tema de ${materiaNombre} tienes dudas hoy?`,
+      contenido: `Hola, ${nombre}. Soy Owlaris, tu tutor academico. Estoy aqui para ayudarte a entender, no solo a darte respuestas. Sobre que tema de ${materiaNombre} tienes dudas hoy?`,
       timestamp: new Date(),
     }])
   }, [materiaId])
@@ -242,7 +303,9 @@ function MensajeBurbuja({ mensaje }: { mensaje: MensajeChat }) {
       </div>
       <div className={`max-w-[80%] px-4 py-3 rounded-2xl shadow-sm
         ${esAlumno ? 'bg-owlaris-primary text-white rounded-tr-none' : 'bg-white text-gray-800 rounded-tl-none'}`}>
-        <p className="text-sm whitespace-pre-wrap leading-relaxed">{mensaje.contenido}</p>
+        <p className="text-sm leading-relaxed">
+          {renderTexto(mensaje.contenido)}
+        </p>
         {mensaje.documento_fuente && (
           <p className="text-xs mt-2 opacity-60">Fuente: {mensaje.documento_fuente}</p>
         )}
