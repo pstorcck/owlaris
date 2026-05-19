@@ -19,18 +19,28 @@ export async function GET() {
   )
   const { access_token: token } = await tokenRes.json()
 
-  // Probar ruta exacta con segmentos codificados individualmente
   const segs = ['Owlaris', 'Escolaris', '3ero Básico', 'Mineduc - Lenguaje']
   const ruta = segs.map(s => encodeURIComponent(s)).join('/')
   const url  = `https://graph.microsoft.com/v1.0/drives/${driveId}/root:/${ruta}:/children`
-
   const res  = await fetch(url, { headers: { Authorization: `Bearer ${token}` } })
   const data = await res.json()
 
+  const archivos = (data.value || []).filter((f: {name:string}) => f.name.endsWith('.docx'))
+  
+  if (archivos.length === 0) return NextResponse.json({ error: 'No hay docx' })
+
+  // Intentar extraer texto del primer archivo
+  const archivo = archivos[0]
+  const downloadUrl = archivo['@microsoft.graph.downloadUrl']
+  
+  const docRes = await fetch(downloadUrl)
+  const buffer = await docRes.arrayBuffer()
+  const mammoth = await import('mammoth')
+  const { value: texto } = await mammoth.extractRawText({ buffer: Buffer.from(buffer) })
+
   return NextResponse.json({
-    url_probada: ruta,
-    status: res.status,
-    archivos: (data.value || []).map((f: {name:string}) => f.name),
-    error: data.error || null
+    archivo: archivo.name,
+    texto_primeros_200: texto.substring(0, 200),
+    exito: texto.length > 0
   })
 }
