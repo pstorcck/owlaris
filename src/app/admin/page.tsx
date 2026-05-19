@@ -16,28 +16,29 @@ export default async function AdminPage() {
 
   if (!perfil || !['admin', 'superadmin'].includes(perfil.rol)) redirect('/login')
 
-  // Superadmin ve todos los colegios, admin solo el suyo
   const esSuperAdmin = perfil.rol === 'superadmin'
 
-  // Métricas del colegio
-  let queryUsuarios = supabase.from('usuarios').select('*', { count: 'exact', head: true }).eq('rol', 'alumno')
-  let queryPreguntas = supabase.from('interacciones').select('*', { count: 'exact', head: true })
-  let queryPendientes = supabase.from('pendientes').select('*', { count: 'exact', head: true }).eq('resuelto', false)
+  // Métricas — superadmin ve todo, admin ve su colegio
+  let qAlumnos    = supabase.from('usuarios').select('*', { count: 'exact', head: true }).eq('rol', 'alumno')
+  let qPreguntas  = supabase.from('interacciones').select('*', { count: 'exact', head: true })
+  let qPendientes = supabase.from('pendientes').select('*', { count: 'exact', head: true }).eq('resuelto', false)
 
-  if (!esSuperAdmin) {
-    queryUsuarios  = queryUsuarios.eq('colegio_id', perfil.colegio_id)
-    queryPreguntas = queryPreguntas.eq('colegio_id', perfil.colegio_id)
-    queryPendientes = queryPendientes.eq('colegio_id', perfil.colegio_id)
+  if (!esSuperAdmin && perfil.colegio_id) {
+    qAlumnos    = qAlumnos.eq('colegio_id', perfil.colegio_id)
+    qPreguntas  = qPreguntas.eq('colegio_id', perfil.colegio_id)
+    qPendientes = qPendientes.eq('colegio_id', perfil.colegio_id)
   }
 
-  const { count: totalAlumnos }   = await queryUsuarios
-  const { count: totalPreguntas } = await queryPreguntas
-  const { count: pendientesCount } = await queryPendientes
+  const [
+    { count: totalAlumnos },
+    { count: totalPreguntas },
+    { count: pendientesCount },
+  ] = await Promise.all([qAlumnos, qPreguntas, qPendientes])
 
   const menus = [
     { href: '/admin/usuarios',      icon: '👥', titulo: 'Usuarios',           desc: 'Crear, importar, gestionar alumnos' },
     { href: '/admin/metricas',      icon: '📈', titulo: 'Métricas',           desc: 'Uso y actividad' },
-    { href: '/admin/chats',         icon: '💬', titulo: 'Historial de chats', desc: 'Ver conversaciones' },
+    { href: '/admin/chats',         icon: '💬', titulo: 'Historial de chats', desc: 'Ver conversaciones de alumnos' },
     { href: '/admin/configuracion', icon: '⚙️', titulo: 'Configuración',      desc: 'Prompt, límites, mantenimiento' },
   ]
 
@@ -63,19 +64,19 @@ export default async function AdminPage() {
 
       <main className="max-w-6xl mx-auto px-6 py-8">
 
-        {/* Métricas — sin costos */}
+        {/* Métricas reales */}
         <div className="grid grid-cols-3 gap-4 mb-8">
           <div className="bg-white/5 rounded-xl p-5 border border-white/10 text-center">
-            <p className="text-xs text-gray-400 mb-1">Alumnos</p>
-            <p className="text-3xl font-bold text-purple-400">{totalAlumnos || 0}</p>
+            <p className="text-xs text-gray-400 mb-1">Alumnos registrados</p>
+            <p className="text-3xl font-bold text-purple-400">{totalAlumnos ?? '—'}</p>
           </div>
           <div className="bg-white/5 rounded-xl p-5 border border-white/10 text-center">
             <p className="text-xs text-gray-400 mb-1">Preguntas totales</p>
-            <p className="text-3xl font-bold text-blue-400">{totalPreguntas || 0}</p>
+            <p className="text-3xl font-bold text-blue-400">{totalPreguntas ?? '—'}</p>
           </div>
           <div className="bg-white/5 rounded-xl p-5 border border-white/10 text-center">
-            <p className="text-xs text-gray-400 mb-1">Temas pendientes</p>
-            <p className="text-3xl font-bold text-yellow-400">{pendientesCount || 0}</p>
+            <p className="text-xs text-gray-400 mb-1">Temas sin contenido</p>
+            <p className="text-3xl font-bold text-yellow-400">{pendientesCount ?? '—'}</p>
           </div>
         </div>
 
@@ -98,7 +99,7 @@ export default async function AdminPage() {
         {/* Estado */}
         <div className="bg-white/5 rounded-2xl p-6 border border-white/10">
           <h2 className="font-semibold mb-4">Estado del sistema</h2>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
             {[
               { ok: true,  texto: 'Base de datos' },
               { ok: true,  texto: 'Login activo' },
@@ -106,12 +107,10 @@ export default async function AdminPage() {
               { ok: true,  texto: 'SharePoint' },
               { ok: true,  texto: 'owlaris.app' },
               { ok: true,  texto: 'Email Resend' },
-              { ok: false, texto: 'Panel maestro' },
-              { ok: false, texto: 'Dashboard financiero' },
             ].map((item, i) => (
               <div key={i} className="flex items-center gap-2">
-                <span className={`w-2 h-2 rounded-full flex-shrink-0 ${item.ok ? 'bg-green-400' : 'bg-gray-600'}`}/>
-                <span className={`text-sm ${item.ok ? 'text-white' : 'text-gray-500'}`}>{item.texto}</span>
+                <span className="w-2 h-2 rounded-full flex-shrink-0 bg-green-400"/>
+                <span className="text-sm text-white">{item.texto}</span>
               </div>
             ))}
           </div>
