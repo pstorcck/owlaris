@@ -4,6 +4,15 @@ import { NextResponse, type NextRequest } from 'next/server'
 export async function middleware(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request })
 
+  const { pathname } = request.nextUrl
+
+  // Rutas completamente públicas — sin verificar sesión
+  if (pathname === '/signup' || 
+      pathname === '/login' || 
+      pathname.startsWith('/api/signup')) {
+    return supabaseResponse
+  }
+
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -22,30 +31,7 @@ export async function middleware(request: NextRequest) {
   )
 
   const { data: { user } } = await supabase.auth.getUser()
-  const { pathname } = request.nextUrl
 
-  // Signup siempre accesible — nunca redirigir
-  if (pathname === '/signup') return supabaseResponse
-
-  // Login — si ya está logueado, redirigir según rol
-  if (pathname === '/login' || pathname === '/') {
-    if (user) {
-      const { data: perfil } = await supabase
-        .from('usuarios')
-        .select('rol')
-        .eq('id', user.id)
-        .single()
-
-      if (perfil) {
-        return NextResponse.redirect(
-          new URL(getRutaPorRol(perfil.rol), request.url)
-        )
-      }
-    }
-    return supabaseResponse
-  }
-
-  // Rutas protegidas — requieren login
   if (!user) {
     return NextResponse.redirect(new URL('/login', request.url))
   }
@@ -53,16 +39,6 @@ export async function middleware(request: NextRequest) {
   return supabaseResponse
 }
 
-function getRutaPorRol(rol: string): string {
-  switch (rol) {
-    case 'alumno':     return '/chat'
-    case 'maestro':    return '/teacher'
-    case 'admin':
-    case 'superadmin': return '/admin'
-    default:           return '/login'
-  }
-}
-
 export const config = {
-  matcher: ['/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)'],
+  matcher: ['/((?!_next/static|_next/image|favicon.ico|api/signup|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)'],
 }
