@@ -68,7 +68,7 @@ const DOCS_CONFIG = [
 const PALABRAS_CRISIS = [
   'me quiero matar', 'suicidar', 'quitarme la vida', 'hacerme daño',
   'autolesion', 'no quiero vivir', 'me voy a matar', 'quiero morir',
-  'abuso sexual', 'me violaron', 'me toca'
+  'abuso sexual', 'me violaron', 'me toca inapropiadamente'
 ]
 
 const PALABRAS_FORMATIVAS = [
@@ -78,7 +78,9 @@ const PALABRAS_FORMATIVAS = [
   'me pega', 'me golpea', 'me grita', 'me insulta', 'violencia en casa',
   'mis padres pelean', 'me siento solo', 'no tengo amigos', 'me hacen menos',
   'me discriminan', 'me ignoran', 'no me entienden', 'estoy deprimido',
-  'me preocupa', 'tengo miedo', 'no sé qué hacer', 'necesito ayuda'
+  'me preocupa', 'tengo miedo', 'no sé qué hacer', 'necesito ayuda',
+  'me siento triste', 'estoy triste', 'muy triste', 'problema familiar',
+  'no me quieren', 'me castigan', 'me regañan', 'mis papás'
 ]
 
 function detectarTipoPregunta(pregunta: string): 'crisis' | 'formativa' | 'academica' {
