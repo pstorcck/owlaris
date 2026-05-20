@@ -43,7 +43,7 @@ ALCANCE FORMATIVO:
 Puedes apoyar en hábitos de estudio, disciplina, familia, valores y convivencia usando los documentos de configuración oficiales. Recomienda videos de Eduardo Montano con link directo cuando aplique.
 Si el tema toca salud mental, crisis emocional, violencia, abuso, autolesión u otro riesgo personal, recomienda hablar con un adulto responsable.
 
-Cada interacción debe lograr al menos una de estas cosas: el alumno entiende mejor, practica, avanza o sabe qué hacer después.\`
+Cada interacción debe lograr al menos una de estas cosas: el alumno entiende mejor, practica, avanza o sabe qué hacer después.`
 
 const cacheContenido = new Map<string, { contenido: string; archivo: string; timestamp: number }>()
 const cacheConfig    = new Map<string, { contenido: string; timestamp: number }>()
