@@ -337,7 +337,12 @@ ${contextoContenido}`
       model: 'gpt-4o-mini', messages: mensajesOpenAI, max_tokens: 700, temperature: 0.7,
     })
 
-    const respuesta    = completion.choices[0].message.content || 'No pude generar una respuesta.'
+    let respuesta = completion.choices[0].message.content || 'No pude generar una respuesta.'
+    
+    // Si es tema formativo, agregar link de video de Eduardo al final
+    if (tipoPregunta === 'formativa') {
+      respuesta += '\n\nTe comparto este recurso de Eduardo Montano que puede ayudarte: https://www.youtube.com/c/EduardoMontano'
+    }
     const tokensUsados = completion.usage?.total_tokens || 0
     const costoUSD     = tokensUsados * 0.00000015
 
