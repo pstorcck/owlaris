@@ -20,7 +20,7 @@ const GRADOS_CON_MINEDUC = ['3ero Básico', '5to Bachillerato']
 
 const SUGERENCIAS_DEFAULT = [
   { icon: '✦', text: 'Explícame con un ejemplo' },
-  { icon: '◈', text: 'Hazme 3 preguntas de práctica' },
+  { icon: '◈', text: 'Quiero practicar' },
   { icon: '◇', text: 'Resume el tema' },
   { icon: '↺', text: 'Propón otro tema' },
 ]
@@ -110,7 +110,7 @@ export default function ChatInterface({ usuario, materias }: Props) {
       const mat = materiasVisibles.find(m => m.id === materiaId)?.nombre || 'el tema'
       setSugerencias([
         { icon: '✦', text: `¿Qué partes tiene ${tp.split(' ').slice(0,4).join(' ')}?` },
-        { icon: '◈', text: 'Hazme 3 preguntas de práctica' },
+        { icon: '◈', text: 'Quiero practicar' },
         { icon: '◇', text: 'Explícame con un ejemplo' },
         { icon: '↺', text: `Propón otro tema de ${mat}` },
       ])
