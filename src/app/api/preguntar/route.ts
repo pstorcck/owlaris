@@ -133,34 +133,89 @@ async function extraerTexto(url: string): Promise<string> {
   return value
 }
 
-async function buscarContenido(colegio_slug: string, grado: string, materia: string, pregunta: string) {
-  const cacheKey = `${colegio_slug}/${grado}/${materia}`
-  const cached   = cacheContenido.get(cacheKey)
-  if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
-    return { contenido: cached.contenido, archivo: cached.archivo }
-  }
+// Índice de documentos: cacheKey -> [{nombre, tema, downloadUrl}]
+const indiceDocumentos = new Map<string, { nombre: string; tema: string; downloadUrl: string }[]>()
 
+async function construirIndice(driveId: string, token: string, colegioSP: string, grado: string, materia: string) {
+  const idxKey  = `idx/${colegioSP}/${grado}/${materia}`
+  const cached  = indiceDocumentos.get(idxKey)
+  if (cached) return cached
+
+  console.log(`Construyendo índice: ${colegioSP}/${grado}/${materia}`)
+  const archivos = await listarArchivos(driveId, token, 'Owlaris', colegioSP, grado, materia)
+  if (archivos.length === 0) return []
+
+  const indice: { nombre: string; tema: string; downloadUrl: string }[] = []
+
+  // Leer primeros 300 chars de cada doc para extraer el tema
+  await Promise.all(archivos.map(async (archivo: { name: string; '@microsoft.graph.downloadUrl': string }) => {
+    try {
+      const r   = await fetch(archivo['@microsoft.graph.downloadUrl'])
+      const buf = await r.arrayBuffer()
+      const m   = await import('mammoth')
+      const { value } = await m.extractRawText({ buffer: Buffer.from(buf) })
+      const tema = value.substring(0, 300).trim()
+      indice.push({ nombre: archivo.name, tema, downloadUrl: archivo['@microsoft.graph.downloadUrl'] })
+    } catch { 
+      indice.push({ nombre: archivo.name, tema: archivo.name, downloadUrl: archivo['@microsoft.graph.downloadUrl'] })
+    }
+  }))
+
+  indiceDocumentos.set(idxKey, indice)
+  console.log(`✅ Índice construido: ${indice.length} documentos`)
+  
+  // Limpiar índice después de 30 min
+  setTimeout(() => indiceDocumentos.delete(idxKey), CACHE_TTL)
+  
+  return indice
+}
+
+async function buscarContenido(colegio_slug: string, grado: string, materia: string, pregunta: string) {
   const token    = await getToken()
   if (!token) return { contenido: '', archivo: null }
 
   const driveId   = process.env.SHAREPOINT_DRIVE_ID!
   const colegioSP = COLEGIOS_SP[colegio_slug] || colegio_slug
 
-  console.log(`Buscando: Owlaris/${colegioSP}/${grado}/${materia}`)
-  const archivos = await listarArchivos(driveId, token, 'Owlaris', colegioSP, grado, materia)
-  const elegido  = elegirArchivo(archivos, pregunta)
-
-  if (!elegido) {
+  // Construir índice con temas reales de cada documento
+  const indice = await construirIndice(driveId, token, colegioSP, grado, materia)
+  if (indice.length === 0) {
     console.log(`❌ No encontrado: ${colegioSP}/${grado}/${materia}`)
     return { contenido: '', archivo: null }
   }
 
-  const contenido = await extraerTexto(elegido['@microsoft.graph.downloadUrl'])
-  const archivo = elegido.name
-  console.log(`✅ Encontrado: ${elegido.name}`)
+  // Elegir el documento más relevante comparando con el tema extraído
+  const preguntaLower = pregunta.toLowerCase()
+  const palabras = preguntaLower.split(/\s+/).filter(p => p.length > 3)
 
-  if (contenido) cacheContenido.set(cacheKey, { contenido, archivo: elegido.name, timestamp: Date.now() })
-  return { contenido, archivo: elegido.name }
+  let mejorPuntaje = -1
+  let mejorDoc = indice[0]
+
+  for (const doc of indice) {
+    const temaLower = doc.tema.toLowerCase()
+    let puntaje = 0
+    for (const palabra of palabras) {
+      if (temaLower.includes(palabra)) puntaje += 2
+      if (doc.nombre.toLowerCase().includes(palabra)) puntaje += 1
+    }
+    if (puntaje > mejorPuntaje) {
+      mejorPuntaje = puntaje
+      mejorDoc = doc
+    }
+  }
+
+  console.log(`✅ Elegido: ${mejorDoc.nombre} (puntaje: ${mejorPuntaje})`)
+
+  // Leer contenido completo del documento elegido
+  const cacheKey = `${colegioSP}/${grado}/${materia}/${mejorDoc.nombre}`
+  const cached   = cacheContenido.get(cacheKey)
+  if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+    return { contenido: cached.contenido, archivo: cached.archivo }
+  }
+
+  const contenido = await extraerTexto(mejorDoc.downloadUrl)
+  cacheContenido.set(cacheKey, { contenido, archivo: mejorDoc.nombre, timestamp: Date.now() })
+  return { contenido, archivo: mejorDoc.nombre }
 }
 
 async function leerConfig(): Promise<string> {
