@@ -18,69 +18,39 @@ const GRADOS_GUATEMALA = [
 
 const GRADOS_CON_MINEDUC = ['3ero Básico', '5to Bachillerato']
 
-function renderTexto(texto: string): React.ReactNode[] {
-  // Convierte markdown links [texto](url) a <a> clickeables
-  // También convierte URLs sueltas a links
-  const partes = texto.split(/(\[([^\]]+)\]\((https?:\/\/[^\)]+)\)|https?:\/\/\S+)/g)
-  const resultado: React.ReactNode[] = []
-  let i = 0
+const SUGERENCIAS_DEFAULT = [
+  { icon: '✦', text: 'Explícame con un ejemplo' },
+  { icon: '◈', text: 'Hazme 3 preguntas de práctica' },
+  { icon: '◇', text: 'Resume el tema' },
+  { icon: '↺', text: 'Propón otro tema' },
+]
 
+function renderTexto(texto: string): React.ReactNode[] {
   const lineas = texto.split('\n')
   return lineas.map((linea, lineaIdx) => {
     const segmentos: React.ReactNode[] = []
-    let resto = linea
-    let key = 0
-
-    // Buscar links markdown [texto](url)
-    const mdLinkRegex = /\[([^\]]+)\]\((https?:\/\/[^\)]+)\)/g
     let lastIndex = 0
-    let match
-
+    let key = 0
+    const mdLinkRegex = /\[([^\]]+)\]\((https?:\/\/[^\)]+)\)/g
     mdLinkRegex.lastIndex = 0
-    while ((match = mdLinkRegex.exec(resto)) !== null) {
-      if (match.index > lastIndex) {
-        segmentos.push(<span key={key++}>{resto.slice(lastIndex, match.index)}</span>)
-      }
-      segmentos.push(
-        <a key={key++} href={match[2]} target="_blank" rel="noopener noreferrer"
-           className="text-owlaris-secondary underline hover:text-teal-300 transition-colors">
-          {match[2]}
-        </a>
-      )
+    let match
+    while ((match = mdLinkRegex.exec(linea)) !== null) {
+      if (match.index > lastIndex) segmentos.push(<span key={key++}>{linea.slice(lastIndex, match.index)}</span>)
+      segmentos.push(<a key={key++} href={match[2]} target="_blank" rel="noopener noreferrer" style={{color:'#6D28D9',textDecoration:'underline',textDecorationColor:'rgba(109,40,217,.3)'}}>{match[2]}</a>)
       lastIndex = match.index + match[0].length
     }
-
-    if (lastIndex < resto.length) {
-      // Buscar URLs sueltas en el resto
+    if (lastIndex < linea.length) {
+      const resto = linea.slice(lastIndex)
       const urlRegex = /(https?:\/\/\S+)/g
-      const parteResto = resto.slice(lastIndex)
-      let lastUrl = 0
-      let urlMatch
-
-      urlRegex.lastIndex = 0
-      while ((urlMatch = urlRegex.exec(parteResto)) !== null) {
-        if (urlMatch.index > lastUrl) {
-          segmentos.push(<span key={key++}>{parteResto.slice(lastUrl, urlMatch.index)}</span>)
-        }
-        segmentos.push(
-          <a key={key++} href={urlMatch[1]} target="_blank" rel="noopener noreferrer"
-             className="text-owlaris-secondary underline hover:text-teal-300 transition-colors">
-            {urlMatch[1]}
-          </a>
-        )
+      let lastUrl = 0; let urlMatch
+      while ((urlMatch = urlRegex.exec(resto)) !== null) {
+        if (urlMatch.index > lastUrl) segmentos.push(<span key={key++}>{resto.slice(lastUrl, urlMatch.index)}</span>)
+        segmentos.push(<a key={key++} href={urlMatch[1]} target="_blank" rel="noopener noreferrer" style={{color:'#6D28D9',textDecoration:'underline',textDecorationColor:'rgba(109,40,217,.3)'}}>{urlMatch[1]}</a>)
         lastUrl = urlMatch.index + urlMatch[0].length
       }
-      if (lastUrl < parteResto.length) {
-        segmentos.push(<span key={key++}>{parteResto.slice(lastUrl)}</span>)
-      }
+      if (lastUrl < resto.length) segmentos.push(<span key={key++}>{resto.slice(lastUrl)}</span>)
     }
-
-    return (
-      <span key={lineaIdx}>
-        {segmentos.length > 0 ? segmentos : linea}
-        {lineaIdx < lineas.length - 1 && <br/>}
-      </span>
-    )
+    return <span key={lineaIdx}>{segmentos.length > 0 ? segmentos : linea}{lineaIdx < lineas.length - 1 && <br />}</span>
   })
 }
 
@@ -92,227 +62,426 @@ export default function ChatInterface({ usuario, materias }: Props) {
   const [cargando, setCargando]             = useState(false)
   const [guardandoGrado, setGuardandoGrado] = useState(false)
   const [error, setError]                   = useState('')
+  const [sugerencias, setSugerencias]       = useState(SUGERENCIAS_DEFAULT)
+  const [expandido, setExpandido]           = useState<string | null>(null)
   const finalRef = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLTextAreaElement>(null)
   const router   = useRouter()
   const supabase = createClient()
 
   const materiasVisibles = materias.filter(m => {
-    const esMineduc = m.nombre.startsWith('Mineduc')
-    if (esMineduc) return GRADOS_CON_MINEDUC.includes(grado)
+    if (m.nombre.startsWith('Mineduc')) return GRADOS_CON_MINEDUC.includes(grado)
     return true
   })
 
-  useEffect(() => {
-    const primera = materiasVisibles[0]?.id || ''
-    setMateriaId(primera)
-  }, [grado])
-
-  useEffect(() => {
-    finalRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [mensajes])
+  useEffect(() => { setMateriaId(materiasVisibles[0]?.id || '') }, [grado])
+  useEffect(() => { finalRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [mensajes, cargando])
 
   useEffect(() => {
     if (!materiaId) return
     const nombre = usuario.nombre_completo.split(' ')[0]
-    const materiaNombre = materiasVisibles.find(m => m.id === materiaId)?.nombre || 'tu materia'
+    const mat = materiasVisibles.find(m => m.id === materiaId)?.nombre || 'tu materia'
     setMensajes([{
-      id: 'bienvenida',
-      rol: 'asistente',
-      contenido: `Hola, ${nombre}. Soy Owlaris, tu tutor de ${grado}. Estoy aquí para ayudarte a entender y aprender. ¿Tienes una duda específica en ${materiaNombre} o quieres que te proponga un tema para practicar hoy?`,
-      timestamp: new Date(),
+      id: 'bienvenida', rol: 'asistente', timestamp: new Date(),
+      contenido: `¡Hola, ${nombre}! Soy Owlaris, tu tutor académico.\n\nEstoy aquí para ayudarte a comprender ${mat} de ${grado} usando el contenido oficial de tu colegio.\n\n¿Tienes una duda específica o quieres que te proponga un tema para estudiar hoy?`,
     }])
   }, [materiaId])
 
-  async function cambiarGrado(nuevoGrado: string) {
-    setGrado(nuevoGrado)
-    setGuardandoGrado(true)
-    await supabase.from('usuarios').update({ grado: nuevoGrado }).eq('id', usuario.id)
+  async function cambiarGrado(g: string) {
+    setGrado(g); setGuardandoGrado(true)
+    await supabase.from('usuarios').update({ grado: g }).eq('id', usuario.id)
     setGuardandoGrado(false)
   }
 
-  async function enviarPregunta(e: React.FormEvent) {
-    e.preventDefault()
-    if (!pregunta.trim() || cargando) return
-
-    const textoPregunta = pregunta.trim()
-    setPregunta('')
-    setError('')
-
-    const msgUsuario: MensajeChat = {
-      id: Date.now().toString(),
-      rol: 'usuario',
-      contenido: textoPregunta,
-      timestamp: new Date(),
-    }
-    setMensajes(prev => [...prev, msgUsuario])
+  async function enviarPregunta(texto?: string) {
+    const tp = (texto || pregunta).trim()
+    if (!tp || cargando) return
+    setPregunta(''); setError(''); setSugerencias([])
+    setMensajes(prev => [...prev, { id: Date.now().toString(), rol: 'usuario', contenido: tp, timestamp: new Date() }])
     setCargando(true)
-
     try {
       const res = await fetch('/api/preguntar', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          pregunta: textoPregunta,
-          materia_id: materiaId,
-          grado_override: grado,
-          historial: mensajes.slice(-6).map(m => ({ rol: m.rol, contenido: m.contenido })),
-        }),
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pregunta: tp, materia_id: materiaId, grado_override: grado, historial: mensajes.slice(-6).map(m => ({ rol: m.rol, contenido: m.contenido })) })
       })
-
-      if (!res.ok) throw new Error('Error al consultar al tutor')
+      if (!res.ok) throw new Error()
       const data = await res.json()
-
-      const msgAsistente: MensajeChat = {
-        id: (Date.now() + 1).toString(),
-        rol: 'asistente',
-        contenido: data.respuesta,
-        timestamp: new Date(),
-        tokens: data.tokens,
-        documento_fuente: data.documento_fuente,
-      }
-      setMensajes(prev => [...prev, msgAsistente])
-
-    } catch {
-      setError('Hubo un problema al conectar con el tutor. Intenta de nuevo.')
-    } finally {
-      setCargando(false)
-    }
+      setMensajes(prev => [...prev, { id: (Date.now()+1).toString(), rol: 'asistente', contenido: data.respuesta, timestamp: new Date(), tokens: data.tokens, documento_fuente: data.documento_fuente }])
+      const mat = materiasVisibles.find(m => m.id === materiaId)?.nombre || 'el tema'
+      setSugerencias([
+        { icon: '✦', text: `¿Qué partes tiene ${tp.split(' ').slice(0,4).join(' ')}?` },
+        { icon: '◈', text: 'Hazme 3 preguntas de práctica' },
+        { icon: '◇', text: 'Explícame con un ejemplo' },
+        { icon: '↺', text: `Propón otro tema de ${mat}` },
+      ])
+    } catch { setError('Hubo un problema. Intenta de nuevo.') }
+    finally { setCargando(false); inputRef.current?.focus() }
   }
 
   async function cerrarSesion() {
-    await supabase.auth.signOut()
-    router.push('/login')
-    router.refresh()
+    await supabase.auth.signOut(); router.push('/login'); router.refresh()
   }
 
-  const materiaNombre = materiasVisibles.find(m => m.id === materiaId)?.nombre
+  const mat      = materiasVisibles.find(m => m.id === materiaId)?.nombre
+  const nombre   = usuario.nombre_completo.split(' ')[0]
+  const iniciales = usuario.nombre_completo.split(' ').map((n: string) => n[0]).join('').substring(0,2).toUpperCase()
 
   return (
-    <div className="min-h-screen bg-owlaris-light flex flex-col">
-      <header className="bg-owlaris-dark text-white px-4 py-3 shadow-lg">
-        <div className="max-w-3xl mx-auto flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2 flex-shrink-0">
-            <img src="/buho.png" alt="Owlaris" className="w-6 h-6 object-contain"/>
-            <div className="hidden sm:block">
-              <p className="font-bold text-xs leading-tight">Owlaris</p>
-              <p className="text-gray-400 text-xs">{usuario.colegio?.nombre}</p>
-            </div>
-          </div>
+    <>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700&family=Syne:wght@600;700&display=swap');
 
-          <div className="flex items-center gap-2 flex-1 justify-center">
-            <div className="relative">
-              <select value={grado} onChange={e => cambiarGrado(e.target.value)} disabled={guardandoGrado}
-                className="bg-white/10 text-white text-xs rounded-lg px-2 py-1.5 border border-white/20
-                           focus:outline-none focus:ring-2 focus:ring-owlaris-secondary appearance-none
-                           pr-6 cursor-pointer disabled:opacity-50">
-                {GRADOS_GUATEMALA.map(g => (
-                  <option key={g} value={g} className="text-gray-900">{g}</option>
-                ))}
-              </select>
-              <span className="absolute right-1.5 top-1/2 -translate-y-1/2 text-white/60 text-xs pointer-events-none">▾</span>
-            </div>
+        .owlaris-root {
+          min-height: 100vh;
+          display: flex;
+          flex-direction: column;
+          background: #F8F7FF;
+          background-image:
+            radial-gradient(ellipse at 0% 0%, rgba(109,40,217,.06) 0%, transparent 50%),
+            radial-gradient(ellipse at 100% 100%, rgba(14,165,233,.05) 0%, transparent 50%);
+          font-family: 'Plus Jakarta Sans', sans-serif;
+        }
 
-            <div className="relative">
-              <select value={materiaId} onChange={e => setMateriaId(e.target.value)}
-                className="bg-owlaris-primary text-white text-xs rounded-lg px-2 py-1.5 border border-purple-400/30
-                           focus:outline-none focus:ring-2 focus:ring-owlaris-secondary appearance-none
-                           pr-6 cursor-pointer">
-                {materiasVisibles.map(m => (
-                  <option key={m.id} value={m.id} className="text-gray-900">{m.nombre}</option>
-                ))}
-              </select>
-              <span className="absolute right-1.5 top-1/2 -translate-y-1/2 text-white/60 text-xs pointer-events-none">▾</span>
-            </div>
-          </div>
+        .o-header {
+          background: rgba(255,255,255,.85);
+          backdrop-filter: blur(24px);
+          border-bottom: 1px solid rgba(109,40,217,.08);
+          box-shadow: 0 1px 24px rgba(109,40,217,.06);
+          position: sticky; top: 0; z-index: 50;
+          padding: 14px 24px;
+        }
 
-          <div className="flex items-center gap-2 flex-shrink-0">
-            <p className="text-xs text-gray-400 hidden sm:block">{usuario.nombre_completo.split(' ')[0]}</p>
-            <button onClick={cerrarSesion}
-              className="bg-white/10 hover:bg-white/20 text-white text-xs px-3 py-1.5 rounded-lg
-                         border border-white/20 transition-all duration-200 flex items-center gap-1">
-              <span>↩</span><span className="hidden sm:inline">Salir</span>
-            </button>
-          </div>
-        </div>
-      </header>
+        .o-sel {
+          background: #F3F0FF;
+          border: 1px solid rgba(109,40,217,.15);
+          color: #4C1D95;
+          border-radius: 12px;
+          padding: 8px 30px 8px 14px;
+          font-size: 13px; font-weight: 600;
+          appearance: none; cursor: pointer;
+          transition: all .2s;
+          font-family: 'Plus Jakarta Sans', sans-serif;
+        }
+        .o-sel:hover { border-color: rgba(109,40,217,.4); background: #EDE9FE; }
+        .o-sel:focus { outline: none; border-color: #7C3AED; box-shadow: 0 0 0 3px rgba(109,40,217,.1); }
+        .o-sel option { background: white; color: #1E1B4B; }
 
-      <div className="bg-owlaris-primary/5 border-b border-purple-100 px-4 py-2">
-        <p className="text-xs text-center text-owlaris-primary max-w-3xl mx-auto">
-          Tutorando: <strong>{grado}</strong> · <strong>{materiaNombre}</strong>
-          {guardandoGrado && <span className="ml-2 text-gray-400">Guardando...</span>}
-        </p>
-      </div>
+        .o-sel-mat {
+          background: linear-gradient(135deg, #6D28D9, #7C3AED);
+          border: none;
+          color: white;
+          border-radius: 12px;
+          padding: 8px 30px 8px 14px;
+          font-size: 13px; font-weight: 600;
+          appearance: none; cursor: pointer;
+          transition: all .2s;
+          font-family: 'Plus Jakarta Sans', sans-serif;
+          box-shadow: 0 4px 16px rgba(109,40,217,.25);
+        }
+        .o-sel-mat:hover { box-shadow: 0 6px 20px rgba(109,40,217,.35); }
+        .o-sel-mat:focus { outline: none; }
+        .o-sel-mat option { background: #4C1D95; color: white; }
 
-      <main className="flex-1 overflow-y-auto px-4 py-6 max-w-3xl mx-auto w-full">
-        <div className="space-y-4">
-          {mensajes.map(msg => <MensajeBurbuja key={msg.id} mensaje={msg} />)}
+        .bbl-tutor {
+          background: white;
+          border: 1px solid rgba(109,40,217,.1);
+          border-radius: 4px 20px 20px 20px;
+          box-shadow: 0 2px 20px rgba(109,40,217,.08);
+          position: relative;
+          overflow: hidden;
+        }
+        .bbl-tutor::before {
+          content: '';
+          position: absolute;
+          top: 0; left: 0;
+          width: 3px; height: 100%;
+          background: linear-gradient(180deg, #7C3AED, #0EA5E9);
+        }
 
-          {cargando && (
-            <div className="flex items-start gap-3">
-              <div className="w-8 h-8 bg-owlaris-primary rounded-full flex items-center justify-center flex-shrink-0">
-                <span className="text-sm">🦉</span>
-              </div>
-              <div className="bg-white rounded-2xl rounded-tl-none px-4 py-3 shadow-sm">
-                <div className="flex gap-1 items-center h-5">
-                  <span className="w-2 h-2 bg-owlaris-primary rounded-full animate-bounce" style={{animationDelay:'0ms'}}/>
-                  <span className="w-2 h-2 bg-owlaris-primary rounded-full animate-bounce" style={{animationDelay:'150ms'}}/>
-                  <span className="w-2 h-2 bg-owlaris-primary rounded-full animate-bounce" style={{animationDelay:'300ms'}}/>
+        .bbl-user {
+          background: linear-gradient(135deg, #6D28D9, #5B21B6);
+          border-radius: 20px 4px 20px 20px;
+          box-shadow: 0 4px 20px rgba(109,40,217,.3);
+        }
+
+        .o-chip {
+          background: white;
+          border: 1px solid rgba(109,40,217,.12);
+          border-radius: 20px;
+          padding: 8px 14px;
+          font-size: 12px; font-weight: 500;
+          color: #6D28D9;
+          cursor: pointer;
+          transition: all .2s;
+          display: flex; align-items: center; gap: 5px;
+          white-space: nowrap;
+          font-family: 'Plus Jakarta Sans', sans-serif;
+          box-shadow: 0 1px 8px rgba(109,40,217,.06);
+        }
+        .o-chip:hover {
+          background: #F3F0FF;
+          border-color: rgba(109,40,217,.3);
+          transform: translateY(-2px);
+          box-shadow: 0 4px 16px rgba(109,40,217,.15);
+        }
+
+        .o-input-wrap {
+          background: white;
+          border: 1.5px solid rgba(109,40,217,.15);
+          border-radius: 18px;
+          transition: all .2s;
+          box-shadow: 0 2px 20px rgba(109,40,217,.06);
+        }
+        .o-input-wrap:focus-within {
+          border-color: #7C3AED;
+          box-shadow: 0 0 0 4px rgba(109,40,217,.08), 0 2px 20px rgba(109,40,217,.1);
+        }
+
+        .o-send {
+          background: linear-gradient(135deg, #7C3AED, #6D28D9);
+          border-radius: 14px; border: none; cursor: pointer;
+          transition: all .2s;
+          width: 46px; height: 46px;
+          display: flex; align-items: center; justify-content: center;
+          box-shadow: 0 4px 16px rgba(109,40,217,.3);
+          flex-shrink: 0;
+        }
+        .o-send:hover { transform: scale(1.06); box-shadow: 0 6px 24px rgba(109,40,217,.45); }
+        .o-send:disabled { opacity: .4; cursor: not-allowed; transform: none; box-shadow: none; }
+
+        .o-dot {
+          width: 7px; height: 7px;
+          background: #7C3AED; border-radius: 50%;
+          animation: oDot 1.4s infinite;
+        }
+        .o-dot:nth-child(2) { animation-delay: .2s; background: #9333EA; }
+        .o-dot:nth-child(3) { animation-delay: .4s; background: #0EA5E9; }
+        @keyframes oDot {
+          0%,60%,100% { transform: translateY(0); opacity: .4; }
+          30% { transform: translateY(-7px); opacity: 1; }
+        }
+
+        .o-float { animation: oFloat 4s ease-in-out infinite; }
+        @keyframes oFloat {
+          0%,100% { transform: translateY(0) rotate(-2deg); }
+          50% { transform: translateY(-8px) rotate(2deg); }
+        }
+
+        .o-fade { animation: oFadeUp .35s ease forwards; }
+        @keyframes oFadeUp {
+          from { opacity: 0; transform: translateY(10px); }
+          to   { opacity: 1; transform: translateY(0); }
+        }
+
+        .scrollbar-hide::-webkit-scrollbar { display: none; }
+        .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+
+        .o-ver-mas {
+          background: rgba(109,40,217,.06);
+          border: 1px solid rgba(109,40,217,.15);
+          border-radius: 8px; padding: 4px 12px;
+          font-size: 11px; font-weight: 600;
+          color: #7C3AED; cursor: pointer;
+          transition: all .2s; margin-top: 10px;
+          display: inline-flex; align-items: center; gap: 4px;
+        }
+        .o-ver-mas:hover { background: rgba(109,40,217,.12); }
+
+        .o-fuente {
+          display: inline-flex; align-items: center; gap: 4px;
+          background: rgba(14,165,233,.06);
+          border: 1px solid rgba(14,165,233,.15);
+          border-radius: 6px; padding: 3px 9px;
+          font-size: 10px; font-weight: 600;
+          color: #0EA5E9; margin-top: 10px;
+          letter-spacing: .3px;
+        }
+
+        .o-avatar-ring {
+          background: linear-gradient(135deg, #7C3AED, #0EA5E9);
+          padding: 2px; border-radius: 50%;
+        }
+      `}</style>
+
+      <div className="owlaris-root">
+
+        {/* Header */}
+        <header className="o-header">
+          <div style={{maxWidth:'900px',margin:'0 auto',display:'flex',alignItems:'center',justifyContent:'space-between',gap:'16px'}}>
+
+            {/* Logo */}
+            <div style={{display:'flex',alignItems:'center',gap:'10px',flexShrink:0}}>
+              <div className="o-avatar-ring" style={{width:'42px',height:'42px'}}>
+                <div style={{background:'white',borderRadius:'50%',width:'38px',height:'38px',display:'flex',alignItems:'center',justifyContent:'center'}}>
+                  <img src="/buho.png" alt="Owlaris" style={{width:'28px',height:'28px',objectFit:'contain'}}/>
                 </div>
               </div>
+              <div className="hidden sm:block">
+                <p style={{fontFamily:"'Syne',sans-serif",fontSize:'16px',fontWeight:700,color:'#1E1B4B',letterSpacing:'-0.4px'}}>Owlaris</p>
+                <p style={{fontSize:'11px',color:'#9490B8',fontWeight:500}}>Tu tutor académico</p>
+              </div>
             </div>
-          )}
 
-          {error && (
-            <div className="bg-red-50 border border-red-200 text-red-600 text-sm px-4 py-3 rounded-xl text-center">
-              {error}
+            {/* Selectores */}
+            <div style={{display:'flex',alignItems:'center',gap:'8px',flex:1,justifyContent:'center'}}>
+              <div style={{position:'relative'}}>
+                <select value={grado} onChange={e=>cambiarGrado(e.target.value)} disabled={guardandoGrado} className="o-sel">
+                  {GRADOS_GUATEMALA.map(g=><option key={g} value={g}>{g}</option>)}
+                </select>
+                <span style={{position:'absolute',right:'9px',top:'50%',transform:'translateY(-50%)',color:'#7C3AED',pointerEvents:'none',fontSize:'9px'}}>▾</span>
+              </div>
+              <div style={{position:'relative'}}>
+                <select value={materiaId} onChange={e=>setMateriaId(e.target.value)} className="o-sel-mat">
+                  {materiasVisibles.map(m=><option key={m.id} value={m.id}>{m.nombre}</option>)}
+                </select>
+                <span style={{position:'absolute',right:'9px',top:'50%',transform:'translateY(-50%)',color:'rgba(255,255,255,.7)',pointerEvents:'none',fontSize:'9px'}}>▾</span>
+              </div>
             </div>
-          )}
-          <div ref={finalRef} />
-        </div>
-      </main>
 
-      <div className="border-t border-gray-200 bg-white px-4 py-4">
-        <form onSubmit={enviarPregunta} className="max-w-3xl mx-auto flex gap-3 items-end">
-          <div className="flex-1">
-            <textarea value={pregunta} onChange={e => setPregunta(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); enviarPregunta(e) } }}
-              placeholder={`Escribe tu duda de ${materiaNombre}... (Enter para enviar)`}
-              rows={2} className="input-base resize-none" disabled={cargando}/>
+            {/* Usuario */}
+            <div style={{display:'flex',alignItems:'center',gap:'10px',flexShrink:0}}>
+              <div className="hidden sm:block" style={{textAlign:'right'}}>
+                <p style={{fontSize:'13px',fontWeight:600,color:'#1E1B4B'}}>{nombre}</p>
+                <p style={{fontSize:'10px',color:'#9490B8'}}>{usuario.colegio?.nombre}</p>
+              </div>
+              <div style={{width:'36px',height:'36px',borderRadius:'50%',background:'linear-gradient(135deg,#7C3AED,#0EA5E9)',display:'flex',alignItems:'center',justifyContent:'center',boxShadow:'0 4px 12px rgba(109,40,217,.3)'}}>
+                <span style={{fontSize:'13px',fontWeight:700,color:'white'}}>{iniciales}</span>
+              </div>
+              <button onClick={cerrarSesion} style={{background:'#F3F0FF',border:'1px solid rgba(109,40,217,.15)',borderRadius:'10px',padding:'7px 13px',fontSize:'12px',fontWeight:500,color:'#7C3AED',cursor:'pointer',display:'flex',alignItems:'center',gap:'5px',transition:'all .2s',fontFamily:"'Plus Jakarta Sans',sans-serif"}}>
+                <span>↩</span><span className="hidden sm:inline">Salir</span>
+              </button>
+            </div>
           </div>
-          <button type="submit" disabled={cargando || !pregunta.trim()} className="btn-primary px-4 py-3 flex-shrink-0">
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/>
-            </svg>
-          </button>
-        </form>
-        <p className="text-center text-xs text-gray-400 mt-2 max-w-3xl mx-auto">
-          Owlaris te guia para que aprendas — no hace tu tarea por ti
-        </p>
-      </div>
-    </div>
-  )
-}
 
-function MensajeBurbuja({ mensaje }: { mensaje: MensajeChat }) {
-  const esAlumno = mensaje.rol === 'usuario'
-  return (
-    <div className={`flex items-start gap-3 ${esAlumno ? 'flex-row-reverse' : ''}`}>
-      <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-sm
-        ${esAlumno ? 'bg-owlaris-secondary text-white' : 'bg-owlaris-primary text-white'}`}>
-        {esAlumno ? "👤" : <img src="/buho.png" alt="Owlaris" className="w-4 h-4 object-contain"/>}
+          {/* Contexto */}
+          <div style={{maxWidth:'900px',margin:'8px auto 0',textAlign:'center'}}>
+            <p style={{fontSize:'11px',color:'#C4C0E0',letterSpacing:'.4px',fontWeight:500}}>
+              Tutorando: <span style={{color:'#7C3AED',fontWeight:700}}>{nombre}</span>
+              <span style={{margin:'0 8px',color:'#E0DCFF'}}>·</span>
+              <span style={{color:'#B0ACCC'}}>{usuario.colegio?.nombre}</span>
+              {guardandoGrado&&<span style={{marginLeft:'8px',color:'#C4C0E0'}}>Guardando...</span>}
+            </p>
+          </div>
+        </header>
+
+        {/* Mensajes */}
+        <main style={{flex:1,overflowY:'auto',padding:'28px 16px'}} className="scrollbar-hide">
+          <div style={{maxWidth:'800px',margin:'0 auto',display:'flex',flexDirection:'column',gap:'20px'}}>
+
+            {mensajes.map((msg,idx)=>{
+              const esU   = msg.rol==='usuario'
+              const largo = msg.contenido.length > 350
+              const abierto = expandido===msg.id
+              return (
+                <div key={msg.id} className="o-fade" style={{display:'flex',alignItems:'flex-start',gap:'10px',flexDirection:esU?'row-reverse':'row',animationDelay:`${idx*.05}s`}}>
+
+                  {esU ? (
+                    <div style={{width:'36px',height:'36px',borderRadius:'50%',background:'linear-gradient(135deg,#7C3AED,#5B21B6)',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,boxShadow:'0 4px 12px rgba(109,40,217,.3)'}}>
+                      <span style={{fontSize:'13px',fontWeight:700,color:'white'}}>{iniciales}</span>
+                    </div>
+                  ) : (
+                    <div className="o-avatar-ring" style={{width:'36px',height:'36px',flexShrink:0}}>
+                      <div style={{background:'white',borderRadius:'50%',width:'32px',height:'32px',display:'flex',alignItems:'center',justifyContent:'center'}}>
+                        <img src="/buho.png" alt="" style={{width:'22px',height:'22px',objectFit:'contain'}}/>
+                      </div>
+                    </div>
+                  )}
+
+                  <div style={{maxWidth:'78%'}}>
+                    <p style={{fontSize:'11px',fontWeight:600,color:esU?'#9490B8':'#B0ACCC',marginBottom:'5px',textAlign:esU?'right':'left',letterSpacing:'.3px',textTransform:'uppercase'}}>
+                      {esU ? nombre : 'Owlaris Tutor'}
+                    </p>
+
+                    <div className={esU?'bbl-user':'bbl-tutor'} style={{padding:'14px 18px'}}>
+                      <p style={{fontSize:'14px',lineHeight:'1.8',color:esU?'#EDE9FE':'#2D2B55',whiteSpace:'pre-wrap',fontWeight:400}}>
+                        {largo&&!abierto?<>{renderTexto(msg.contenido.substring(0,300))}...</>:renderTexto(msg.contenido)}
+                      </p>
+                      {largo&&(
+                        <button className="o-ver-mas" onClick={()=>setExpandido(abierto?null:msg.id)}>
+                          {abierto?'↑ Ver menos':'↓ Ver explicación completa'}
+                        </button>
+                      )}
+                      {msg.documento_fuente&&(
+                        <div className="o-fuente">
+                          <span>◈</span><span>{msg.documento_fuente}</span>
+                        </div>
+                      )}
+                    </div>
+
+                    <p style={{fontSize:'10px',color:'#C4C0E0',marginTop:'4px',textAlign:esU?'right':'left',fontWeight:500}}>
+                      {msg.timestamp.toLocaleTimeString('es-GT',{hour:'2-digit',minute:'2-digit'})}
+                    </p>
+                  </div>
+                </div>
+              )
+            })}
+
+            {cargando&&(
+              <div className="o-fade" style={{display:'flex',alignItems:'flex-start',gap:'10px'}}>
+                <div className="o-avatar-ring" style={{width:'36px',height:'36px',flexShrink:0}}>
+                  <div style={{background:'white',borderRadius:'50%',width:'32px',height:'32px',display:'flex',alignItems:'center',justifyContent:'center'}}>
+                    <img src="/buho.png" alt="" style={{width:'22px',height:'22px',objectFit:'contain'}}/>
+                  </div>
+                </div>
+                <div className="bbl-tutor" style={{padding:'16px 22px'}}>
+                  <div style={{display:'flex',gap:'5px',alignItems:'center'}}>
+                    <div className="o-dot"/><div className="o-dot"/><div className="o-dot"/>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {error&&(
+              <div style={{background:'rgba(239,68,68,.05)',border:'1px solid rgba(239,68,68,.15)',borderRadius:'14px',padding:'12px 16px',textAlign:'center'}}>
+                <p style={{fontSize:'13px',color:'#EF4444',fontWeight:500}}>{error}</p>
+              </div>
+            )}
+            <div ref={finalRef}/>
+          </div>
+        </main>
+
+        {/* Footer */}
+        <div style={{background:'rgba(248,247,255,.95)',backdropFilter:'blur(20px)',borderTop:'1px solid rgba(109,40,217,.08)',padding:'12px 16px 20px',boxShadow:'0 -4px 24px rgba(109,40,217,.06)'}}>
+          <div style={{maxWidth:'800px',margin:'0 auto'}}>
+
+            {sugerencias.length>0&&(
+              <div style={{display:'flex',gap:'8px',marginBottom:'10px',overflowX:'auto'}} className="scrollbar-hide">
+                {sugerencias.map((s,i)=>(
+                  <button key={i} className="o-chip" onClick={()=>enviarPregunta(s.text)}>
+                    <span style={{color:'#7C3AED',fontSize:'14px'}}>{s.icon}</span>
+                    <span>{s.text}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+
+            <div className="o-input-wrap" style={{display:'flex',gap:'10px',alignItems:'flex-end',padding:'10px 14px'}}>
+              <textarea ref={inputRef} value={pregunta}
+                onChange={e=>setPregunta(e.target.value)}
+                onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();enviarPregunta()}}}
+                placeholder={`Escribe tu duda sobre ${mat||'la materia'}...`}
+                rows={2} disabled={cargando}
+                style={{flex:1,background:'transparent',border:'none',outline:'none',resize:'none',fontSize:'14px',color:'#1E1B4B',lineHeight:'1.6',fontFamily:"'Plus Jakarta Sans',sans-serif",fontWeight:400}}
+              />
+              <button onClick={()=>enviarPregunta()} disabled={cargando||!pregunta.trim()} className="o-send">
+                <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="white" strokeWidth={2.2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/>
+                </svg>
+              </button>
+            </div>
+
+            <p style={{fontSize:'10px',color:'#D4D0EE',textAlign:'center',marginTop:'8px',letterSpacing:'.4px',fontWeight:500}}>
+              Owlaris te guía para que aprendas — no hace tu tarea por ti
+            </p>
+          </div>
+        </div>
+
+        {/* Búho flotante */}
+        <div className="o-float" style={{position:'fixed',bottom:'24px',left:'24px',zIndex:40,pointerEvents:'none'}}>
+          <img src="/buho.png" alt="" style={{width:'64px',height:'64px',objectFit:'contain',filter:'drop-shadow(0 8px 24px rgba(109,40,217,.25))'}}/>
+        </div>
+
       </div>
-      <div className={`max-w-[80%] px-4 py-3 rounded-2xl shadow-sm
-        ${esAlumno ? 'bg-owlaris-primary text-white rounded-tr-none' : 'bg-white text-gray-800 rounded-tl-none'}`}>
-        <p className="text-sm leading-relaxed">
-          {renderTexto(mensaje.contenido)}
-        </p>
-        {mensaje.documento_fuente && (
-          <p className="text-xs mt-2 opacity-60">Fuente: {mensaje.documento_fuente}</p>
-        )}
-        <p className={`text-xs mt-1 ${esAlumno ? 'text-purple-200' : 'text-gray-400'}`}>
-          {mensaje.timestamp.toLocaleTimeString('es-GT', { hour: '2-digit', minute: '2-digit' })}
-        </p>
-      </div>
-    </div>
+    </>
   )
 }
