@@ -293,7 +293,7 @@ export default function ChatInterface({ usuario, materias }: Props) {
         if (m.id === 'bienvenida') return
         checkY(12)
         const esAlumno = m.rol === 'usuario'
-        doc.setFillColor(esAlumno ? 237 : 248, esAlumno ? 233 : 247, esAlumno ? 254 : 255)
+        doc.setFillColor(esAlumno ? 237 : 255, esAlumno ? 233 : 255, esAlumno ? 254 : 255)
         const textLines = doc.splitTextToSize(m.contenido, maxW - 16)
         const boxH = textLines.length * 4.5 + 10
         checkY(boxH)
