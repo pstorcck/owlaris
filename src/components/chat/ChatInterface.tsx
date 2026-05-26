@@ -692,6 +692,20 @@ export default function ChatInterface({ usuario, materias }: Props) {
           <img src="/buho.png" alt="" style={{width:'64px',height:'64px',objectFit:'contain',filter:'drop-shadow(0 8px 24px rgba(109,40,217,.25))'}}/>
         </div>
 
+        {/* Botón FAB reporte */}
+        {mensajes.length >= 3 && (
+          <button onClick={generarReporte} disabled={generandoPDF}
+            title="Generar reporte PDF"
+            style={{position:'fixed',bottom:'24px',right:'24px',zIndex:50,width:'56px',height:'56px',borderRadius:'50%',background:generandoPDF?'rgba(109,40,217,.5)':'linear-gradient(135deg,#7C3AED,#6D28D9)',border:'none',cursor:generandoPDF?'not-allowed':'pointer',display:'flex',alignItems:'center',justifyContent:'center',boxShadow:'0 8px 24px rgba(109,40,217,.4)',transition:'all .2s',fontSize:'22px'}}>
+            {generandoPDF ? (
+              <svg style={{animation:'spin 1s linear infinite',width:'22px',height:'22px'}} fill="none" viewBox="0 0 24 24">
+                <circle style={{opacity:.25}} cx="12" cy="12" r="10" stroke="white" strokeWidth="3"/>
+                <path style={{opacity:.75}} fill="white" d="M4 12a8 8 0 018-8V0C5.4 0 0 5.4 0 12h4z"/>
+              </svg>
+            ) : <span style={{fontSize:'20px'}}>📄</span>}
+          </button>
+        )}
+
       </div>
     </>
   )
