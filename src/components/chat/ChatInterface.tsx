@@ -692,17 +692,36 @@ export default function ChatInterface({ usuario, materias }: Props) {
           <img src="/buho.png" alt="" style={{width:'64px',height:'64px',objectFit:'contain',filter:'drop-shadow(0 8px 24px rgba(109,40,217,.25))'}}/>
         </div>
 
-        {/* Botón FAB reporte */}
+        {/* Botón reporte flotante */}
         {mensajes.length >= 3 && (
           <button onClick={generarReporte} disabled={generandoPDF}
-            title="Generar reporte PDF"
-            style={{position:'fixed',bottom:'24px',right:'24px',zIndex:50,width:'56px',height:'56px',borderRadius:'50%',background:generandoPDF?'rgba(109,40,217,.5)':'linear-gradient(135deg,#7C3AED,#6D28D9)',border:'none',cursor:generandoPDF?'not-allowed':'pointer',display:'flex',alignItems:'center',justifyContent:'center',boxShadow:'0 8px 24px rgba(109,40,217,.4)',transition:'all .2s',fontSize:'22px'}}>
+            style={{
+              position:'fixed', bottom:'28px', right:'28px', zIndex:50,
+              background: generandoPDF ? 'rgba(109,40,217,.6)' : 'linear-gradient(135deg,#7C3AED,#6D28D9)',
+              border:'none', borderRadius:'16px',
+              padding:'12px 20px',
+              cursor: generandoPDF ? 'not-allowed' : 'pointer',
+              display:'flex', alignItems:'center', gap:'8px',
+              boxShadow:'0 8px 28px rgba(109,40,217,.35)',
+              transition:'all .25s',
+              fontFamily:"'Plus Jakarta Sans',sans-serif",
+            }}
+            onMouseEnter={e => { if(!generandoPDF)(e.currentTarget as HTMLButtonElement).style.transform='translateY(-2px)'; (e.currentTarget as HTMLButtonElement).style.boxShadow='0 12px 32px rgba(109,40,217,.5)' }}
+            onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.transform='translateY(0)'; (e.currentTarget as HTMLButtonElement).style.boxShadow='0 8px 28px rgba(109,40,217,.35)' }}
+          >
             {generandoPDF ? (
-              <svg style={{animation:'spin 1s linear infinite',width:'22px',height:'22px'}} fill="none" viewBox="0 0 24 24">
+              <svg style={{animation:'spin 1s linear infinite',width:'16px',height:'16px',flexShrink:0}} fill="none" viewBox="0 0 24 24">
                 <circle style={{opacity:.25}} cx="12" cy="12" r="10" stroke="white" strokeWidth="3"/>
                 <path style={{opacity:.75}} fill="white" d="M4 12a8 8 0 018-8V0C5.4 0 0 5.4 0 12h4z"/>
               </svg>
-            ) : <span style={{fontSize:'20px'}}>📄</span>}
+            ) : (
+              <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="white" strokeWidth="2" style={{flexShrink:0}}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+              </svg>
+            )}
+            <span style={{fontSize:'13px',fontWeight:600,color:'white',letterSpacing:'.2px'}}>
+              {generandoPDF ? 'Generando...' : 'Reporte Académico'}
+            </span>
           </button>
         )}
 
