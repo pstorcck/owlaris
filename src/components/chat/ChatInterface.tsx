@@ -205,7 +205,16 @@ export default function ChatInterface({ usuario, materias }: Props) {
 
       txt('Alumno:', margin+6, 10, true, [109,40,217]); y += 7
       txt(usuario.nombre_completo, margin+6, 12, false, [30,27,75]); y += 7
-      txt(`Grado: ${grado}   |   Materia: ${mat || ''}   |   Fecha: ${new Date().toLocaleDateString('es-GT')}`, margin+6, 9, false, [120,110,160]); y += 7
+      // Calcular duración
+      const msgsConFecha = mensajes.filter((m: MensajeChat) => m.timestamp)
+      let duracionStr = ''
+      if (msgsConFecha.length >= 2) {
+        const inicio = new Date(msgsConFecha[0].timestamp).getTime()
+        const fin    = new Date(msgsConFecha[msgsConFecha.length-1].timestamp).getTime()
+        const mins   = Math.round((fin - inicio) / 60000)
+        duracionStr  = mins <= 1 ? '1 minuto' : `${mins} minutos`
+      }
+      txt(`Grado: ${grado}   |   Materia: ${mat || ''}   |   Fecha: ${new Date().toLocaleDateString('es-GT')}${duracionStr ? '   |   Duración: ' + duracionStr : ''}`, margin+6, 9, false, [120,110,160]); y += 7
 
       // Nivel
       doc.setFillColor(nc[0], nc[1], nc[2])
