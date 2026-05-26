@@ -660,9 +660,17 @@ export default function ChatInterface({ usuario, materias }: Props) {
               </button>
             </div>
 
-            <p style={{fontSize:'10px',color:'#D4D0EE',textAlign:'center',marginTop:'8px',letterSpacing:'.4px',fontWeight:500}}>
-              Owlaris te guía para que aprendas — no hace tu tarea por ti
-            </p>
+            <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginTop:'8px'}}>
+              <p style={{fontSize:'10px',color:'#D4D0EE',letterSpacing:'.4px',fontWeight:500}}>
+                Owlaris te guía para que aprendas — no hace tu tarea por ti
+              </p>
+              {mensajes.length >= 3 && (
+                <button onClick={generarReporte} disabled={generandoPDF}
+                  style={{background:'rgba(109,40,217,.08)',border:'1px solid rgba(109,40,217,.2)',borderRadius:'10px',padding:'5px 12px',fontSize:'11px',fontWeight:600,color:'#7C3AED',cursor:'pointer',display:'flex',alignItems:'center',gap:'5px',transition:'all .2s',flexShrink:0,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>
+                  {generandoPDF ? '⏳ Generando...' : '📄 Reporte PDF'}
+                </button>
+              )}
+            </div>
           </div>
         </div>
 
