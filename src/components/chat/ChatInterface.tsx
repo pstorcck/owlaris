@@ -25,6 +25,19 @@ const SUGERENCIAS_DEFAULT = [
   { icon: '↺', text: 'Propón otro tema' },
 ]
 
+function renderSegmento(texto: string, key: number): React.ReactNode[] {
+  const partes: React.ReactNode[] = []
+  const boldRegex = /\*\*([^*]+)\*\*/g
+  let last = 0; let k = key; let match
+  while ((match = boldRegex.exec(texto)) !== null) {
+    if (match.index > last) partes.push(<span key={k++}>{texto.slice(last, match.index)}</span>)
+    partes.push(<strong key={k++} style={{fontWeight:700}}>{match[1]}</strong>)
+    last = match.index + match[0].length
+  }
+  if (last < texto.length) partes.push(<span key={k++}>{texto.slice(last)}</span>)
+  return partes.length > 0 ? partes : [<span key={k}>{texto}</span>]
+}
+
 function renderTexto(texto: string): React.ReactNode[] {
   const lineas = texto.split('\n')
   return lineas.map((linea, lineaIdx) => {
@@ -35,7 +48,7 @@ function renderTexto(texto: string): React.ReactNode[] {
     mdLinkRegex.lastIndex = 0
     let match
     while ((match = mdLinkRegex.exec(linea)) !== null) {
-      if (match.index > lastIndex) segmentos.push(<span key={key++}>{linea.slice(lastIndex, match.index)}</span>)
+      if (match.index > lastIndex) segmentos.push(...renderSegmento(linea.slice(lastIndex, match.index), key++))
       segmentos.push(<a key={key++} href={match[2]} target="_blank" rel="noopener noreferrer" style={{color:'#6D28D9',textDecoration:'underline',textDecorationColor:'rgba(109,40,217,.3)'}}>{match[2]}</a>)
       lastIndex = match.index + match[0].length
     }
@@ -44,11 +57,11 @@ function renderTexto(texto: string): React.ReactNode[] {
       const urlRegex = /(https?:\/\/\S+)/g
       let lastUrl = 0; let urlMatch
       while ((urlMatch = urlRegex.exec(resto)) !== null) {
-        if (urlMatch.index > lastUrl) segmentos.push(<span key={key++}>{resto.slice(lastUrl, urlMatch.index)}</span>)
+        if (urlMatch.index > lastUrl) segmentos.push(...renderSegmento(resto.slice(lastUrl, urlMatch.index), key++))
         segmentos.push(<a key={key++} href={urlMatch[1]} target="_blank" rel="noopener noreferrer" style={{color:'#6D28D9',textDecoration:'underline',textDecorationColor:'rgba(109,40,217,.3)'}}>{urlMatch[1]}</a>)
         lastUrl = urlMatch.index + urlMatch[0].length
       }
-      if (lastUrl < resto.length) segmentos.push(<span key={key++}>{resto.slice(lastUrl)}</span>)
+      if (lastUrl < resto.length) segmentos.push(...renderSegmento(resto.slice(lastUrl), key++))
     }
     return <span key={lineaIdx}>{segmentos.length > 0 ? segmentos : linea}{lineaIdx < lineas.length - 1 && <br />}</span>
   })
@@ -378,7 +391,6 @@ export default function ChatInterface({ usuario, materias }: Props) {
           border-radius: 4px 20px 20px 20px;
           box-shadow: 0 2px 20px rgba(109,40,217,.08);
           position: relative;
-          overflow: hidden;
         }
         .bbl-tutor::before {
           content: '';
