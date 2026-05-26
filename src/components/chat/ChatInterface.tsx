@@ -122,6 +122,196 @@ export default function ChatInterface({ usuario, materias }: Props) {
     await supabase.auth.signOut(); router.push('/login'); router.refresh()
   }
 
+  const [generandoPDF, setGenerandoPDF] = useState(false)
+
+  async function generarReporte() {
+    if (mensajes.length < 3) return
+    setGenerandoPDF(true)
+    try {
+      const res = await fetch('/api/reporte', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          historial: mensajes.map(m => ({ rol: m.rol, contenido: m.contenido })),
+          grado, materia: mat, colegio: usuario.colegio?.nombre
+        })
+      })
+      const data = await res.json()
+      if (!data.analisis) return
+
+      const { jsPDF } = await import('jspdf')
+      const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
+      const W = 210, margin = 20, maxW = W - margin * 2
+      let y = 0
+
+      const addPage = () => { doc.addPage(); y = 20 }
+      const checkY = (needed = 10) => { if (y + needed > 270) addPage() }
+
+      const txt = (text: string, x: number, size: number, bold = false, color = [30,27,75]) => {
+        doc.setFontSize(size)
+        doc.setFont('helvetica', bold ? 'bold' : 'normal')
+        doc.setTextColor(color[0], color[1], color[2])
+        doc.text(text, x, y)
+      }
+
+      const wrappedTxt = (text: string, x: number, size: number, bold = false, color = [80,80,100]) => {
+        doc.setFontSize(size); doc.setFont('helvetica', bold ? 'bold' : 'normal')
+        doc.setTextColor(color[0], color[1], color[2])
+        const lines = doc.splitTextToSize(text, maxW - (x - margin))
+        checkY(lines.length * (size * 0.4 + 1))
+        doc.text(lines, x, y)
+        y += lines.length * (size * 0.4 + 1) + 2
+      }
+
+      // PORTADA
+      doc.setFillColor(109, 40, 217)
+      doc.rect(0, 0, W, 60, 'F')
+      doc.setFillColor(124, 58, 237)
+      doc.rect(0, 55, W, 8, 'F')
+
+      doc.setFontSize(28); doc.setFont('helvetica', 'bold')
+      doc.setTextColor(255, 255, 255)
+      doc.text('Owlaris', margin, 28)
+      doc.setFontSize(13); doc.setFont('helvetica', 'normal')
+      doc.text('Reporte de Sesión Académica', margin, 38)
+      doc.setFontSize(10)
+      doc.text(usuario.colegio?.nombre || '', margin, 48)
+
+      y = 80
+      const nivelColor: Record<string,number[]> = {
+        'Excelente': [22,163,74], 'Bueno': [37,99,235],
+        'En proceso': [234,88,12], 'Necesita refuerzo': [220,38,38]
+      }
+      const nc = nivelColor[data.analisis.nivel] || [109,40,217]
+
+      // Info alumno
+      doc.setFillColor(248, 247, 255)
+      doc.roundedRect(margin, y-5, maxW, 42, 4, 4, 'F')
+      doc.setDrawColor(109,40,217); doc.setLineWidth(0.5)
+      doc.roundedRect(margin, y-5, maxW, 42, 4, 4, 'S')
+
+      txt('Alumno:', margin+6, 10, true, [109,40,217]); y += 7
+      txt(usuario.nombre_completo, margin+6, 12, false, [30,27,75]); y += 7
+      txt(`Grado: ${grado}   |   Materia: ${mat || ''}   |   Fecha: ${new Date().toLocaleDateString('es-GT')}`, margin+6, 9, false, [120,110,160]); y += 7
+
+      // Nivel
+      doc.setFillColor(nc[0], nc[1], nc[2])
+      doc.roundedRect(margin+6, y-4, 60, 10, 3, 3, 'F')
+      doc.setFontSize(9); doc.setFont('helvetica','bold'); doc.setTextColor(255,255,255)
+      doc.text(`Nivel: ${data.analisis.nivel}`, margin+10, y+2)
+      y += 16
+
+      // Resumen
+      y += 6
+      doc.setFillColor(237,233,254)
+      doc.roundedRect(margin, y-4, maxW, 6, 2, 2, 'F')
+      txt('RESUMEN DE LA SESIÓN', margin+4, 9, true, [109,40,217]); y += 10
+      wrappedTxt(data.analisis.resumen, margin+4, 10, false, [60,50,100])
+      y += 4
+
+      // Temas
+      checkY(20)
+      doc.setFillColor(237,233,254)
+      doc.roundedRect(margin, y-4, maxW, 6, 2, 2, 'F')
+      txt('TEMAS TRABAJADOS', margin+4, 9, true, [109,40,217]); y += 10
+      data.analisis.temas.forEach((t: string) => {
+        checkY(8)
+        doc.setFillColor(109,40,217); doc.circle(margin+7, y-2, 1.5, 'F')
+        wrappedTxt(t, margin+12, 10, false, [60,50,100])
+      })
+      y += 4
+
+      // Fortalezas
+      checkY(20)
+      doc.setFillColor(220,252,231)
+      doc.roundedRect(margin, y-4, maxW, 6, 2, 2, 'F')
+      txt('FORTALEZAS DETECTADAS', margin+4, 9, true, [22,163,74]); y += 10
+      data.analisis.fortalezas.forEach((f: string) => {
+        checkY(8)
+        doc.setFillColor(22,163,74); doc.circle(margin+7, y-2, 1.5, 'F')
+        wrappedTxt(f, margin+12, 10, false, [20,80,40])
+      })
+      y += 4
+
+      // Áreas de refuerzo
+      checkY(20)
+      doc.setFillColor(255,237,213)
+      doc.roundedRect(margin, y-4, maxW, 6, 2, 2, 'F')
+      txt('ÁREAS DE REFUERZO', margin+4, 9, true, [234,88,12]); y += 10
+      data.analisis.areas_refuerzo.forEach((a: string) => {
+        checkY(8)
+        doc.setFillColor(234,88,12); doc.circle(margin+7, y-2, 1.5, 'F')
+        wrappedTxt(a, margin+12, 10, false, [120,60,20])
+      })
+      y += 4
+
+      // Recomendaciones alumno
+      checkY(20)
+      doc.setFillColor(219,234,254)
+      doc.roundedRect(margin, y-4, maxW, 6, 2, 2, 'F')
+      txt('RECOMENDACIONES PARA EL ALUMNO', margin+4, 9, true, [37,99,235]); y += 10
+      data.analisis.recomendaciones_alumno.forEach((r: string) => {
+        checkY(8)
+        doc.setFillColor(37,99,235); doc.circle(margin+7, y-2, 1.5, 'F')
+        wrappedTxt(r, margin+12, 10, false, [20,50,120])
+      })
+      y += 4
+
+      // Recomendaciones maestro
+      checkY(20)
+      doc.setFillColor(243,232,255)
+      doc.roundedRect(margin, y-4, maxW, 6, 2, 2, 'F')
+      txt('RECOMENDACIONES PARA EL MAESTRO', margin+4, 9, true, [109,40,217]); y += 10
+      data.analisis.recomendaciones_maestro.forEach((r: string) => {
+        checkY(8)
+        doc.setFillColor(109,40,217); doc.circle(margin+7, y-2, 1.5, 'F')
+        wrappedTxt(r, margin+12, 10, false, [60,20,120])
+      })
+
+      // HISTORIAL — última hoja
+      addPage()
+      doc.setFillColor(109,40,217)
+      doc.rect(0, 0, W, 16, 'F')
+      doc.setFontSize(11); doc.setFont('helvetica','bold'); doc.setTextColor(255,255,255)
+      doc.text('HISTORIAL DE LA SESIÓN', margin, 11)
+      y = 26
+
+      mensajes.forEach((m: MensajeChat) => {
+        if (m.id === 'bienvenida') return
+        checkY(12)
+        const esAlumno = m.rol === 'usuario'
+        doc.setFillColor(esAlumno ? 237 : 248, esAlumno ? 233 : 247, esAlumno ? 254 : 255)
+        const textLines = doc.splitTextToSize(m.contenido, maxW - 16)
+        const boxH = textLines.length * 4.5 + 10
+        checkY(boxH)
+        doc.roundedRect(margin, y-5, maxW, boxH, 3, 3, 'F')
+        doc.setFontSize(8); doc.setFont('helvetica','bold')
+        doc.setTextColor(esAlumno ? 109 : 100, esAlumno ? 40 : 90, esAlumno ? 217 : 160)
+        doc.text(esAlumno ? usuario.nombre_completo.split(' ')[0] : 'Owlaris Tutor', margin+4, y+1)
+        doc.setFontSize(9); doc.setFont('helvetica','normal')
+        doc.setTextColor(50,40,90)
+        doc.text(textLines, margin+4, y+7)
+        y += boxH + 4
+      })
+
+      // Footer en todas las páginas
+      const totalPages = doc.getNumberOfPages()
+      for (let i = 1; i <= totalPages; i++) {
+        doc.setPage(i)
+        doc.setFillColor(248,247,255)
+        doc.rect(0, 285, W, 12, 'F')
+        doc.setFontSize(7); doc.setFont('helvetica','normal'); doc.setTextColor(160,150,200)
+        doc.text('Owlaris — Tu tutor académico inteligente · owlaris.app', margin, 291)
+        doc.text(`Página ${i} de ${totalPages}`, W-margin, 291, { align:'right' })
+      }
+
+      const fecha = new Date().toISOString().split('T')[0]
+      doc.save(`Owlaris-Reporte-${usuario.nombre_completo.replace(/ /g,'-')}-${fecha}.pdf`)
+
+    } catch(e) { console.error(e) }
+    finally { setGenerandoPDF(false) }
+  }
+
   const mat      = materiasVisibles.find(m => m.id === materiaId)?.nombre
   const nombre   = usuario.nombre_completo.split(' ')[0]
   const iniciales = usuario.nombre_completo.split(' ').map((n: string) => n[0]).join('').substring(0,2).toUpperCase()
@@ -485,3 +675,5 @@ export default function ChatInterface({ usuario, materias }: Props) {
     </>
   )
 }
+
+// Este comentario marca el fin del componente — no ejecutar
