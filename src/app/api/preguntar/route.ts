@@ -66,6 +66,7 @@ const COLEGIOS_SP: Record<string, string> = {
   'escolaris':       'Escolaris',
   'colegio-montano': 'Colegio Montano',
 }
+const CARPETA_COMPARTIDA = 'Colegio Montano y Escolaris'
 
 // Mapeo de grados del sistema a nombres en carpetas de Olimpiadas
 const GRADOS_OLIMPIADAS: Record<string, string> = {
@@ -218,24 +219,28 @@ async function buscarContenido(colegio_slug: string, grado: string, materia: str
     const carpetaMateria = MATERIAS_OLIMPIADAS[materia] || materia.replace('Olimpiadas - ', '')
     const carpetaGrado   = GRADOS_OLIMPIADAS[grado] || grado
 
-    // Intentar con grado específico primero
-    indice = await construirIndice(driveId, token, 'Owlaris', 'Colegios Guatemala', 'Olimpiadas de Ciencias', carpetaMateria, carpetaGrado)
-    // Si no hay, buscar sin grado
+    // Buscar en carpeta compartida con grado específico
+    indice = await construirIndice(driveId, token, 'Owlaris', CARPETA_COMPARTIDA, 'Olimpiadas de Ciencias', carpetaMateria, carpetaGrado)
     if (indice.length === 0) {
-      indice = await construirIndice(driveId, token, 'Owlaris', 'Colegios Guatemala', 'Olimpiadas de Ciencias', carpetaMateria)
+      indice = await construirIndice(driveId, token, 'Owlaris', CARPETA_COMPARTIDA, 'Olimpiadas de Ciencias', carpetaMateria)
     }
     console.log('Olimpiadas: ' + carpetaMateria + '/' + carpetaGrado + ' -> ' + indice.length + ' docs')
 
   } else {
-    // 1. Buscar en carpeta del colegio
-    indice = await construirIndice(driveId, token, 'Owlaris', colegioSP, grado, materia)
+    // 1. Buscar en carpeta compartida primero (contenido nuevo)
+    indice = await construirIndice(driveId, token, 'Owlaris', CARPETA_COMPARTIDA, grado, materia)
 
-    // 2. Si no hay, buscar en Mineduc Guatemala
+    // 2. Si no hay, buscar en carpeta del colegio (contenido viejo)
     if (indice.length === 0) {
-      indice = await construirIndice(driveId, token, 'Owlaris', 'Colegios Guatemala', 'Preparación pruebas nacionales', 'Mineduc', grado, materia)
+      indice = await construirIndice(driveId, token, 'Owlaris', colegioSP, grado, materia)
+    }
+
+    // 3. Si no hay, buscar Mineduc en carpeta compartida
+    if (indice.length === 0) {
+      indice = await construirIndice(driveId, token, 'Owlaris', CARPETA_COMPARTIDA, 'Preparación pruebas nacionales', 'Mineduc', grado, materia)
     }
     if (indice.length === 0) {
-      indice = await construirIndice(driveId, token, 'Owlaris', 'Colegios Guatemala', 'Preparación pruebas nacionales', 'Mineduc', materia)
+      indice = await construirIndice(driveId, token, 'Owlaris', CARPETA_COMPARTIDA, 'Preparación pruebas nacionales', 'Mineduc', materia)
     }
   }
 
