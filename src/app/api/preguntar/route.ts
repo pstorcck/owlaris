@@ -505,7 +505,7 @@ export async function POST(req: NextRequest) {
 
     // Solo buscar contenido académico si la pregunta es académica y no es saludo inicial
     if (tipoPregunta === 'academica' && !esBienvenida) {
-      const result = await buscarContenido(colegioSlug, gradoEfectivo, materia?.nombre || '', pregunta)
+      const result = await buscarContenido(colegioSlug, gradoEfectivo, materia_id || '', pregunta)
       contenidoCurricular = result.contenido
       documentoFuente     = result.archivo
     }
