@@ -190,10 +190,31 @@ async function buscarContenido(colegio_slug: string, grado: string, materia: str
   const driveId   = process.env.SHAREPOINT_DRIVE_ID!
   const colegioSP = COLEGIOS_SP[colegio_slug] || colegio_slug
 
-  // Construir índice con temas reales de cada documento
-  const indice = await construirIndice(driveId, token, colegioSP, grado, materia)
+  // 1. Buscar primero en carpeta del colegio
+  let indice = await construirIndice(driveId, token, colegioSP, grado, materia)
+
+  // 2. Si no hay contenido, buscar en Colegios Guatemala
   if (indice.length === 0) {
-    console.log(`❌ No encontrado: ${colegioSP}/${grado}/${materia}`)
+    console.log(`Buscando en Colegios Guatemala: ${grado}/${materia}`)
+    
+    // Intentar rutas en Colegios Guatemala
+    const rutasGuatemala = [
+      ['Colegios Guatemala', 'Olimpiadas de Ciencias', materia],
+      ['Colegios Guatemala', 'Preparación pruebas nacionales', 'Mineduc', grado, materia],
+      ['Colegios Guatemala', 'Preparación pruebas nacionales', 'Mineduc', materia],
+    ]
+    
+    for (const ruta of rutasGuatemala) {
+      indice = await construirIndice(driveId, token, ...ruta as [string, ...string[]])
+      if (indice.length > 0) {
+        console.log(\`✅ Encontrado en Colegios Guatemala: \${ruta.join('/')}\`)
+        break
+      }
+    }
+  }
+
+  if (indice.length === 0) {
+    console.log(\`❌ No encontrado en ninguna fuente: \${colegioSP}/\${grado}/\${materia}\`)
     return { contenido: '', archivo: null }
   }
 
