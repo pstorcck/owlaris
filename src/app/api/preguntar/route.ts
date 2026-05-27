@@ -149,13 +149,13 @@ async function extraerTexto(url: string): Promise<string> {
 // Índice de documentos: cacheKey -> [{nombre, tema, downloadUrl}]
 const indiceDocumentos = new Map<string, { nombre: string; tema: string; downloadUrl: string }[]>()
 
-async function construirIndice(driveId: string, token: string, colegioSP: string, grado: string, materia: string) {
-  const idxKey  = `idx/${colegioSP}/${grado}/${materia}`
+async function construirIndice(driveId: string, token: string, ...segs: string[]) {
+  const idxKey  = 'idx/' + segs.join('/')
   const cached  = indiceDocumentos.get(idxKey)
   if (cached) return cached
 
-  console.log(`Construyendo índice: ${colegioSP}/${grado}/${materia}`)
-  const archivos = await listarArchivos(driveId, token, 'Owlaris', colegioSP, grado, materia)
+  console.log('Construyendo indice: ' + segs.join('/'))
+  const archivos = await listarArchivos(driveId, token, ...segs)
   if (archivos.length === 0) return []
 
   const indice: { nombre: string; tema: string; downloadUrl: string }[] = []
@@ -191,17 +191,17 @@ async function buscarContenido(colegio_slug: string, grado: string, materia: str
   const colegioSP = COLEGIOS_SP[colegio_slug] || colegio_slug
 
   // 1. Buscar primero en carpeta del colegio
-  let indice = await construirIndice(driveId, token, colegioSP, grado, materia)
+  let indice = await construirIndice(driveId, token, 'Owlaris', colegioSP, grado, materia)
 
   // 2. Si no hay contenido, buscar en Colegios Guatemala
   if (indice.length === 0) {
-    indice = await construirIndice(driveId, token, 'Colegios Guatemala', 'Olimpiadas de Ciencias', materia)
+    indice = await construirIndice(driveId, token, 'Owlaris', 'Colegios Guatemala', 'Olimpiadas de Ciencias', materia)
   }
   if (indice.length === 0) {
-    indice = await construirIndice(driveId, token, 'Colegios Guatemala', 'Preparación pruebas nacionales', 'Mineduc', grado, materia)
+    indice = await construirIndice(driveId, token, 'Owlaris', 'Colegios Guatemala', 'Preparación pruebas nacionales', 'Mineduc', grado, materia)
   }
   if (indice.length === 0) {
-    indice = await construirIndice(driveId, token, 'Colegios Guatemala', 'Preparación pruebas nacionales', 'Mineduc', materia)
+    indice = await construirIndice(driveId, token, 'Owlaris', 'Colegios Guatemala', 'Preparación pruebas nacionales', 'Mineduc', materia)
   }
 
   if (indice.length === 0) {
