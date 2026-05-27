@@ -68,6 +68,55 @@ const COLEGIOS_SP: Record<string, string> = {
 }
 const CARPETA_COMPARTIDA = 'Colegio Montano y Escolaris'
 
+// Normalizar grado desde texto libre del alumno
+function normalizarGrado(texto: string): string {
+  const t = texto.toLowerCase()
+    .replace(/á/g,'a').replace(/é/g,'e').replace(/í/g,'i').replace(/ó/g,'o').replace(/ú/g,'u')
+    .replace(/°/g,'').replace(/\.$/g,'').trim()
+
+  if (/4.*prim|cuarto.*prim/i.test(t)) return '4to Primaria'
+  if (/5.*prim|quinto.*prim/i.test(t)) return '5to Primaria'
+  if (/6.*prim|sexto.*prim/i.test(t)) return '6to Primaria'
+  if (/1.*bas|primer.*bas|primero.*bas/i.test(t)) return '1ero Básico'
+  if (/2.*bas|segundo.*bas/i.test(t)) return '2do Básico'
+  if (/3.*bas|tercer.*bas/i.test(t)) return '3ero Básico'
+  if (/4.*bach.*cien|cuarto.*cien/i.test(t)) return '4to Bachillerato en Ciencias y Letras'
+  if (/4.*bach.*comp|cuarto.*comp|4.*pre.*ing/i.test(t)) return '4to Bachillerato en Computación y Pre Ingeniería'
+  if (/4.*bach.*mer|cuarto.*mer/i.test(t)) return '4to Bachillerato en Mercadotecnia'
+  if (/4.*bach|cuarto.*bach/i.test(t)) return '4to Bachillerato en Ciencias y Letras'
+  if (/5.*bach.*cien|quinto.*cien/i.test(t)) return '5to Bachillerato en Ciencias y Letras'
+  if (/5.*bach.*comp|quinto.*comp|5.*pre.*ing/i.test(t)) return '5to Bachillerato en Computación y Pre Ingeniería'
+  if (/5.*bach.*mer|quinto.*mer/i.test(t)) return '5to Bachillerato en Mercadotecnia'
+  if (/5.*bach|quinto.*bach/i.test(t)) return '5to Bachillerato en Ciencias y Letras'
+  return ''
+}
+
+// Normalizar materia desde texto libre
+function normalizarMateria(texto: string): string {
+  const t = texto.toLowerCase()
+    .replace(/á/g,'a').replace(/é/g,'e').replace(/í/g,'i').replace(/ó/g,'o').replace(/ú/g,'u')
+  if (/matem/i.test(t)) return 'Matemática'
+  if (/leng|espan|español|castell/i.test(t)) return 'Español'
+  if (/ingles|english/i.test(t)) return 'Inglés'
+  if (/biol/i.test(t)) return 'Biología'
+  if (/fis|fisica/i.test(t)) return 'Física'
+  if (/quim/i.test(t)) return 'Química'
+  if (/hist/i.test(t)) return 'Historia'
+  if (/cien.*nat|natural/i.test(t)) return 'Ciencias Naturales'
+  if (/olimp.*mat/i.test(t)) return 'Olimpiadas - Matemática'
+  if (/olimp.*biol/i.test(t)) return 'Olimpiadas - Biología'
+  if (/olimp.*fis/i.test(t)) return 'Olimpiadas - Física'
+  if (/olimp.*quim/i.test(t)) return 'Olimpiadas - Química'
+  if (/olimp.*cien/i.test(t)) return 'Olimpiadas - Ciencias Naturales'
+  if (/olimp/i.test(t)) return 'Olimpiadas - Matemática'
+  if (/mineduc.*leng/i.test(t)) return 'Mineduc - Lenguaje'
+  if (/mineduc.*mat/i.test(t)) return 'Mineduc - Matemática'
+  return texto.trim()
+}
+
+// Estados del onboarding
+type EstadoChat = 'esperando_nombre' | 'esperando_grado' | 'esperando_materia' | 'activo'
+
 // Mapeo de grados del sistema a nombres en carpetas de Olimpiadas
 const GRADOS_OLIMPIADAS: Record<string, string> = {
   '1ero Básico':        'Primero Basico',
