@@ -207,14 +207,14 @@ async function buscarContenido(colegio_slug: string, grado: string, materia: str
     for (const ruta of rutasGuatemala) {
       indice = await construirIndice(driveId, token, ...ruta as [string, ...string[]])
       if (indice.length > 0) {
-        console.log(\`✅ Encontrado en Colegios Guatemala: \${ruta.join('/')}\`)
+        console.log('Encontrado en Colegios Guatemala: ' + ruta.join('/'))
         break
       }
     }
   }
 
   if (indice.length === 0) {
-    console.log(\`❌ No encontrado en ninguna fuente: \${colegioSP}/\${grado}/\${materia}\`)
+    console.log('No encontrado: ' + colegioSP + '/' + grado + '/' + materia)
     return { contenido: '', archivo: null }
   }
 
