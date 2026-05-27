@@ -195,22 +195,13 @@ async function buscarContenido(colegio_slug: string, grado: string, materia: str
 
   // 2. Si no hay contenido, buscar en Colegios Guatemala
   if (indice.length === 0) {
-    console.log(`Buscando en Colegios Guatemala: ${grado}/${materia}`)
-    
-    // Intentar rutas en Colegios Guatemala
-    const rutasGuatemala = [
-      ['Colegios Guatemala', 'Olimpiadas de Ciencias', materia],
-      ['Colegios Guatemala', 'Preparación pruebas nacionales', 'Mineduc', grado, materia],
-      ['Colegios Guatemala', 'Preparación pruebas nacionales', 'Mineduc', materia],
-    ]
-    
-    for (const ruta of rutasGuatemala) {
-      indice = await construirIndice(driveId, token, ruta[0], ...ruta.slice(1))
-      if (indice.length > 0) {
-        console.log('Encontrado en Colegios Guatemala: ' + ruta.join('/'))
-        break
-      }
-    }
+    indice = await construirIndice(driveId, token, 'Colegios Guatemala', 'Olimpiadas de Ciencias', materia)
+  }
+  if (indice.length === 0) {
+    indice = await construirIndice(driveId, token, 'Colegios Guatemala', 'Preparación pruebas nacionales', 'Mineduc', grado, materia)
+  }
+  if (indice.length === 0) {
+    indice = await construirIndice(driveId, token, 'Colegios Guatemala', 'Preparación pruebas nacionales', 'Mineduc', materia)
   }
 
   if (indice.length === 0) {
