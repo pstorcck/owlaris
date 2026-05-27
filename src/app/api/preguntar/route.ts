@@ -447,6 +447,53 @@ export async function POST(req: NextRequest) {
     const colegioSlug   = perfil.colegio?.sharepoint_folder || perfil.colegio?.slug
 
     // Detectar tipo de pregunta
+    // ── ONBOARDING ──────────────────────────────────────────────────
+    const estado: string = body.estado || 'activo'
+    const nombreAlumno: string = body.nombre_alumno || ''
+    const gradoAlumno: string  = body.grado_override || ''
+
+    if (estado === 'esperando_nombre') {
+      const nombre = pregunta.trim().split(' ')[0]
+      return NextResponse.json({
+        respuesta: '¡Hola, ' + nombre + '! Qué bueno tenerte aquí. ¿En qué grado estás?',
+        nuevo_estado: 'esperando_grado',
+        nombre_alumno: nombre,
+        tokens: 0,
+      })
+    }
+
+    if (estado === 'esperando_grado') {
+      const gradoDetectado = normalizarGrado(pregunta)
+      if (!gradoDetectado) {
+        return NextResponse.json({
+          respuesta: 'No reconocí ese grado. ¿Puedes decirme tu grado? Por ejemplo: "4to Primaria", "3ero Básico", "5to Bachillerato"...',
+          nuevo_estado: 'esperando_grado',
+          nombre_alumno: nombreAlumno,
+          tokens: 0,
+        })
+      }
+      return NextResponse.json({
+        respuesta: 'Perfecto, ' + nombreAlumno + '. ¿Qué materia quieres estudiar hoy?',
+        nuevo_estado: 'esperando_materia',
+        nombre_alumno: nombreAlumno,
+        grado_detectado: gradoDetectado,
+        tokens: 0,
+      })
+    }
+
+    if (estado === 'esperando_materia') {
+      const materiaDetectada = normalizarMateria(pregunta)
+      return NextResponse.json({
+        respuesta: 'Excelente, ' + nombreAlumno + '. Vamos con ' + materiaDetectada + ' de ' + gradoAlumno + '. ¿Tienes una duda específica o quieres que te proponga un tema?',
+        nuevo_estado: 'activo',
+        nombre_alumno: nombreAlumno,
+        grado_detectado: gradoAlumno,
+        materia_detectada: materiaDetectada,
+        tokens: 0,
+      })
+    }
+    // ── FIN ONBOARDING ───────────────────────────────────────────────
+
     const tipoPregunta = detectarTipoPregunta(pregunta)
     const esBienvenida = esSaludo(pregunta) && (!historial || historial.length === 0)
 
