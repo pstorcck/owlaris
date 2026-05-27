@@ -67,6 +67,27 @@ const COLEGIOS_SP: Record<string, string> = {
   'colegio-montano': 'Colegio Montano',
 }
 
+// Mapeo de grados del sistema a nombres en carpetas de Olimpiadas
+const GRADOS_OLIMPIADAS: Record<string, string> = {
+  '1ero Básico':        'Primero Basico',
+  '2do Básico':         'Segundo Basico',
+  '3ero Básico':        'Tercero Basico',
+  '4to Bachillerato':   'Diversificado',
+  '5to Bachillerato':   'Diversificado',
+  '4to Primaria':       'Primaria',
+  '5to Primaria':       'Primaria',
+  '6to Primaria':       'Primaria',
+}
+
+// Mapeo de materias Olimpiadas a carpetas
+const MATERIAS_OLIMPIADAS: Record<string, string> = {
+  'Olimpiadas - Matemática':        'Matematica',
+  'Olimpiadas - Biología':          'Biologia',
+  'Olimpiadas - Física':            'Fisica',
+  'Olimpiadas - Química':           'Quimica',
+  'Olimpiadas - Ciencias Naturales':'Ciencias Naturales',
+}
+
 const DOCS_CONFIG = [
   'Prompt Principal - Agente Alumno.docx',
   'Politica Pedagogica Oficial - Agente Alumno.docx',
@@ -190,18 +211,32 @@ async function buscarContenido(colegio_slug: string, grado: string, materia: str
   const driveId   = process.env.SHAREPOINT_DRIVE_ID!
   const colegioSP = COLEGIOS_SP[colegio_slug] || colegio_slug
 
-  // 1. Buscar primero en carpeta del colegio
-  let indice = await construirIndice(driveId, token, 'Owlaris', colegioSP, grado, materia)
+  let indice: { nombre: string; tema: string; downloadUrl: string }[] = []
 
-  // 2. Si no hay contenido, buscar en Colegios Guatemala
-  if (indice.length === 0) {
-    indice = await construirIndice(driveId, token, 'Owlaris', 'Colegios Guatemala', 'Olimpiadas de Ciencias', materia)
-  }
-  if (indice.length === 0) {
-    indice = await construirIndice(driveId, token, 'Owlaris', 'Colegios Guatemala', 'Preparación pruebas nacionales', 'Mineduc', grado, materia)
-  }
-  if (indice.length === 0) {
-    indice = await construirIndice(driveId, token, 'Owlaris', 'Colegios Guatemala', 'Preparación pruebas nacionales', 'Mineduc', materia)
+  // Si es materia de Olimpiadas, buscar directamente en Colegios Guatemala
+  if (materia.startsWith('Olimpiadas')) {
+    const carpetaMateria = MATERIAS_OLIMPIADAS[materia] || materia.replace('Olimpiadas - ', '')
+    const carpetaGrado   = GRADOS_OLIMPIADAS[grado] || grado
+
+    // Intentar con grado específico primero
+    indice = await construirIndice(driveId, token, 'Owlaris', 'Colegios Guatemala', 'Olimpiadas de Ciencias', carpetaMateria, carpetaGrado)
+    // Si no hay, buscar sin grado
+    if (indice.length === 0) {
+      indice = await construirIndice(driveId, token, 'Owlaris', 'Colegios Guatemala', 'Olimpiadas de Ciencias', carpetaMateria)
+    }
+    console.log('Olimpiadas: ' + carpetaMateria + '/' + carpetaGrado + ' -> ' + indice.length + ' docs')
+
+  } else {
+    // 1. Buscar en carpeta del colegio
+    indice = await construirIndice(driveId, token, 'Owlaris', colegioSP, grado, materia)
+
+    // 2. Si no hay, buscar en Mineduc Guatemala
+    if (indice.length === 0) {
+      indice = await construirIndice(driveId, token, 'Owlaris', 'Colegios Guatemala', 'Preparación pruebas nacionales', 'Mineduc', grado, materia)
+    }
+    if (indice.length === 0) {
+      indice = await construirIndice(driveId, token, 'Owlaris', 'Colegios Guatemala', 'Preparación pruebas nacionales', 'Mineduc', materia)
+    }
   }
 
   if (indice.length === 0) {
