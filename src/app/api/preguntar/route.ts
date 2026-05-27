@@ -80,14 +80,8 @@ function normalizarGrado(texto: string): string {
   if (/1.*bas|primer.*bas|primero.*bas/i.test(t)) return '1ero Básico'
   if (/2.*bas|segundo.*bas/i.test(t)) return '2do Básico'
   if (/3.*bas|tercer.*bas/i.test(t)) return '3ero Básico'
-  if (/4.*bach.*cien|cuarto.*cien/i.test(t)) return '4to Bachillerato en Ciencias y Letras'
-  if (/4.*bach.*comp|cuarto.*comp|4.*pre.*ing/i.test(t)) return '4to Bachillerato en Computación y Pre Ingeniería'
-  if (/4.*bach.*mer|cuarto.*mer/i.test(t)) return '4to Bachillerato en Mercadotecnia'
-  if (/4.*bach|cuarto.*bach/i.test(t)) return '4to Bachillerato en Ciencias y Letras'
-  if (/5.*bach.*cien|quinto.*cien/i.test(t)) return '5to Bachillerato en Ciencias y Letras'
-  if (/5.*bach.*comp|quinto.*comp|5.*pre.*ing/i.test(t)) return '5to Bachillerato en Computación y Pre Ingeniería'
-  if (/5.*bach.*mer|quinto.*mer/i.test(t)) return '5to Bachillerato en Mercadotecnia'
-  if (/5.*bach|quinto.*bach/i.test(t)) return '5to Bachillerato en Ciencias y Letras'
+  if (/4.*bach|cuarto.*bach/i.test(t)) return '4to Bachillerato'
+  if (/5.*bach|quinto.*bach/i.test(t)) return '5to Bachillerato'
   return ''
 }
 
