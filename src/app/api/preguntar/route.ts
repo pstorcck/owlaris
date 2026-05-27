@@ -415,7 +415,8 @@ export async function POST(req: NextRequest) {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
 
-    const { pregunta, materia_id, grado_override, historial } = await req.json()
+    const body = await req.json()
+    const { pregunta, materia_id, grado_override, historial } = body
     if (!pregunta?.trim()) return NextResponse.json({ error: 'Pregunta vacía' }, { status: 400 })
 
     const { data: perfil } = await supabase
