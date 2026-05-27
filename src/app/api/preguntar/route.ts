@@ -205,7 +205,7 @@ async function buscarContenido(colegio_slug: string, grado: string, materia: str
     ]
     
     for (const ruta of rutasGuatemala) {
-      indice = await construirIndice(driveId, token, ...ruta as [string, ...string[]])
+      indice = await construirIndice(driveId, token, ruta[0], ...ruta.slice(1))
       if (indice.length > 0) {
         console.log('Encontrado en Colegios Guatemala: ' + ruta.join('/'))
         break
