@@ -86,9 +86,27 @@ function normalizarGrado(texto: string): string {
 }
 
 // Normalizar materia desde texto libre
-function normalizarMateria(texto: string): string {
+function normalizarMateria(texto: string, esOlimpiadas = false): string {
   const t = texto.toLowerCase()
     .replace(/á/g,'a').replace(/é/g,'e').replace(/í/g,'i').replace(/ó/g,'o').replace(/ú/g,'u')
+
+  // Detectar si es olimpiadas primero
+  if (/olimp.*mat/i.test(t)) return 'Olimpiadas - Matemática'
+  if (/olimp.*biol/i.test(t)) return 'Olimpiadas - Biología'
+  if (/olimp.*fis/i.test(t)) return 'Olimpiadas - Física'
+  if (/olimp.*quim/i.test(t)) return 'Olimpiadas - Química'
+  if (/olimp.*cien/i.test(t)) return 'Olimpiadas - Ciencias Naturales'
+  if (/olimp/i.test(t)) return '__OLIMPIADAS__'  // señal para preguntar materia
+
+  // Si ya está en modo olimpiadas, prefijar
+  if (esOlimpiadas) {
+    if (/matem/i.test(t)) return 'Olimpiadas - Matemática'
+    if (/biol/i.test(t)) return 'Olimpiadas - Biología'
+    if (/fis/i.test(t)) return 'Olimpiadas - Física'
+    if (/quim/i.test(t)) return 'Olimpiadas - Química'
+    if (/cien/i.test(t)) return 'Olimpiadas - Ciencias Naturales'
+  }
+
   if (/matem/i.test(t)) return 'Matemática'
   if (/leng|espan|español|castell/i.test(t)) return 'Español'
   if (/ingles|english/i.test(t)) return 'Inglés'
@@ -97,12 +115,6 @@ function normalizarMateria(texto: string): string {
   if (/quim/i.test(t)) return 'Química'
   if (/hist/i.test(t)) return 'Historia'
   if (/cien.*nat|natural/i.test(t)) return 'Ciencias Naturales'
-  if (/olimp.*mat/i.test(t)) return 'Olimpiadas - Matemática'
-  if (/olimp.*biol/i.test(t)) return 'Olimpiadas - Biología'
-  if (/olimp.*fis/i.test(t)) return 'Olimpiadas - Física'
-  if (/olimp.*quim/i.test(t)) return 'Olimpiadas - Química'
-  if (/olimp.*cien/i.test(t)) return 'Olimpiadas - Ciencias Naturales'
-  if (/olimp/i.test(t)) return 'Olimpiadas - Matemática'
   if (/mineduc.*leng/i.test(t)) return 'Mineduc - Lenguaje'
   if (/mineduc.*mat/i.test(t)) return 'Mineduc - Matemática'
   return texto.trim()
@@ -486,8 +498,30 @@ export async function POST(req: NextRequest) {
 
     if (estado === 'esperando_materia') {
       const materiaDetectada = normalizarMateria(pregunta)
+      // Si detectó olimpiadas sin materia específica, preguntar cuál
+      if (materiaDetectada === '__OLIMPIADAS__') {
+        return NextResponse.json({
+          respuesta: 'Olimpiadas, perfecto. ¿De cuál materia? Matemática, Biología, Física, Química o Ciencias Naturales.',
+          nuevo_estado: 'esperando_materia_olimpiadas',
+          nombre_alumno: nombreAlumno,
+          grado_detectado: gradoAlumno,
+          tokens: 0,
+        })
+      }
       return NextResponse.json({
         respuesta: 'Excelente, ' + nombreAlumno + '. Vamos con ' + materiaDetectada + ' de ' + gradoAlumno + '. ¿Tienes una duda específica o quieres que te proponga un tema?',
+        nuevo_estado: 'activo',
+        nombre_alumno: nombreAlumno,
+        grado_detectado: gradoAlumno,
+        materia_detectada: materiaDetectada,
+        tokens: 0,
+      })
+    }
+
+    if (estado === 'esperando_materia_olimpiadas') {
+      const materiaDetectada = normalizarMateria(pregunta, true)
+      return NextResponse.json({
+        respuesta: 'Perfecto, ' + nombreAlumno + '. Vamos con ' + materiaDetectada + ' de ' + gradoAlumno + '. ¿Tienes una duda específica o quieres que te proponga un tema?',
         nuevo_estado: 'activo',
         nombre_alumno: nombreAlumno,
         grado_detectado: gradoAlumno,
