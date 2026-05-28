@@ -624,12 +624,8 @@ export async function POST(req: NextRequest) {
         if (nuevaMateria && nuevaMateria !== materia_id && !nuevaMateria.startsWith('__')) {
           console.log('Cambio materia:', materia_id, '->', nuevaMateria)
           // Limpiar caché de la materia anterior
-          for (const key of cacheContenido.keys()) {
-            if (key.includes(materia_id)) cacheContenido.delete(key)
-          }
-          for (const key of indiceDocumentos.keys()) {
-            if (key.includes(materia_id)) indiceDocumentos.delete(key)
-          }
+          Array.from(cacheContenido.keys()).forEach(key => { if (key.includes(materia_id)) cacheContenido.delete(key) })
+          Array.from(indiceDocumentos.keys()).forEach(key => { if (key.includes(materia_id)) indiceDocumentos.delete(key) })
           return NextResponse.json({
             respuesta: 'Claro, cambiamos a ' + nuevaMateria + '. ¿Tienes una duda específica o quieres que te proponga un tema?',
             nuevo_estado: 'activo',
