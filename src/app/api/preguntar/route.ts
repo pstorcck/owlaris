@@ -288,15 +288,44 @@ async function buscarContenido(colegio_slug: string, grado: string, materia: str
     console.log('Olimpiadas: ' + carpetaMateria + '/' + carpetaGrado + ' -> ' + indice.length + ' docs')
 
   } else {
-    // 1. Buscar en carpeta compartida primero (contenido nuevo)
-    indice = await construirIndice(driveId, token, 'Owlaris', CARPETA_COMPARTIDA, grado, materia)
+    // Función para buscar materia aproximada dentro de un grado
+    async function buscarEnGrado(raiz: string, grado: string, materia: string) {
+      // 1. Intentar ruta exacta primero
+      let idx = await construirIndice(driveId, token, raiz, grado, materia)
+      if (idx.length > 0) return idx
 
-    // 2. Si no hay, buscar en carpeta del colegio (contenido viejo)
-    if (indice.length === 0) {
-      indice = await construirIndice(driveId, token, 'Owlaris', colegioSP, grado, materia)
+      // 2. Listar carpetas disponibles en el grado y elegir la más cercana
+      const url = `https://graph.microsoft.com/v1.0/drives/${driveId}/root:/${encodeURIComponent(raiz)}/${encodeURIComponent(grado)}:/children`
+      const res = await fetch(url, { headers: { Authorization: 'Bearer ' + token } })
+      if (!res.ok) return []
+      const data = await res.json()
+      const carpetas: string[] = (data.value || []).filter((i: {folder?:unknown}) => i.folder).map((i: {name:string}) => i.name)
+      
+      // Buscar la carpeta cuyo nombre coincide mejor con la materia
+      const materiaLower = materia.toLowerCase()
+        .replace(/á/g,'a').replace(/é/g,'e').replace(/í/g,'i').replace(/ó/g,'o').replace(/ú/g,'u')
+      
+      const carpetaMatch = carpetas.find(c => {
+        const cl = c.toLowerCase()
+          .replace(/á/g,'a').replace(/é/g,'e').replace(/í/g,'i').replace(/ó/g,'o').replace(/ú/g,'u')
+        return cl.includes(materiaLower) || materiaLower.includes(cl)
+      })
+      
+      if (carpetaMatch) {
+        idx = await construirIndice(driveId, token, raiz, grado, carpetaMatch)
+      }
+      return idx
     }
 
-    // 3. Si no hay, buscar Mineduc en carpeta compartida
+    // 1. Buscar en carpeta compartida
+    indice = await buscarEnGrado('Owlaris/' + CARPETA_COMPARTIDA, grado, materia)
+
+    // 2. Si no hay, buscar en carpeta del colegio
+    if (indice.length === 0) {
+      indice = await buscarEnGrado('Owlaris/' + colegioSP, grado, materia)
+    }
+
+    // 3. Si no hay, buscar en Mineduc
     if (indice.length === 0) {
       indice = await construirIndice(driveId, token, 'Owlaris', CARPETA_COMPARTIDA, 'Preparación pruebas nacionales', 'Mineduc', grado, materia)
     }
