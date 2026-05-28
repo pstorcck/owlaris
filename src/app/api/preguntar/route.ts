@@ -579,7 +579,7 @@ export async function POST(req: NextRequest) {
     if (estado === 'esperando_nombre') {
       const nombre = pregunta.trim().split(' ')[0]
       return NextResponse.json({
-        respuesta: '¡Hola, ' + nombre + '! Qué bueno tenerte aquí. ¿En qué grado estás?',
+        respuesta: idiomaIngles ? 'Hi, ' + nombre + '! Great to have you here. What grade are you in?' : '¡Hola, ' + nombre + '! Qué bueno tenerte aquí. ¿En qué grado estás?',
         nuevo_estado: 'esperando_grado',
         nombre_alumno: nombre,
         tokens: 0,
@@ -600,7 +600,7 @@ export async function POST(req: NextRequest) {
       if (userId) await supabase.from('usuarios').update({ grado: gradoDetectado }).eq('id', userId)
 
       return NextResponse.json({
-        respuesta: 'Perfecto, ' + nombreAlumno + '. ¿Qué materia quieres estudiar hoy?',
+        respuesta: idiomaIngles ? 'Perfect, ' + nombreAlumno + '. What subject do you want to study today?' : 'Perfecto, ' + nombreAlumno + '. ¿Qué materia quieres estudiar hoy?',
         nuevo_estado: 'esperando_materia',
         nombre_alumno: nombreAlumno,
         grado_detectado: gradoDetectado,
@@ -621,7 +621,7 @@ export async function POST(req: NextRequest) {
         })
       }
       return NextResponse.json({
-        respuesta: 'Ok, ' + materiaDetectada + '. ¿Tienes una duda específica o quieres que te proponga un tema?',
+        respuesta: idiomaIngles ? 'Ok, ' + materiaDetectada + '. Do you have a specific question or would you like me to suggest a topic?' : 'Ok, ' + materiaDetectada + '. ¿Tienes una duda específica o quieres que te proponga un tema?',
         nuevo_estado: 'activo',
         nombre_alumno: nombreAlumno,
         grado_detectado: gradoAlumno,
@@ -633,7 +633,7 @@ export async function POST(req: NextRequest) {
     if (estado === 'esperando_materia_olimpiadas') {
       const materiaDetectada = normalizarMateria(pregunta, true)
       return NextResponse.json({
-        respuesta: 'Ok, ' + materiaDetectada + '. ¿Tienes una duda específica o quieres que te proponga un tema?',
+        respuesta: idiomaIngles ? 'Ok, ' + materiaDetectada + '. Do you have a specific question or would you like me to suggest a topic?' : 'Ok, ' + materiaDetectada + '. ¿Tienes una duda específica o quieres que te proponga un tema?',
         nuevo_estado: 'activo',
         nombre_alumno: nombreAlumno,
         grado_detectado: gradoAlumno,
