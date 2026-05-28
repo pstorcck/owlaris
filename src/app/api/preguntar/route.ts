@@ -610,6 +610,24 @@ export async function POST(req: NextRequest) {
         tokens: 0,
       })
     }
+    // Detectar cambio de materia mid-sesión
+    if (estado === 'activo') {
+      const cambioMateriaRegex = /(?:quiero|vamos a|cambia(?:mos)? a|ahora|estudiemos|practiquemos)\s+(?:estudiar|ver|practicar|repasar)?\s*([a-záéíóúüñA-ZÁÉÍÓÚÜÑ\s]+?)(?:\s*$|\s+por favor|\s+ahora)/i
+      const matchMateria = cambioMateriaRegex.exec(pregunta)
+      if (matchMateria) {
+        const nuevaMateria = normalizarMateria(matchMateria[1].trim())
+        if (nuevaMateria && nuevaMateria !== materia_id && !nuevaMateria.startsWith('__')) {
+          console.log('Cambio materia:', materia_id, '->', nuevaMateria)
+          return NextResponse.json({
+            respuesta: 'Claro, cambiamos a ' + nuevaMateria + '. ¿Tienes una duda específica o quieres que te proponga un tema?',
+            nuevo_estado: 'activo',
+            materia_detectada: nuevaMateria,
+            tokens: 0,
+          })
+        }
+      }
+    }
+
     // Detectar cambio de grado mid-sesión
     if (estado === 'activo') {
       const cambioGradoRegex = /ahora (estoy en|curso|voy a|soy de)\s+(.+)|cambi[eé] (a|de) grado[:\s]*(.+)|estoy en\s+(.+(?:grado|b[aá]sico|primaria|bachillerato))/i
