@@ -10,7 +10,7 @@ interface Props {
   materias: Materia[]
 }
 
-type EstadoChat = 'esperando_nombre' | 'esperando_grado' | 'esperando_materia' | 'activo'
+type EstadoChat = 'esperando_nombre' | 'esperando_confirmacion_grado' | 'esperando_grado' | 'esperando_materia' | 'esperando_materia_olimpiadas' | 'activo'
 
 function renderSegmento(texto: string, key: number): React.ReactNode[] {
   const partes: React.ReactNode[] = []
@@ -61,9 +61,11 @@ export default function ChatInterface({ usuario }: Props) {
   const [generandoPDF, setGenerandoPDF] = useState(false)
 
   // Estado onboarding
-  const [estadoChat, setEstadoChat]     = useState<EstadoChat>('esperando_nombre')
-  const [nombreAlumno, setNombreAlumno] = useState('')
-  const [gradoAlumno, setGradoAlumno]   = useState('')
+  const gradoGuardado = usuario.grado || ''
+  const estadoInicial: EstadoChat = gradoGuardado ? 'esperando_confirmacion_grado' : 'esperando_nombre'
+  const [estadoChat, setEstadoChat]       = useState<EstadoChat>(estadoInicial)
+  const [nombreAlumno, setNombreAlumno]   = useState('')
+  const [gradoAlumno, setGradoAlumno]     = useState('')
   const [materiaAlumno, setMateriaAlumno] = useState('')
 
   const finalRef = useRef<HTMLDivElement>(null)
@@ -76,13 +78,17 @@ export default function ChatInterface({ usuario }: Props) {
   useEffect(() => { finalRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [mensajes, cargando])
 
   useEffect(() => {
-    // Mensaje inicial de bienvenida
+    const nombre = usuario.nombre_completo.split(' ')[0]
+    const msg = gradoGuardado
+      ? `¡Hola, ${nombre}! Bienvenido de vuelta. ¿Sigues en ${gradoGuardado}?`
+      : '¡Hola! Soy Owlaris, tu tutor académico inteligente. ¿Cómo te llamas?'
     setMensajes([{
       id: 'bienvenida',
       rol: 'asistente',
-      contenido: '¡Hola! Soy Owlaris, tu tutor académico inteligente. ¿Cómo te llamas?',
+      contenido: msg,
       timestamp: new Date(),
     }])
+    if (gradoGuardado) setNombreAlumno(nombre)
   }, [])
 
   async function enviarPregunta(texto?: string) {
@@ -252,8 +258,9 @@ export default function ChatInterface({ usuario }: Props) {
   }
 
   const placeholder = estadoChat === 'esperando_nombre' ? 'Escribe tu nombre...' :
+                      estadoChat === 'esperando_confirmacion_grado' ? 'Escribe si o no...' :
                       estadoChat === 'esperando_grado'  ? 'Escribe tu grado...' :
-                      estadoChat === 'esperando_materia'? '¿Qué materia quieres estudiar?' :
+                      estadoChat === 'esperando_materia' || estadoChat === 'esperando_materia_olimpiadas' ? '¿Qué materia quieres estudiar?' :
                       `Escribe tu duda sobre ${materiaAlumno || 'la materia'}...`
 
   return (

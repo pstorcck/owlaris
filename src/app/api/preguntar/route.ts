@@ -484,6 +484,27 @@ export async function POST(req: NextRequest) {
     const nombreAlumno: string = body.nombre_alumno || ''
     const gradoAlumno: string  = body.grado_override || ''
 
+    if (estado === 'esperando_confirmacion_grado') {
+      const resp = pregunta.toLowerCase().trim()
+      const esAfirmativo = /^(si|sí|yes|s|claro|correcto|asi|así|efectivamente)/.test(resp)
+      if (esAfirmativo) {
+        return NextResponse.json({
+          respuesta: 'Perfecto. ¿Qué materia quieres estudiar hoy?',
+          nuevo_estado: 'esperando_materia',
+          nombre_alumno: nombreAlumno,
+          grado_detectado: gradoAlumno,
+          tokens: 0,
+        })
+      } else {
+        return NextResponse.json({
+          respuesta: 'Sin problema. ¿En qué grado estás ahora?',
+          nuevo_estado: 'esperando_grado',
+          nombre_alumno: nombreAlumno,
+          tokens: 0,
+        })
+      }
+    }
+
     if (estado === 'esperando_nombre') {
       const nombre = pregunta.trim().split(' ')[0]
       return NextResponse.json({
@@ -504,6 +525,11 @@ export async function POST(req: NextRequest) {
           tokens: 0,
         })
       }
+      // Guardar grado en Supabase
+      const supabase = createClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      if (user) await supabase.from('usuarios').update({ grado: gradoDetectado }).eq('id', user.id)
+
       return NextResponse.json({
         respuesta: 'Perfecto, ' + nombreAlumno + '. ¿Qué materia quieres estudiar hoy?',
         nuevo_estado: 'esperando_materia',
