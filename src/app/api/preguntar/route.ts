@@ -560,7 +560,7 @@ export async function POST(req: NextRequest) {
           console.log('Grado confirmado y guardado:', gradoAlumno, 'para userId:', userId)
         }
         return NextResponse.json({
-          respuesta: 'Perfecto. ¿Qué materia quieres estudiar hoy?',
+          respuesta: idiomaIngles ? 'Perfect. What subject do you want to study today?' : 'Perfecto. ¿Qué materia quieres estudiar hoy?',
           nuevo_estado: 'esperando_materia',
           nombre_alumno: nombreAlumno,
           grado_detectado: gradoAlumno,
@@ -568,7 +568,7 @@ export async function POST(req: NextRequest) {
         })
       } else {
         return NextResponse.json({
-          respuesta: 'Sin problema. ¿En qué grado estás ahora?',
+          respuesta: idiomaIngles ? 'No problem. What grade are you in?' : 'Sin problema. ¿En qué grado estás ahora?',
           nuevo_estado: 'esperando_grado',
           nombre_alumno: nombreAlumno,
           tokens: 0,
