@@ -540,7 +540,12 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const { data: materia } = await supabase.from('materias').select('*').eq('id', materia_id).single()
+    // Buscar materia por ID o por nombre
+    const { data: materiaPorId } = await supabase.from('materias').select('*').eq('id', materia_id).single()
+    const { data: materiaPorNombre } = !materiaPorId && materia_id
+      ? await supabase.from('materias').select('*').eq('nombre', materia_id).eq('colegio_id', perfil.colegio_id).single()
+      : { data: null }
+    const materia = materiaPorId || materiaPorNombre
     const gradoEfectivo = grado_override || perfil.grado
     const colegioSlug   = perfil.colegio?.sharepoint_folder || perfil.colegio?.slug
 
