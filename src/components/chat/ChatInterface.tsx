@@ -108,9 +108,12 @@ export default function ChatInterface({ usuario }: Props) {
           pregunta: tp,
           estado: estadoChat,
           nombre_alumno: nombreAlumno,
-          grado_override: gradoAlumno,
+          grado_override: gradoAlumno || gradoGuardado,
           materia_id: materiaAlumno,
           historial: mensajes.slice(-6).map(m => ({ rol: m.rol, contenido: m.contenido })),
+          user_id: usuario.id,
+          nivel_dificultad: nivelDificultad,
+          aciertos_consecutivos: aciertosConsec,
         })
       })
       if (!res.ok) throw new Error()
