@@ -14,7 +14,6 @@ const GRADOS = [
 export default function SignupPage() {
   const [nombre, setNombre]   = useState('')
   const [email, setEmail]     = useState('')
-  const [grado, setGrado]     = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError]     = useState('')
   const [exito, setExito]     = useState('')
@@ -29,7 +28,7 @@ export default function SignupPage() {
       const res = await fetch('/api/signup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ nombre_completo: nombre, email, grado, rol: 'alumno' }),
+        body: JSON.stringify({ nombre_completo: nombre, email, rol: 'alumno' }),
       })
       const data = await res.json()
       setLoading(false)
@@ -78,13 +77,7 @@ export default function SignupPage() {
                 <input type="email" value={email} onChange={e => setEmail(e.target.value)}
                   placeholder="juan@colegiomontano.edu.gt" required className="input-base"/>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Grado</label>
-                <select value={grado} onChange={e => setGrado(e.target.value)} required className="input-base">
-                  <option value="">Selecciona tu grado</option>
-                  {GRADOS.map(g => <option key={g} value={g}>{g}</option>)}
-                </select>
-              </div>
+
               {error && (
                 <div className="bg-red-50 border border-red-200 text-red-600 text-sm px-4 py-3 rounded-xl">{error}</div>
               )}
