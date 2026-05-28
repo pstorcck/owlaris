@@ -58,7 +58,9 @@ export default function ChatInterface({ usuario }: Props) {
   const [error, setError]               = useState('')
   const [sugerencias, setSugerencias]   = useState<{icon:string;text:string}[]>([])
   const [expandido, setExpandido]       = useState<string | null>(null)
-  const [generandoPDF, setGenerandoPDF] = useState(false)
+  const [generandoPDF, setGenerandoPDF]       = useState(false)
+  const [nivelDificultad, setNivelDificultad] = useState(1)
+  const [aciertosConsec, setAciertosConsec]   = useState(0)
 
   // Estado onboarding
   const gradoGuardado = usuario.grado || ''
@@ -124,6 +126,8 @@ export default function ChatInterface({ usuario }: Props) {
       if (data.nombre_alumno) setNombreAlumno(data.nombre_alumno)
       if (data.grado_detectado) setGradoAlumno(data.grado_detectado)
       if (data.materia_detectada) setMateriaAlumno(data.materia_detectada)
+      if (data.nivel_dificultad) setNivelDificultad(data.nivel_dificultad)
+      if (data.aciertos_consecutivos !== undefined) setAciertosConsec(data.aciertos_consecutivos)
 
       setMensajes(prev => [...prev, {
         id: (Date.now()+1).toString(),
