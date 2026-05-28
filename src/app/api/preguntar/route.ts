@@ -483,6 +483,7 @@ export async function POST(req: NextRequest) {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
 
+    const supabase = createClient()
     const body = await req.json()
     const { pregunta, historial } = body
     const materia_id    = body.materia_id || body.materia_detectada || ''
@@ -565,7 +566,6 @@ export async function POST(req: NextRequest) {
         })
       }
       // Guardar grado en Supabase
-      const supabase = createClient()
       const { data: { user } } = await supabase.auth.getUser()
       if (user) await supabase.from('usuarios').update({ grado: gradoDetectado }).eq('id', user.id)
 
