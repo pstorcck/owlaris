@@ -124,7 +124,11 @@ export default function ChatInterface({ usuario }: Props) {
       // Actualizar estado onboarding
       if (data.nuevo_estado) setEstadoChat(data.nuevo_estado)
       if (data.nombre_alumno) setNombreAlumno(data.nombre_alumno)
-      if (data.grado_detectado) setGradoAlumno(data.grado_detectado)
+      if (data.grado_detectado) {
+        setGradoAlumno(data.grado_detectado)
+        // Guardar grado desde el frontend donde sí hay sesión activa
+        supabase.from('usuarios').update({ grado: data.grado_detectado }).eq('id', usuario.id)
+      }
       if (data.materia_detectada) setMateriaAlumno(data.materia_detectada)
       if (data.nivel_dificultad) setNivelDificultad(data.nivel_dificultad)
       if (data.aciertos_consecutivos !== undefined) setAciertosConsec(data.aciertos_consecutivos)
