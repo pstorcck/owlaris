@@ -744,9 +744,7 @@ export async function POST(req: NextRequest) {
     const contextoValidacion = validacionOM ? `
 
 INSTRUCCIÓN CRÍTICA DE EVALUACIÓN: ${validacionOM}` : ''
-    const contextoIdioma = idiomaIngles ? '
-
-LANGUAGE INSTRUCTION: You MUST respond entirely in English. All explanations, questions, feedback and conversation must be in English only.' : ''
+    const contextoIdioma = idiomaIngles ? '\n\nLANGUAGE INSTRUCTION: You MUST respond entirely in English. All explanations, questions, feedback and conversation must be in English only.' : ''
 
     // Contexto según tipo de pregunta
     let contextoContenido = ''
