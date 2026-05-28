@@ -541,18 +541,18 @@ export async function POST(req: NextRequest) {
 
     if (estado === 'esperando_materia') {
       const materiaDetectada = normalizarMateria(pregunta)
-      // Si detectó olimpiadas sin materia específica, preguntar cuál
+      const gradoMostrar = gradoAlumno || body.grado_detectado || ''
       if (materiaDetectada === '__OLIMPIADAS__') {
         return NextResponse.json({
           respuesta: 'Olimpiadas, perfecto. ¿De cuál materia? Matemática, Biología, Física, Química o Ciencias Naturales.',
           nuevo_estado: 'esperando_materia_olimpiadas',
           nombre_alumno: nombreAlumno,
-          grado_detectado: gradoAlumno,
+          grado_detectado: gradoMostrar,
           tokens: 0,
         })
       }
       return NextResponse.json({
-        respuesta: 'Excelente, ' + nombreAlumno + '. Vamos con ' + materiaDetectada + ' de ' + gradoAlumno + '. ¿Tienes una duda específica o quieres que te proponga un tema?',
+        respuesta: 'Excelente, ' + nombreAlumno + '. Vamos con ' + materiaDetectada + ' de ' + gradoMostrar + '. ¿Tienes una duda específica o quieres que te proponga un tema?',
         nuevo_estado: 'activo',
         nombre_alumno: nombreAlumno,
         grado_detectado: gradoAlumno,
