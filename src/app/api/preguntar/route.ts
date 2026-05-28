@@ -509,8 +509,9 @@ export async function POST(req: NextRequest) {
 
     const body = await req.json()
     const { pregunta, historial } = body
-    const materia_id    = body.materia_id || body.materia_detectada || ''
-    const userId: string = body.user_id || ''
+    const materia_id      = body.materia_id || body.materia_detectada || ''
+    const userId: string  = body.user_id || ''
+    const idiomaIngles: boolean = body.idioma_ingles || false
     console.log('userId recibido:', userId)
     const grado_override = body.grado_override || body.grado_detectado || ''
     if (!pregunta?.trim()) return NextResponse.json({ error: 'Pregunta vacía' }, { status: 400 })
@@ -743,6 +744,9 @@ export async function POST(req: NextRequest) {
     const contextoValidacion = validacionOM ? `
 
 INSTRUCCIÓN CRÍTICA DE EVALUACIÓN: ${validacionOM}` : ''
+    const contextoIdioma = idiomaIngles ? '
+
+LANGUAGE INSTRUCTION: You MUST respond entirely in English. All explanations, questions, feedback and conversation must be in English only.' : ''
 
     // Contexto según tipo de pregunta
     let contextoContenido = ''

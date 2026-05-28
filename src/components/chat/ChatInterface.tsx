@@ -62,6 +62,8 @@ export default function ChatInterface({ usuario }: Props) {
   const [nivelDificultad, setNivelDificultad] = useState(1)
   const [aciertosConsec, setAciertosConsec]   = useState(0)
   const [materiaSugerida, setMateriaSugerida] = useState('')
+  const [idiomaIngles, setIdiomaIngles]       = useState(false)
+  const [modoConversacion, setModoConversacion] = useState(false)
 
   // Estado onboarding
   const gradoGuardado = usuario.grado || ''
@@ -116,6 +118,7 @@ export default function ChatInterface({ usuario }: Props) {
           historial: mensajes.slice(-6).map(m => ({ rol: m.rol, contenido: m.contenido })),
           user_id: usuario.id,
           materia_sugerida: materiaSugerida,
+          idioma_ingles: idiomaIngles,
           nivel_dificultad: nivelDificultad,
           aciertos_consecutivos: aciertosConsec,
         })
@@ -272,11 +275,17 @@ export default function ChatInterface({ usuario }: Props) {
     finally { setGenerandoPDF(false) }
   }
 
-  const placeholder = estadoChat === 'esperando_nombre' ? 'Escribe tu nombre...' :
-                      estadoChat === 'esperando_confirmacion_grado' ? 'Escribe si o no...' :
-                      estadoChat === 'esperando_grado'  ? 'Escribe tu grado...' :
-                      estadoChat === 'esperando_materia' || estadoChat === 'esperando_materia_olimpiadas' ? '¿Qué materia quieres estudiar?' :
-                      `Escribe tu duda sobre ${materiaAlumno || 'la materia'}...`
+  const placeholder = idiomaIngles
+    ? (estadoChat === 'esperando_nombre' ? 'Write your name...' :
+       estadoChat === 'esperando_confirmacion_grado' ? 'Write yes or no...' :
+       estadoChat === 'esperando_grado' ? 'Write your grade...' :
+       estadoChat === 'esperando_materia' || estadoChat === 'esperando_materia_olimpiadas' ? 'What subject do you want to study?' :
+       `Write your question about ${materiaAlumno || 'the subject'}...`)
+    : (estadoChat === 'esperando_nombre' ? 'Escribe tu nombre...' :
+       estadoChat === 'esperando_confirmacion_grado' ? 'Escribe si o no...' :
+       estadoChat === 'esperando_grado'  ? 'Escribe tu grado...' :
+       estadoChat === 'esperando_materia' || estadoChat === 'esperando_materia_olimpiadas' ? '¿Qué materia quieres estudiar?' :
+       `Escribe tu duda sobre ${materiaAlumno || 'la materia'}...`)
 
   return (
     <>
@@ -322,8 +331,12 @@ export default function ChatInterface({ usuario }: Props) {
               </div>
               <div className="hidden sm:block">
                 <p style={{fontFamily:"'Syne',sans-serif",fontSize:'16px',fontWeight:700,color:'#1E1B4B',letterSpacing:'-0.4px'}}>Owlaris</p>
-                <p style={{fontSize:'11px',color:'#9490B8',fontWeight:500}}>Tu tutor académico</p>
+                <p style={{fontSize:'11px',color:'#9490B8',fontWeight:500}}>{idiomaIngles ? 'Your academic tutor' : 'Tu tutor académico'}</p>
               </div>
+              <button onClick={()=>{setIdiomaIngles(!idiomaIngles); if(modoConversacion) setModoConversacion(false)}}
+                style={{background:idiomaIngles?'linear-gradient(135deg,#1d4ed8,#1e40af)':'#F3F0FF',border:idiomaIngles?'none':'1px solid rgba(109,40,217,.2)',borderRadius:'10px',padding:'6px 12px',fontSize:'12px',fontWeight:700,color:idiomaIngles?'white':'#7C3AED',cursor:'pointer',display:'flex',alignItems:'center',gap:'5px',transition:'all .2s',flexShrink:0}}>
+                {idiomaIngles ? '🇬🇧 EN' : '🇬🇧 EN'}
+              </button>
             </div>
 
             {/* Estado actual */}
@@ -436,10 +449,26 @@ export default function ChatInterface({ usuario }: Props) {
           </div>
         </div>
 
-        {/* Búho flotante */}
-        <div className="o-float" style={{position:'fixed',bottom:'24px',left:'24px',zIndex:40,pointerEvents:'none'}}>
-          <img src="/buho.png" alt="" style={{width:'60px',height:'60px',objectFit:'contain',filter:'drop-shadow(0 8px 24px rgba(109,40,217,.35))'}}/>
-        </div>
+        {/* Búho flotante / Modo conversación */}
+        {modoConversacion ? (
+          <div style={{position:'fixed',bottom:'20px',left:'50%',transform:'translateX(-50%)',zIndex:50,display:'flex',flexDirection:'column',alignItems:'center',gap:'12px'}}>
+            <div style={{background:'white',borderRadius:'20px',padding:'10px 16px',boxShadow:'0 4px 20px rgba(109,40,217,.2)',border:'1px solid rgba(109,40,217,.1)',fontSize:'13px',color:'#6D28D9',fontWeight:600}}>
+              {idiomaIngles ? "I'm listening... 🎙️" : "Te escucho... 🎙️"}
+            </div>
+            <div style={{animation:'buhoHabla 0.4s ease-in-out infinite alternate'}}>
+              <img src="/buho.png" alt="Owlaris" style={{width:'90px',height:'90px',objectFit:'contain',filter:'drop-shadow(0 8px 32px rgba(109,40,217,.4))'}}/>
+            </div>
+            <button onClick={()=>setModoConversacion(false)}
+              style={{background:'rgba(220,38,38,.1)',border:'1px solid rgba(220,38,38,.2)',borderRadius:'10px',padding:'6px 16px',fontSize:'12px',fontWeight:600,color:'#DC2626',cursor:'pointer'}}>
+              {idiomaIngles ? 'End conversation' : 'Terminar conversación'}
+            </button>
+            <style>{`@keyframes buhoHabla { from{transform:translateY(0) scale(1)} to{transform:translateY(-8px) scale(1.05)} }`}</style>
+          </div>
+        ) : (
+          <div className="o-float" style={{position:'fixed',bottom:'24px',left:'24px',zIndex:40,pointerEvents:'none'}}>
+            <img src="/buho.png" alt="" style={{width:'60px',height:'60px',objectFit:'contain',filter:'drop-shadow(0 8px 24px rgba(109,40,217,.35))'}}/>
+          </div>
+        )}
 
         {/* Botón reporte flotante */}
         {mensajes.length >= 3 && estadoChat === 'activo' && (
