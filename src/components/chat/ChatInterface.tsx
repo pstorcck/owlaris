@@ -155,7 +155,12 @@ export default function ChatInterface({ usuario }: Props) {
       // Sugerencias solo cuando está activo
       if (data.nuevo_estado === 'activo' || estadoChat === 'activo') {
         const mat = data.materia_detectada || materiaAlumno
-        setSugerencias([
+        setSugerencias(idiomaIngles ? [
+          { icon: '✦', text: 'Explain with an example' },
+          { icon: '◈', text: 'I want to practice' },
+          { icon: '◇', text: 'Summarize the topic' },
+          { icon: '↺', text: 'Suggest another topic in ' + (mat || 'the subject') },
+        ] : [
           { icon: '✦', text: 'Explícame con un ejemplo' },
           { icon: '◈', text: 'Quiero practicar' },
           { icon: '◇', text: 'Resume el tema' },
@@ -393,7 +398,7 @@ export default function ChatInterface({ usuario }: Props) {
                       <p style={{fontSize:'14px',lineHeight:'1.8',color:esU?'#EDE9FE':'#2D2B55',whiteSpace:'pre-wrap',fontWeight:400}}>
                         {largo&&!abierto?<>{renderTexto(msg.contenido.substring(0,300))}...</>:renderTexto(msg.contenido)}
                       </p>
-                      {largo&&<button className="o-ver-mas" onClick={()=>setExpandido(abierto?null:msg.id)}>{abierto?'↑ Ver menos':'↓ Ver explicación completa'}</button>}
+                      {largo&&<button className="o-ver-mas" onClick={()=>setExpandido(abierto?null:msg.id)}>{abierto ? (idiomaIngles ? '↑ Show less' : '↑ Ver menos') : (idiomaIngles ? '↓ Show full explanation' : '↓ Ver explicación completa')}</button>}
                       {msg.documento_fuente&&<div className="o-fuente"><span>◈</span><span>{msg.documento_fuente}</span></div>}
                     </div>
                     <p style={{fontSize:'10px',color:'#C4C0E0',marginTop:'4px',textAlign:esU?'right':'left',fontWeight:500}}>
