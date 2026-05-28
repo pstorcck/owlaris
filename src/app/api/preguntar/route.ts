@@ -288,32 +288,20 @@ async function buscarContenido(colegio_slug: string, grado: string, materia: str
     console.log('Olimpiadas: ' + carpetaMateria + '/' + carpetaGrado + ' -> ' + indice.length + ' docs')
 
   } else {
-    // Función para buscar materia aproximada dentro de un grado
-    async function buscarEnGrado(raiz: string, grado: string, materia: string) {
-      // 1. Intentar ruta exacta primero
-      let idx = await construirIndice(driveId, token, raiz, grado, materia)
+    const buscarEnGrado = async (raiz: string, gradoB: string, materiaB: string) => {
+      let idx = await construirIndice(driveId, token, raiz, gradoB, materiaB)
       if (idx.length > 0) return idx
-
-      // 2. Listar carpetas disponibles en el grado y elegir la más cercana
-      const url = `https://graph.microsoft.com/v1.0/drives/${driveId}/root:/${encodeURIComponent(raiz)}/${encodeURIComponent(grado)}:/children`
+      const url = 'https://graph.microsoft.com/v1.0/drives/' + driveId + '/root:/' + encodeURIComponent(raiz) + '/' + encodeURIComponent(gradoB) + ':/children'
       const res = await fetch(url, { headers: { Authorization: 'Bearer ' + token } })
       if (!res.ok) return []
       const data = await res.json()
       const carpetas: string[] = (data.value || []).filter((i: {folder?:unknown}) => i.folder).map((i: {name:string}) => i.name)
-      
-      // Buscar la carpeta cuyo nombre coincide mejor con la materia
-      const materiaLower = materia.toLowerCase()
-        .replace(/á/g,'a').replace(/é/g,'e').replace(/í/g,'i').replace(/ó/g,'o').replace(/ú/g,'u')
-      
-      const carpetaMatch = carpetas.find(c => {
-        const cl = c.toLowerCase()
-          .replace(/á/g,'a').replace(/é/g,'e').replace(/í/g,'i').replace(/ó/g,'o').replace(/ú/g,'u')
-        return cl.includes(materiaLower) || materiaLower.includes(cl)
+      const mLower = materiaB.toLowerCase().replace(/á/g,'a').replace(/é/g,'e').replace(/í/g,'i').replace(/ó/g,'o').replace(/ú/g,'u')
+      const match = carpetas.find(cp => {
+        const cl = cp.toLowerCase().replace(/á/g,'a').replace(/é/g,'e').replace(/í/g,'i').replace(/ó/g,'o').replace(/ú/g,'u')
+        return cl.includes(mLower) || mLower.includes(cl)
       })
-      
-      if (carpetaMatch) {
-        idx = await construirIndice(driveId, token, raiz, grado, carpetaMatch)
-      }
+      if (match) idx = await construirIndice(driveId, token, raiz, gradoB, match)
       return idx
     }
 
