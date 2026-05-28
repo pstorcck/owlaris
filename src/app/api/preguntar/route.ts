@@ -120,6 +120,45 @@ function normalizarMateria(texto: string, esOlimpiadas = false): string {
   return texto.trim()
 }
 
+// Validar respuesta de opción múltiple comparando con el historial
+function validarOpcionMultiple(preguntaAlumno: string, historial: {rol:string; contenido:string}[]): string | null {
+  // Solo aplica si el alumno respondió con una sola letra
+  const respLetra = preguntaAlumno.trim().toUpperCase()
+  if (!/^[ABCD]$/.test(respLetra)) return null
+
+  // Buscar la última pregunta del tutor con opciones A) B) C) D)
+  const mensajesTutor = historial.filter(m => m.rol === 'asistente')
+  const ultimoMensaje = mensajesTutor[mensajesTutor.length - 1]
+  if (!ultimoMensaje) return null
+
+  const texto = ultimoMensaje.contenido
+
+  // Extraer opciones del mensaje anterior
+  const opcionRegex = new RegExp('[A-D][).]\\s*([^\\n]+)', 'g')
+  const opciones: Record<string, string> = {}
+  let match
+  while ((match = opcionRegex.exec(texto)) !== null) {
+    const letra = match[0][0].toUpperCase()
+    opciones[letra] = match[1].trim()
+  }
+
+  if (Object.keys(opciones).length < 2) return null
+
+  const respCorrectaRegex = new RegExp('respuesta\\s+(?:correcta\\s+)?(?:es\\s+)?[lael]*\\s*(?:opci[oó]n\\s+)?([A-D])', 'gi')
+  const matchCorrecta = respCorrectaRegex.exec(texto)
+  
+  if (!matchCorrecta) return null
+  
+  const letraCorrecta = matchCorrecta[1].toUpperCase()
+  const esCorrecta = respLetra === letraCorrecta
+
+  if (esCorrecta) {
+    return `VALIDACIÓN_CORRECTA: El alumno eligió ${respLetra}) ${opciones[respLetra] || ''} que ES la respuesta correcta. Confirma que es correcto y pide el proceso.`
+  } else {
+    return `VALIDACIÓN_INCORRECTA: El alumno eligió ${respLetra}) ${opciones[respLetra] || ''} pero la respuesta correcta es ${letraCorrecta}) ${opciones[letraCorrecta] || ''}. Explica por qué es incorrecto.`
+  }
+}
+
 // Estados del onboarding
 type EstadoChat = 'esperando_nombre' | 'esperando_grado' | 'esperando_materia' | 'activo'
 
@@ -574,6 +613,9 @@ export async function POST(req: NextRequest) {
     }
     // ── FIN ONBOARDING ───────────────────────────────────────────────
 
+    // Validar opción múltiple antes de llamar a OpenAI
+    const validacionOM = validarOpcionMultiple(pregunta, historial || [])
+
     const tipoPregunta = detectarTipoPregunta(pregunta)
     const esBienvenida = esSaludo(pregunta) && (!historial || historial.length === 0)
 
@@ -590,6 +632,9 @@ export async function POST(req: NextRequest) {
     // Siempre leer docs de configuración (tienen videos y política pedagógica)
     const docsConfig = await leerConfig()
     const promptBase = cfg.prompt_personalizado || PROMPT_BASE
+    const contextoValidacion = validacionOM ? `
+
+INSTRUCCIÓN CRÍTICA DE EVALUACIÓN: ${validacionOM}` : ''
 
     // Contexto según tipo de pregunta
     let contextoContenido = ''
