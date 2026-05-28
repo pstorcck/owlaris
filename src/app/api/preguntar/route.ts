@@ -552,7 +552,7 @@ export async function POST(req: NextRequest) {
         })
       }
       return NextResponse.json({
-        respuesta: 'Excelente, ' + nombreAlumno + '. Vamos con ' + materiaDetectada + ' de ' + gradoMostrar + '. ¿Tienes una duda específica o quieres que te proponga un tema?',
+        respuesta: 'Ok, ' + materiaDetectada + '. ¿Tienes una duda específica o quieres que te proponga un tema?',
         nuevo_estado: 'activo',
         nombre_alumno: nombreAlumno,
         grado_detectado: gradoAlumno,
@@ -564,7 +564,7 @@ export async function POST(req: NextRequest) {
     if (estado === 'esperando_materia_olimpiadas') {
       const materiaDetectada = normalizarMateria(pregunta, true)
       return NextResponse.json({
-        respuesta: 'Perfecto, ' + nombreAlumno + '. Vamos con ' + materiaDetectada + ' de ' + gradoAlumno + '. ¿Tienes una duda específica o quieres que te proponga un tema?',
+        respuesta: 'Ok, ' + materiaDetectada + '. ¿Tienes una duda específica o quieres que te proponga un tema?',
         nuevo_estado: 'activo',
         nombre_alumno: nombreAlumno,
         grado_detectado: gradoAlumno,
