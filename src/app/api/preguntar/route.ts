@@ -612,25 +612,24 @@ export async function POST(req: NextRequest) {
     }
     // Detectar cambio de materia mid-sesión
     if (estado === 'activo') {
-      const cambioMateriaRegex = /(?:quiero|vamos a|cambia(?:mos)? a|ahora|estudiemos|practiquemos)\s+(?:estudiar|ver|practicar|repasar)?\s*([a-záéíóúüñA-ZÁÉÍÓÚÜÑ\s]+?)(?:\s*$|\s+por favor|\s+ahora)/i
-      const matchMateria = cambioMateriaRegex.exec(pregunta)
-      if (matchMateria) {
-        const textoMateria = matchMateria[1].trim()
-        // Ignorar frases genéricas sin materia específica
-        if (/^(de materia|materia|tema|de tema)$/i.test(textoMateria)) {
-          // No hacer nada, dejar que el flujo normal maneje
-        } else {
+      // Solo detectar cambio si menciona explícitamente una materia conocida
+      const MATERIAS_KEYWORDS = ['matemática','matematica','física','fisica','química','quimica','biología','biologia','historia','español','espanol','inglés','ingles','ciencias naturales','mineduc','olimpiadas']
+      const preguntaLow = pregunta.toLowerCase()
+      const cambioExplicito = /(?:quiero estudiar|cambia(?:mos)? a|ahora estudiemos|vamos con)\s+(.+)/i.exec(pregunta)
+      const mencionaMateria = MATERIAS_KEYWORDS.some(m => preguntaLow.includes(m))
+      
+      if (cambioExplicito && mencionaMateria) {
+        const textoMateria = cambioExplicito[1].trim()
         const nuevaMateria = normalizarMateria(textoMateria)
         if (nuevaMateria && nuevaMateria !== materia_id && !nuevaMateria.startsWith('__')) {
           console.log('Cambio materia:', materia_id, '->', nuevaMateria)
           return NextResponse.json({
             respuesta: 'Claro, cambiamos a ' + nuevaMateria + '. ¿Tienes una duda específica o quieres que te proponga un tema?',
-            nuevo_estado: 'esperando_materia_confirmada',
+            nuevo_estado: 'activo',
             materia_detectada: nuevaMateria,
             tokens: 0,
           })
         }
-        } // fin else frases genéricas
       }
     }
 
