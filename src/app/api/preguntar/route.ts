@@ -487,6 +487,7 @@ export async function POST(req: NextRequest) {
     const { pregunta, historial } = body
     const materia_id    = body.materia_id || body.materia_detectada || ''
     const userId: string = body.user_id || ''
+    console.log('userId recibido:', userId)
     const grado_override = body.grado_override || body.grado_detectado || ''
     if (!pregunta?.trim()) return NextResponse.json({ error: 'Pregunta vacía' }, { status: 400 })
 
@@ -528,6 +529,11 @@ export async function POST(req: NextRequest) {
       const resp = pregunta.toLowerCase().trim()
       const esAfirmativo = /^(si|sí|yes|s|claro|correcto|asi|así|efectivamente)/.test(resp)
       if (esAfirmativo) {
+        // Asegurar que el grado esté guardado
+        if (userId && gradoAlumno) {
+          await supabase.from('usuarios').update({ grado: gradoAlumno }).eq('id', userId)
+          console.log('Grado confirmado y guardado:', gradoAlumno, 'para userId:', userId)
+        }
         return NextResponse.json({
           respuesta: 'Perfecto. ¿Qué materia quieres estudiar hoy?',
           nuevo_estado: 'esperando_materia',
