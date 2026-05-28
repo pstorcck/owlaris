@@ -85,8 +85,12 @@ export default function ChatInterface({ usuario }: Props) {
   useEffect(() => {
     const nombre = usuario.nombre_completo.split(' ')[0]
     const msg = gradoGuardado
-      ? `¡Hola, ${nombre}! Bienvenido de vuelta. ¿Sigues en ${gradoGuardado}?`
-      : '¡Hola! Soy Owlaris, tu tutor académico inteligente. ¿Cómo te llamas?'
+      ? (idiomaIngles
+          ? `Hi, ${nombre}! Welcome back. Are you still in ${gradoGuardado}?`
+          : `¡Hola, ${nombre}! Bienvenido de vuelta. ¿Sigues en ${gradoGuardado}?`)
+      : (idiomaIngles
+          ? "Hi! I'm Owlaris, your intelligent academic tutor. What's your name?"
+          : '¡Hola! Soy Owlaris, tu tutor académico inteligente. ¿Cómo te llamas?')
     setMensajes([{
       id: 'bienvenida',
       rol: 'asistente',
@@ -94,7 +98,7 @@ export default function ChatInterface({ usuario }: Props) {
       timestamp: new Date(),
     }])
     if (gradoGuardado) setNombreAlumno(nombre)
-  }, [])
+  }, [idiomaIngles])
 
   async function enviarPregunta(texto?: string) {
     const tp = (texto || pregunta).trim()
