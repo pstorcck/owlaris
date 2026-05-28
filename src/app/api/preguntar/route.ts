@@ -610,6 +610,25 @@ export async function POST(req: NextRequest) {
         tokens: 0,
       })
     }
+    // Detectar cambio de grado mid-sesión
+    if (estado === 'activo') {
+      const cambioGradoRegex = /ahora (estoy en|curso|voy a|soy de)\s+(.+)|cambi[eé] (a|de) grado[:\s]*(.+)|estoy en\s+(.+(?:grado|b[aá]sico|primaria|bachillerato))/i
+      const cambioGradoMatch = cambioGradoRegex.exec(pregunta)
+      if (cambioGradoMatch) {
+        const textoGrado = cambioGradoMatch[2] || cambioGradoMatch[4] || cambioGradoMatch[5] || ''
+        const nuevoGrado = normalizarGrado(textoGrado.trim())
+        if (nuevoGrado) {
+              if (userId) await supabase.from('usuarios').update({ grado: nuevoGrado }).eq('id', userId)
+          return NextResponse.json({
+            respuesta: 'Perfecto, actualicé tu grado a ' + nuevoGrado + '. ¿Qué materia quieres estudiar?',
+            nuevo_estado: 'esperando_materia',
+            grado_detectado: nuevoGrado,
+            tokens: 0,
+          })
+        }
+      }
+    }
+
     // ── FIN ONBOARDING ───────────────────────────────────────────────
 
     // Validar opción múltiple antes de llamar a OpenAI
