@@ -10,7 +10,7 @@ interface Props {
   materias: Materia[]
 }
 
-type EstadoChat = 'esperando_nombre' | 'esperando_confirmacion_grado' | 'esperando_grado' | 'esperando_materia' | 'esperando_materia_olimpiadas' | 'activo'
+type EstadoChat = 'esperando_nombre' | 'esperando_confirmacion_grado' | 'esperando_grado' | 'esperando_materia' | 'esperando_materia_olimpiadas' | 'esperando_confirmacion_cambio_materia' | 'activo'
 
 function renderSegmento(texto: string, key: number): React.ReactNode[] {
   const partes: React.ReactNode[] = []
@@ -61,6 +61,7 @@ export default function ChatInterface({ usuario }: Props) {
   const [generandoPDF, setGenerandoPDF]       = useState(false)
   const [nivelDificultad, setNivelDificultad] = useState(1)
   const [aciertosConsec, setAciertosConsec]   = useState(0)
+  const [materiaSugerida, setMateriaSugerida] = useState('')
 
   // Estado onboarding
   const gradoGuardado = usuario.grado || ''
@@ -114,6 +115,7 @@ export default function ChatInterface({ usuario }: Props) {
           materia_id: materiaAlumno,
           historial: mensajes.slice(-6).map(m => ({ rol: m.rol, contenido: m.contenido })),
           user_id: usuario.id,
+          materia_sugerida: materiaSugerida,
           nivel_dificultad: nivelDificultad,
           aciertos_consecutivos: aciertosConsec,
         })
@@ -132,6 +134,8 @@ export default function ChatInterface({ usuario }: Props) {
       if (data.materia_detectada) setMateriaAlumno(data.materia_detectada)
       if (data.nivel_dificultad) setNivelDificultad(data.nivel_dificultad)
       if (data.aciertos_consecutivos !== undefined) setAciertosConsec(data.aciertos_consecutivos)
+      if (data.materia_sugerida) setMateriaSugerida(data.materia_sugerida)
+      if (data.nuevo_estado && data.nuevo_estado !== 'esperando_confirmacion_cambio_materia') setMateriaSugerida('')
 
       setMensajes(prev => [...prev, {
         id: (Date.now()+1).toString(),
