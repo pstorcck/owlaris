@@ -761,7 +761,7 @@ INSTRUCCIÓN CRÍTICA DE EVALUACIÓN: ${validacionOM}` : ''
       contextoContenido = `No se encontró contenido en SharePoint para ${gradoEfectivo} / ${materia?.nombre}. Responde con conocimiento general apropiado e indica consultar al profesor.`
     }
 
-    const systemPrompt = `${promptBase}
+    const systemPrompt = `${promptBase}${contextoIdioma}
 
 CONTEXTO DEL ALUMNO:
 - Nombre: ${perfil.nombre_completo.split(' ')[0]}
