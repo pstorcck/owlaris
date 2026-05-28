@@ -107,14 +107,14 @@ function normalizarMateria(texto: string, esOlimpiadas = false): string {
     if (/cien/i.test(t)) return 'Olimpiadas - Ciencias Naturales'
   }
 
-  if (/matem/i.test(t)) return 'Matemática'
-  if (/leng|espan|español|castell/i.test(t)) return 'Español'
-  if (/ingles|english/i.test(t)) return 'Inglés'
-  if (/biol/i.test(t)) return 'Biología'
-  if (/fis|fisica/i.test(t)) return 'Física'
-  if (/quim/i.test(t)) return 'Química'
-  if (/hist/i.test(t)) return 'Historia'
-  if (/cien.*nat|natural/i.test(t)) return 'Ciencias Naturales'
+  if (/matem|math/i.test(t)) return 'Matemática'
+  if (/leng|espan|español|castell|spanish/i.test(t)) return 'Español'
+  if (/ingles|english|inglés/i.test(t)) return 'Inglés'
+  if (/biol|biology/i.test(t)) return 'Biología'
+  if (/fis|fisica|physics/i.test(t)) return 'Física'
+  if (/quim|chemistry/i.test(t)) return 'Química'
+  if (/hist|history/i.test(t)) return 'Historia'
+  if (/cien.*nat|natural science|natural/i.test(t)) return 'Ciencias Naturales'
   if (/mineduc.*leng/i.test(t)) return 'Mineduc - Lenguaje'
   if (/mineduc.*mat/i.test(t)) return 'Mineduc - Matemática'
   return texto.trim()
