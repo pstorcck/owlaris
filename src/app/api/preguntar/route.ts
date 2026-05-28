@@ -180,6 +180,30 @@ const GRADOS_OLIMPIADAS: Record<string, string> = {
   '6to Primaria':       'Primaria',
 }
 
+// Mapeo de temas a materias
+const TEMAS_POR_MATERIA: Record<string, string[]> = {
+  'Matemática':       ['aritmética','aritmetica','algebra','álgebra','geometría','geometria','fracciones','ecuaciones','trigonometría','trigonometria','estadística','estadistica','probabilidad','porcentajes','decimales','números','numeros','matrices','funciones','polinomios','logaritmos'],
+  'Física':           ['cinemática','cinematica','dinámica','dinamica','fuerza','movimiento','velocidad','aceleración','aceleracion','energía','energia','trabajo','calor','temperatura','ondas','luz','electricidad','magnetismo','gravedad','óptica','optica'],
+  'Química':          ['átomo','atomo','molécula','molecula','enlace','reacción','reaccion','tabla periódica','tabla periodica','ácido','acido','base','solución','solucion','oxidación','oxidacion','elemento','compuesto','estequiometría'],
+  'Biología':         ['célula','celula','fotosíntesis','fotosintesis','adn','genética','genetica','evolución','evolucion','ecosistema','organismo','proteína','proteina','mitosis','meiosis','respiración celular'],
+  'Historia':         ['guerra','revolución','revolucion','independencia','civilización','civilizacion','colonia','conquista','maya','azteca','inca','república','republica','democracia','feudalismo'],
+  'Español':          ['gramática','gramatica','sintaxis','ortografía','ortografia','redacción','redaccion','literatura','poesía','poesia','narración','narracion','verbo','sustantivo','adjetivo','párrafo','parrafo'],
+  'Inglés':           ['vocabulary','grammar','verb','tense','sentence','reading','writing','speaking','listening','english'],
+  'Ciencias Naturales':['planta','animal','ecosistema','medio ambiente','naturaleza','suelo','agua','aire','clima','biodiversidad','nutrición','nutricion'],
+}
+
+function detectarMateriaDesdeTexto(texto: string): string | null {
+  const t = texto.toLowerCase()
+    .replace(/á/g,'a').replace(/é/g,'e').replace(/í/g,'i').replace(/ó/g,'o').replace(/ú/g,'u')
+  for (const [materia, temas] of Object.entries(TEMAS_POR_MATERIA)) {
+    for (const tema of temas) {
+      const temaNorm = tema.replace(/á/g,'a').replace(/é/g,'e').replace(/í/g,'i').replace(/ó/g,'o').replace(/ú/g,'u')
+      if (t.includes(temaNorm)) return materia
+    }
+  }
+  return null
+}
+
 // Mapeo de materias Olimpiadas a carpetas
 const MATERIAS_OLIMPIADAS: Record<string, string> = {
   'Olimpiadas - Matemática':        'Matematica',
@@ -616,6 +640,40 @@ export async function POST(req: NextRequest) {
         tokens: 0,
       })
     }
+    // Detectar si el alumno menciona un tema de otra materia
+    if (estado === 'activo' && materia_id) {
+      const materiaDetectada = detectarMateriaDesdeTexto(pregunta)
+      if (materiaDetectada && materiaDetectada !== materia_id) {
+        return NextResponse.json({
+          respuesta: '"' + pregunta.trim() + '" es un tema de ' + materiaDetectada + '. ¿Quieres que cambiemos a ' + materiaDetectada + '?',
+          nuevo_estado: 'esperando_confirmacion_cambio_materia',
+          materia_sugerida: materiaDetectada,
+          tokens: 0,
+        })
+      }
+    }
+
+    if (estado === 'esperando_confirmacion_cambio_materia') {
+      const esAfirmativo = /^(si|sí|yes|s|claro|correcto|dale|ok|bueno|perfecto|va|vamos)/.test(pregunta.toLowerCase().trim())
+      const materiaSugerida = body.materia_sugerida || ''
+      if (esAfirmativo && materiaSugerida) {
+        Array.from(cacheContenido.keys()).forEach(key => { if (key.includes(materia_id)) cacheContenido.delete(key) })
+        Array.from(indiceDocumentos.keys()).forEach(key => { if (key.includes(materia_id)) indiceDocumentos.delete(key) })
+        return NextResponse.json({
+          respuesta: 'Perfecto, cambiamos a ' + materiaSugerida + '. ¿Tienes una duda específica o quieres que te proponga un tema?',
+          nuevo_estado: 'activo',
+          materia_detectada: materiaSugerida,
+          tokens: 0,
+        })
+      } else {
+        return NextResponse.json({
+          respuesta: 'Sin problema, seguimos con ' + materia_id + '. ¿En qué te puedo ayudar?',
+          nuevo_estado: 'activo',
+          tokens: 0,
+        })
+      }
+    }
+
     // Detectar cambio de materia mid-sesión
     if (estado === 'activo') {
       // Solo detectar cambio si menciona explícitamente una materia conocida
