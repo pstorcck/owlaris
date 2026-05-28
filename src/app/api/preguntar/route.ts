@@ -486,6 +486,7 @@ export async function POST(req: NextRequest) {
     const body = await req.json()
     const { pregunta, historial } = body
     const materia_id    = body.materia_id || body.materia_detectada || ''
+    const userId: string = body.user_id || ''
     const grado_override = body.grado_override || body.grado_detectado || ''
     if (!pregunta?.trim()) return NextResponse.json({ error: 'Pregunta vacía' }, { status: 400 })
 
@@ -565,8 +566,7 @@ export async function POST(req: NextRequest) {
         })
       }
       // Guardar grado en Supabase
-      const { data: { user } } = await supabase.auth.getUser()
-      if (user) await supabase.from('usuarios').update({ grado: gradoDetectado }).eq('id', user.id)
+      if (userId) await supabase.from('usuarios').update({ grado: gradoDetectado }).eq('id', userId)
 
       return NextResponse.json({
         respuesta: 'Perfecto, ' + nombreAlumno + '. ¿Qué materia quieres estudiar hoy?',
