@@ -64,7 +64,10 @@ export default async function ChatPage() {
     .order('nombre')
 
   // Cargar materias disponibles desde SharePoint
-  const materiasDisponibles = await leerCarpetasGrado(perfil?.grado || '')
+  const grado = perfil?.grado || ''
+  console.log('Cargando materias para grado:', grado)
+  const materiasDisponibles = await leerCarpetasGrado(grado)
+  console.log('Materias cargadas:', materiasDisponibles)
 
   return (
     <ChatInterface

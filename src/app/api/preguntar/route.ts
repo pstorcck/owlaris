@@ -778,7 +778,7 @@ INSTRUCCIÓN CRÍTICA DE EVALUACIÓN: ${validacionOM}` : ''
     } else if (contenidoCurricular) {
       contextoContenido = `CONTENIDO ACADEMICO (fuente principal):\n---\n${contenidoCurricular.substring(0, 3000)}\n---`
     } else {
-      contextoContenido = `No se encontró contenido en SharePoint para ${gradoEfectivo} / ${materia?.nombre}. Responde con conocimiento general apropiado e indica consultar al profesor.`
+      contextoContenido = `No se encontró un documento específico en SharePoint para esta consulta en ${gradoEfectivo}. Responde con tu conocimiento general del tema. Si detectas que la pregunta pertenece a una materia específica (Matemática, Física, Química, Biología, Historia, Español), menciona al alumno que puede estudiar esa materia directamente seleccionándola del menú.`
     }
 
     const systemPrompt = `${promptBase}${contextoIdioma}
