@@ -242,10 +242,12 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
       if (!res.ok) return
       const arrayBuffer = await res.arrayBuffer()
       
-      // Usar AudioContext para compatibilidad con Safari
+      // AudioContext con resume para Safari
       const AudioCtx = window.AudioContext || (window as unknown as {webkitAudioContext: typeof AudioContext}).webkitAudioContext
       const ctx = new AudioCtx()
-      const audioBuffer = await ctx.decodeAudioData(arrayBuffer)
+      // Safari requiere resume explícito
+      if (ctx.state === 'suspended') await ctx.resume()
+      const audioBuffer = await ctx.decodeAudioData(arrayBuffer.slice(0))
       const source = ctx.createBufferSource()
       source.buffer = audioBuffer
       source.connect(ctx.destination)
