@@ -581,11 +581,25 @@ export async function POST(req: NextRequest) {
         if (!carpetas.includes('Olimpiadas de Ciencias')) carpetas.push('Olimpiadas de Ciencias')
         // Agregar opción de inglés conversacional
         carpetas.push(idiomaIngles ? '🎙️ English Conversation' : '🎙️ Conversar en Inglés')
+        // Traducir nombres al inglés si aplica
+        const traducirMateria = (m: string) => {
+          if (!idiomaIngles) return m
+          const traducciones: Record<string,string> = {
+            'Matemática': 'Mathematics', 'Física': 'Physics', 'Química': 'Chemistry',
+            'Biología': 'Biology', 'Historia': 'History', 'Español': 'Spanish Language',
+            'Inglés': 'English', 'Ciencias Naturales': 'Natural Sciences',
+            'Mineduc - Lenguaje': 'Mineduc - Language', 'Mineduc - Matemática': 'Mineduc - Mathematics',
+            'Olimpiadas de Ciencias': 'Science Olympiad'
+          }
+          return traducciones[m] || m
+        }
+        const carpetasDisplay = carpetas.map(traducirMateria)
 
-        const lista = carpetas.map((m, i) => (i+1) + '. ' + m).join('\n')
-        const intro = idiomaIngles ? 'Perfect! Here are the available subjects for your grade:' : 'Perfecto. Estas son las materias disponibles para tu grado:'
-        const cierre = idiomaIngles ? 'Which one would you like to study?' : '¿Cuál quieres estudiar?'
-        const preguntaMateria = intro + '\n\n' + lista + '\n\n' + cierre
+        const trad: Record<string,string> = {'Matem\u00e1tica':'Mathematics','F\u00edsica':'Physics','Qu\u00edmica':'Chemistry','Biolog\u00eda':'Biology','Historia':'History','Espa\u00f1ol':'Spanish','Ingl\u00e9s':'English','Ciencias Naturales':'Natural Sciences','Mineduc - Lenguaje':'Mineduc - Language','Mineduc - Matem\u00e1tica':'Mineduc - Mathematics','Olimpiadas de Ciencias':'Science Olympiad'}
+        const lista = carpetas.map((m, i) => (i+1) + '. ' + (idiomaIngles ? (trad[m] || m) : m)).join('\n')
+        const preguntaMateria = idiomaIngles
+          ? `Perfect! Here are the available subjects:\n\n${lista}\n\nWhich one would you like to study?`
+          : `Perfecto. Estas son las materias disponibles:\n\n${lista}\n\n\u00bfCu\u00e1l quieres estudiar?`
 
         return NextResponse.json({
           respuesta: preguntaMateria,
@@ -645,10 +659,11 @@ export async function POST(req: NextRequest) {
       if (!carpetasG.includes('Olimpiadas de Ciencias')) carpetasG.push('Olimpiadas de Ciencias')
       carpetasG.push(idiomaIngles ? '🎙️ English Conversation' : '🎙️ Conversar en Inglés')
 
-      const listaG = carpetasG.map((m, i) => (i+1) + '. ' + m).join('\n')
-      const introG = idiomaIngles ? 'Perfect, ' + nombreAlumno + '! Here are the available subjects:' : 'Perfecto, ' + nombreAlumno + '. Estas son las materias disponibles:'
-      const cierreG = idiomaIngles ? 'Which one would you like to study?' : '¿Cuál quieres estudiar?'
-      const preguntaG = introG + '\n\n' + listaG + '\n\n' + cierreG
+      const tradG: Record<string,string> = {'Matem\u00e1tica':'Mathematics','F\u00edsica':'Physics','Qu\u00edmica':'Chemistry','Biolog\u00eda':'Biology','Historia':'History','Espa\u00f1ol':'Spanish','Ingl\u00e9s':'English','Ciencias Naturales':'Natural Sciences','Mineduc - Lenguaje':'Mineduc - Language','Mineduc - Matem\u00e1tica':'Mineduc - Mathematics','Olimpiadas de Ciencias':'Science Olympiad'}
+      const listaG = carpetasG.map((m, i) => (i+1) + '. ' + (idiomaIngles ? (tradG[m] || m) : m)).join('\n')
+      const preguntaG = idiomaIngles
+        ? `Perfect, ${nombreAlumno}! Here are the available subjects:\n\n${listaG}\n\nWhich one would you like to study?`
+        : `Perfecto, ${nombreAlumno}. Estas son las materias disponibles:\n\n${listaG}\n\n\u00bfCu\u00e1l quieres estudiar?`
 
       return NextResponse.json({
         respuesta: preguntaG,
