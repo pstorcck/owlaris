@@ -514,6 +514,7 @@ export async function POST(req: NextRequest) {
     const userId: string  = body.user_id || ''
     const idiomaIngles: boolean = body.idioma_ingles || false
     const materiasDisponibles: string[] = body.materias_disponibles || []
+    console.log('materiasDisponibles:', materiasDisponibles.length, materiasDisponibles)
 
     console.log('userId recibido:', userId)
     const grado_override = body.grado_override || body.grado_detectado || ''
