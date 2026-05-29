@@ -74,6 +74,7 @@ export default function ChatInterface({ usuario }: Props) {
   const [materiaAlumno, setMateriaAlumno] = useState('')
 
   const finalRef = useRef<HTMLDivElement>(null)
+  const materiasDisponiblesRef = useRef<string[]>([])
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const router   = useRouter()
   const supabase = createClient()
@@ -122,6 +123,7 @@ export default function ChatInterface({ usuario }: Props) {
           historial: mensajes.slice(-6).map(m => ({ rol: m.rol, contenido: m.contenido })),
           user_id: usuario.id,
           materia_sugerida: materiaSugerida,
+          materias_disponibles: materiasDisponiblesRef.current,
           idioma_ingles: idiomaIngles,
           nivel_dificultad: nivelDificultad,
           aciertos_consecutivos: aciertosConsec,
@@ -141,6 +143,7 @@ export default function ChatInterface({ usuario }: Props) {
       if (data.materia_detectada) setMateriaAlumno(data.materia_detectada)
       if (data.activar_conversacion) { setModoConversacion(true); setIdiomaIngles(true) }
       if (data.nivel_dificultad) setNivelDificultad(data.nivel_dificultad)
+      if (data.materias_disponibles) materiasDisponiblesRef.current = data.materias_disponibles
       if (data.aciertos_consecutivos !== undefined) setAciertosConsec(data.aciertos_consecutivos)
       if (data.materia_sugerida) setMateriaSugerida(data.materia_sugerida)
       if (data.nuevo_estado && data.nuevo_estado !== 'esperando_confirmacion_cambio_materia') setMateriaSugerida('')
