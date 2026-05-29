@@ -601,15 +601,17 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
               {cargando ? (idiomaIngles ? '💬 Owlaris is thinking...' : '💬 Owlaris está pensando...') : (idiomaIngles ? '🎙️ Listening...' : '🎙️ Escuchando...')}
             </div>
 
-            {/* Búho animado */}
+            {/* Búho animado CSS premium */}
             <div style={{position:'relative',width:'280px',height:'280px',display:'flex',alignItems:'center',justifyContent:'center'}}>
-              <div style={{position:'absolute',inset:0,borderRadius:'50%',background:'radial-gradient(circle,rgba(109,40,217,.08) 0%,transparent 70%)',animation:'pulseGlow 2s ease-in-out infinite'}}/>
-              <video
-                key={cargando ? 'hablando' : 'escuchando'}
-                src={cargando ? '/assets/buho-hablando.webm' : '/assets/buho-escuchando.webm'}
-                autoPlay loop muted playsInline
-                style={{width:'260px',height:'260px',objectFit:'contain',filter:'drop-shadow(0 12px 40px rgba(109,40,217,.3))'}}
-              />
+              {/* Rings pulsantes */}
+              <div style={{position:'absolute',width:'280px',height:'280px',borderRadius:'50%',border:'2px solid rgba(109,40,217,.2)',animation:cargando?'ringPulse 0.6s ease-in-out infinite':'ringPulse 1.8s ease-in-out infinite'}}/>
+              <div style={{position:'absolute',width:'240px',height:'240px',borderRadius:'50%',border:'2px solid rgba(109,40,217,.15)',animation:cargando?'ringPulse 0.6s ease-in-out infinite 0.15s':'ringPulse 1.8s ease-in-out infinite 0.4s'}}/>
+              <div style={{position:'absolute',width:'200px',height:'200px',borderRadius:'50%',background:'radial-gradient(circle,rgba(109,40,217,.06) 0%,transparent 70%)',animation:'ringPulse 1.8s ease-in-out infinite 0.8s'}}/>
+              {/* Búho */}
+              <div style={{animation:cargando?'buhoHabla 0.5s ease-in-out infinite alternate':'buhoEscucha 3s ease-in-out infinite',filter:'drop-shadow(0 12px 40px rgba(109,40,217,.25))'}}>
+                <img src="/buho.png" alt="Owlaris"
+                  style={{width:'220px',height:'220px',objectFit:'contain'}}/>
+              </div>
             </div>
 
             {/* Input de texto */}
@@ -651,6 +653,9 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
 
             <style>{`
               @keyframes pulseGlow { 0%,100%{transform:scale(1);opacity:.6} 50%{transform:scale(1.1);opacity:1} }
+              @keyframes ringPulse { 0%,100%{transform:scale(1);opacity:.3} 50%{transform:scale(1.08);opacity:.8} }
+              @keyframes buhoHabla { from{transform:translateY(0) scale(1) rotate(-1deg)} to{transform:translateY(-12px) scale(1.04) rotate(1deg)} }
+              @keyframes buhoEscucha { 0%,100%{transform:translateY(0) rotate(-1deg)} 30%{transform:translateY(-6px) rotate(1deg)} 60%{transform:translateY(-3px) rotate(0deg)} }
             `}</style>
           </div>
         ) : (
