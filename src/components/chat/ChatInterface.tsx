@@ -524,7 +524,12 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
                     })}
                     <button className="o-chip"
                       style={{background:'#F3F0FF',color:'#9490B8',border:'1px solid rgba(109,40,217,.08)',fontWeight:500}}
-                      onClick={() => { setEstadoChat('esperando_grado'); setChipsMateria([]) }}>
+                      onClick={() => { 
+                        setEstadoChat('esperando_grado')
+                        setChipsMateria([])
+                        setMateriaAlumno('')
+                        setSugerencias([])
+                      }}>
                       {idiomaIngles ? '✏️ Change grade' : '✏️ Cambiar grado'}
                     </button>
                   </div>
@@ -559,7 +564,11 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
                 ))}
                 <button className="o-chip"
                   style={{background:'#F3F0FF',color:'#9490B8',border:'1px solid rgba(109,40,217,.08)',fontWeight:500}}
-                  onClick={() => { setEstadoChat('esperando_materia'); setSugerencias([]) }}>
+                  onClick={() => { 
+                    setEstadoChat('esperando_materia')
+                    setSugerencias([])
+                    setMateriaAlumno('')
+                  }}>
                   {idiomaIngles ? '← Menu' : '← Menú'}
                 </button>
               </div>

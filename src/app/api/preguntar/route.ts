@@ -801,7 +801,7 @@ CONTEXTO DEL ALUMNO:
 - Nombre: ${perfil.nombre_completo.split(' ')[0]}
 - Colegio: ${perfil.colegio?.nombre}
 - Grado: ${gradoEfectivo}
-- Materia seleccionada: ${materia_id || materia?.nombre || 'General'}
+- Materia seleccionada: ${materia_id || materia?.nombre || 'Sin materia seleccionada — el alumno está eligiendo'}
 
 ${docsConfig ? `DOCUMENTOS DE CONFIGURACION OFICIAL:\n${docsConfig}\n` : ''}
 
