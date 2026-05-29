@@ -474,13 +474,36 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
                     {chipsMateria.map((mat, i) => {
                       const esOlimpiadas = mat.toLowerCase().includes('olimpiadas') || mat.toLowerCase().includes('olympiad')
                       const esIngles = mat.includes('Conversar') || mat.includes('Conversation') || mat.includes('»')
+                      const colores: Record<string,string> = {
+                        'Matemática':'linear-gradient(135deg,#7C3AED,#5B21B6)',
+                        'Matematica':'linear-gradient(135deg,#7C3AED,#5B21B6)',
+                        'Mathematics':'linear-gradient(135deg,#7C3AED,#5B21B6)',
+                        'Física':'linear-gradient(135deg,#0EA5E9,#0284C7)',
+                        'Physics':'linear-gradient(135deg,#0EA5E9,#0284C7)',
+                        'Química':'linear-gradient(135deg,#10B981,#059669)',
+                        'Chemistry':'linear-gradient(135deg,#10B981,#059669)',
+                        'Biología':'linear-gradient(135deg,#22C55E,#16A34A)',
+                        'Biology':'linear-gradient(135deg,#22C55E,#16A34A)',
+                        'Historia':'linear-gradient(135deg,#F59E0B,#D97706)',
+                        'History':'linear-gradient(135deg,#F59E0B,#D97706)',
+                        'Español':'linear-gradient(135deg,#EF4444,#DC2626)',
+                        'Spanish':'linear-gradient(135deg,#EF4444,#DC2626)',
+                        'Ciencias Naturales':'linear-gradient(135deg,#14B8A6,#0D9488)',
+                        'Natural Sciences':'linear-gradient(135deg,#14B8A6,#0D9488)',
+                        'Mineduc - Lenguaje':'linear-gradient(135deg,#8B5CF6,#7C3AED)',
+                        'Mineduc - Matemática':'linear-gradient(135deg,#6366F1,#4F46E5)',
+                        'Mineduc - Language':'linear-gradient(135deg,#8B5CF6,#7C3AED)',
+                        'Mineduc - Mathematics':'linear-gradient(135deg,#6366F1,#4F46E5)',
+                      }
+                      const bg = esIngles ? 'linear-gradient(135deg,#1d4ed8,#1e40af)' : esOlimpiadas ? 'linear-gradient(135deg,#d97706,#b45309)' : (colores[mat] || 'linear-gradient(135deg,#7C3AED,#5B21B6)')
                       return (
                         <button key={i} className="o-chip"
                           style={{
-                            background: esIngles ? 'linear-gradient(135deg,#1d4ed8,#1e40af)' : esOlimpiadas ? 'linear-gradient(135deg,#d97706,#b45309)' : 'white',
-                            color: esIngles || esOlimpiadas ? 'white' : '#6D28D9',
-                            border: esIngles || esOlimpiadas ? 'none' : '1px solid rgba(109,40,217,.12)',
+                            background: bg,
+                            color: 'white',
+                            border: 'none',
                             fontWeight: 600,
+                            boxShadow: '0 4px 12px rgba(0,0,0,.15)',
                           }}
                           onClick={() => {
                             if (esOlimpiadas) {

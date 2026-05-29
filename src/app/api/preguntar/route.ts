@@ -640,6 +640,20 @@ export async function POST(req: NextRequest) {
           tokens: 0,
         })
       }
+      // Si el texto normalizado es igual al original (no se reconoció como materia conocida)
+      // tratarlo como tema libre — usar la materia anterior o Matemática por defecto
+      const esMateriaNormalizada = materiaDetectada !== pregunta.trim()
+      if (!esMateriaNormalizada && materia_id) {
+        // Continuar con la materia actual y tratar como pregunta académica
+        return NextResponse.json({
+          respuesta: idiomaIngles ? 'Ok, let me help you with that topic.' : 'Ok, vamos con ese tema.',
+          nuevo_estado: 'activo',
+          nombre_alumno: nombreAlumno,
+          grado_detectado: gradoAlumno,
+          materia_detectada: materia_id,
+          tokens: 0,
+        })
+      }
       return NextResponse.json({
         respuesta: idiomaIngles ? 'Ok, ' + materiaDetectada + '. Do you have a specific question or would you like me to suggest a topic?' : 'Ok, ' + materiaDetectada + '. ¿Tienes una duda específica o quieres que te proponga un tema?',
         nuevo_estado: 'activo',
