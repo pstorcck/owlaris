@@ -618,17 +618,16 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
               {cargando ? (idiomaIngles ? '💬 Owlaris is thinking...' : '💬 Owlaris está pensando...') : (idiomaIngles ? '🎙️ Listening...' : '🎙️ Escuchando...')}
             </div>
 
-            {/* Búho animado CSS premium */}
-            <div style={{position:'relative',width:'280px',height:'280px',display:'flex',alignItems:'center',justifyContent:'center'}}>
-              {/* Rings pulsantes */}
-              <div style={{position:'absolute',width:'280px',height:'280px',borderRadius:'50%',border:'2px solid rgba(109,40,217,.2)',animation:cargando?'ringPulse 0.6s ease-in-out infinite':'ringPulse 1.8s ease-in-out infinite'}}/>
-              <div style={{position:'absolute',width:'240px',height:'240px',borderRadius:'50%',border:'2px solid rgba(109,40,217,.15)',animation:cargando?'ringPulse 0.6s ease-in-out infinite 0.15s':'ringPulse 1.8s ease-in-out infinite 0.4s'}}/>
-              <div style={{position:'absolute',width:'200px',height:'200px',borderRadius:'50%',background:'radial-gradient(circle,rgba(109,40,217,.06) 0%,transparent 70%)',animation:'ringPulse 1.8s ease-in-out infinite 0.8s'}}/>
-              {/* Búho */}
-              <div style={{animation:cargando?'buhoHabla 0.5s ease-in-out infinite alternate':'buhoEscucha 3s ease-in-out infinite',filter:'drop-shadow(0 12px 40px rgba(109,40,217,.25))'}}>
-                <img src="/buho.png" alt="Owlaris"
-                  style={{width:'220px',height:'220px',objectFit:'contain'}}/>
-              </div>
+            {/* Búho animado WebM con transparencia */}
+            <div style={{position:'relative',width:'300px',height:'300px',display:'flex',alignItems:'center',justifyContent:'center'}}>
+              <div style={{position:'absolute',width:'300px',height:'300px',borderRadius:'50%',border:'2px solid rgba(109,40,217,.2)',animation:cargando?'ringPulse 0.6s ease-in-out infinite':'ringPulse 2s ease-in-out infinite'}}/>
+              <div style={{position:'absolute',width:'260px',height:'260px',borderRadius:'50%',border:'2px solid rgba(109,40,217,.1)',animation:cargando?'ringPulse 0.6s ease-in-out infinite 0.2s':'ringPulse 2s ease-in-out infinite 0.5s'}}/>
+              <video
+                key={cargando ? 'hablando' : 'escuchando'}
+                autoPlay loop muted playsInline
+                style={{width:'280px',height:'280px',objectFit:'contain',background:'transparent',mixBlendMode:'normal'}}>
+                <source src={cargando ? '/assets/buho-hablando.webm' : '/assets/buho-escuchando.webm'} type='video/webm'/>
+              </video>
             </div>
 
             {/* Input de texto */}
