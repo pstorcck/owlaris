@@ -77,6 +77,11 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
   const [mostrandoSubOlimpiadas, setMostrandoSubOlimpiadas] = useState(false)
   const [idiomaIngles, setIdiomaIngles]       = useState(false)
   const [modoConversacion, setModoConversacion] = useState(false)
+  const [grabando, setGrabando]               = useState(false)
+  const [reproduciendo, setReproduciendo]     = useState(false)
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null)
+  const audioChunksRef   = useRef<Blob[]>([])
+  const audioRef         = useRef<HTMLAudioElement | null>(null)
 
   // Estado onboarding
   const gradoGuardado = usuario.grado || ''
@@ -202,6 +207,10 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
         timestamp: new Date(),
         documento_fuente: data.documento_fuente,
       }])
+      // TTS en modo conversación
+      if (modoConversacion && data.respuesta) {
+        reproducirTTS(data.respuesta)
+      }
 
       // Sugerencias solo cuando está activo
       if (data.nuevo_estado === 'activo' || estadoChat === 'activo') {
@@ -220,6 +229,53 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
       }
     } catch { setError('Hubo un problema. Intenta de nuevo.') }
     finally { setCargando(false); inputRef.current?.focus() }
+  }
+
+  async function reproducirTTS(texto: string) {
+    if (!modoConversacion) return
+    try {
+      setReproduciendo(true)
+      const res = await fetch('/api/tts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ texto }),
+      })
+      if (!res.ok) return
+      const blob = await res.blob()
+      const url  = URL.createObjectURL(blob)
+      const audio = new Audio(url)
+      audioRef.current = audio
+      audio.onended = () => { setReproduciendo(false); URL.revokeObjectURL(url) }
+      await audio.play()
+    } catch { setReproduciendo(false) }
+  }
+
+  async function iniciarGrabacion() {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      const mr = new MediaRecorder(stream, { mimeType: 'audio/webm' })
+      audioChunksRef.current = []
+      mr.ondataavailable = e => audioChunksRef.current.push(e.data)
+      mr.onstop = async () => {
+        stream.getTracks().forEach(t => t.stop())
+        const blob = new Blob(audioChunksRef.current, { type: 'audio/webm' })
+        const fd   = new FormData()
+        fd.append('audio', blob, 'audio.webm')
+        try {
+          const res  = await fetch('/api/transcribir', { method: 'POST', body: fd })
+          const data = await res.json()
+          if (data.texto?.trim()) enviarPregunta(data.texto)
+        } catch { setError('No se pudo transcribir el audio.') }
+      }
+      mr.start()
+      mediaRecorderRef.current = mr
+      setGrabando(true)
+    } catch { setError('No se pudo acceder al micrófono.') }
+  }
+
+  function detenerGrabacion() {
+    mediaRecorderRef.current?.stop()
+    setGrabando(false)
   }
 
   async function cerrarSesion() {
@@ -623,25 +679,39 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
               <div style={{position:'absolute',width:'300px',height:'300px',borderRadius:'50%',border:'2px solid rgba(109,40,217,.2)',animation:cargando?'ringPulse 0.6s ease-in-out infinite':'ringPulse 2s ease-in-out infinite'}}/>
               <div style={{position:'absolute',width:'260px',height:'260px',borderRadius:'50%',border:'2px solid rgba(109,40,217,.1)',animation:cargando?'ringPulse 0.6s ease-in-out infinite 0.2s':'ringPulse 2s ease-in-out infinite 0.5s'}}/>
               <video
-                key={cargando ? 'hablando' : 'escuchando'}
+                key={reproduciendo ? 'hablando' : 'escuchando'}
                 autoPlay loop muted playsInline
-                style={{width:'280px',height:'280px',objectFit:'contain',background:'transparent',mixBlendMode:'normal'}}>
-                <source src={cargando ? '/assets/buho-hablando.webm' : '/assets/buho-escuchando.webm'} type='video/webm'/>
+                style={{width:'280px',height:'280px',objectFit:'contain',background:'transparent'}}>
+                <source src={reproduciendo ? '/assets/buho-hablando.webm' : '/assets/buho-escuchando.webm'} type='video/webm'/>
               </video>
             </div>
 
-            {/* Input de texto */}
+            {/* Input de texto + micrófono */}
             <div style={{width:'90%',maxWidth:'500px',background:'white',borderRadius:'16px',border:'1.5px solid rgba(109,40,217,.2)',padding:'12px 16px',boxShadow:'0 4px 20px rgba(109,40,217,.08)',display:'flex',gap:'10px',alignItems:'flex-end'}}>
               <textarea
                 value={pregunta}
                 onChange={e=>setPregunta(e.target.value)}
                 onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();enviarPregunta()}}}
-                placeholder={idiomaIngles ? 'Type your response...' : 'Escribe tu respuesta...'}
-                rows={2} disabled={cargando}
+                placeholder={grabando ? '🎙️ Recording...' : (idiomaIngles ? 'Type or use mic...' : 'Escribe o usa el mic...')}
+                rows={2} disabled={cargando||grabando}
                 style={{flex:1,background:'transparent',border:'none',outline:'none',resize:'none',fontSize:'14px',color:'#1E1B4B',lineHeight:'1.6',fontFamily:"'Plus Jakarta Sans',sans-serif"}}
               />
-              <button onClick={()=>enviarPregunta()} disabled={cargando||!pregunta.trim()}
-                style={{background:'linear-gradient(135deg,#7C3AED,#6D28D9)',border:'none',borderRadius:'12px',width:'42px',height:'42px',display:'flex',alignItems:'center',justifyContent:'center',cursor:'pointer',flexShrink:0,opacity:(!pregunta.trim()||cargando)?0.4:1}}>
+              {/* Botón micrófono */}
+              <button
+                onMouseDown={iniciarGrabacion}
+                onMouseUp={detenerGrabacion}
+                onTouchStart={iniciarGrabacion}
+                onTouchEnd={detenerGrabacion}
+                disabled={cargando||reproduciendo}
+                style={{background:grabando?'linear-gradient(135deg,#DC2626,#B91C1C)':'linear-gradient(135deg,#10B981,#059669)',border:'none',borderRadius:'12px',width:'42px',height:'42px',display:'flex',alignItems:'center',justifyContent:'center',cursor:'pointer',flexShrink:0,animation:grabando?'ringPulse 0.6s infinite':'none',opacity:(cargando||reproduciendo)?0.4:1}}>
+                <svg width="18" height="18" fill="white" viewBox="0 0 24 24">
+                  <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+                  <path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v4M8 23h8" stroke="white" strokeWidth="1.5" fill="none" strokeLinecap="round"/>
+                </svg>
+              </button>
+              {/* Botón enviar */}
+              <button onClick={()=>enviarPregunta()} disabled={cargando||!pregunta.trim()||grabando}
+                style={{background:'linear-gradient(135deg,#7C3AED,#6D28D9)',border:'none',borderRadius:'12px',width:'42px',height:'42px',display:'flex',alignItems:'center',justifyContent:'center',cursor:'pointer',flexShrink:0,opacity:(!pregunta.trim()||cargando||grabando)?0.4:1}}>
                 <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="white" strokeWidth={2.2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/>
                 </svg>
