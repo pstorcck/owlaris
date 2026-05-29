@@ -594,18 +594,63 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
 
         {/* Búho flotante / Modo conversación */}
         {modoConversacion ? (
-          <div style={{position:'fixed',bottom:'20px',left:'50%',transform:'translateX(-50%)',zIndex:50,display:'flex',flexDirection:'column',alignItems:'center',gap:'12px'}}>
-            <div style={{background:'white',borderRadius:'20px',padding:'10px 16px',boxShadow:'0 4px 20px rgba(109,40,217,.2)',border:'1px solid rgba(109,40,217,.1)',fontSize:'13px',color:'#6D28D9',fontWeight:600}}>
-              {idiomaIngles ? "I'm listening... 🎙️" : "Te escucho... 🎙️"}
+          <div style={{position:'fixed',inset:0,zIndex:50,background:'rgba(248,247,255,.97)',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:'20px'}}>
+            {/* Bubble de estado */}
+            <div style={{background:'white',borderRadius:'20px',padding:'12px 24px',boxShadow:'0 4px 24px rgba(109,40,217,.15)',border:'1px solid rgba(109,40,217,.1)',fontSize:'15px',color:'#6D28D9',fontWeight:600,letterSpacing:'.2px'}}>
+              {cargando ? (idiomaIngles ? '💬 Owlaris is thinking...' : '💬 Owlaris está pensando...') : (idiomaIngles ? '🎙️ Listening...' : '🎙️ Escuchando...')}
             </div>
-            <div style={{animation:'buhoHabla 0.4s ease-in-out infinite alternate'}}>
-              <img src="/buho.png" alt="Owlaris" style={{width:'90px',height:'90px',objectFit:'contain',filter:'drop-shadow(0 8px 32px rgba(109,40,217,.4))'}}/>
+
+            {/* Búho animado */}
+            <div style={{position:'relative',width:'280px',height:'280px',display:'flex',alignItems:'center',justifyContent:'center'}}>
+              <div style={{position:'absolute',inset:0,borderRadius:'50%',background:'radial-gradient(circle,rgba(109,40,217,.08) 0%,transparent 70%)',animation:'pulseGlow 2s ease-in-out infinite'}}/>
+              <video
+                key={cargando ? 'hablando' : 'escuchando'}
+                src={cargando ? '/assets/buho-hablando.webm' : '/assets/buho-escuchando.webm'}
+                autoPlay loop muted playsInline
+                style={{width:'260px',height:'260px',objectFit:'contain',filter:'drop-shadow(0 12px 40px rgba(109,40,217,.3))'}}
+              />
             </div>
-            <button onClick={()=>setModoConversacion(false)}
-              style={{background:'rgba(220,38,38,.1)',border:'1px solid rgba(220,38,38,.2)',borderRadius:'10px',padding:'6px 16px',fontSize:'12px',fontWeight:600,color:'#DC2626',cursor:'pointer'}}>
-              {idiomaIngles ? 'End conversation' : 'Terminar conversación'}
+
+            {/* Input de texto */}
+            <div style={{width:'90%',maxWidth:'500px',background:'white',borderRadius:'16px',border:'1.5px solid rgba(109,40,217,.2)',padding:'12px 16px',boxShadow:'0 4px 20px rgba(109,40,217,.08)',display:'flex',gap:'10px',alignItems:'flex-end'}}>
+              <textarea
+                value={pregunta}
+                onChange={e=>setPregunta(e.target.value)}
+                onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();enviarPregunta()}}}
+                placeholder={idiomaIngles ? 'Type your response...' : 'Escribe tu respuesta...'}
+                rows={2} disabled={cargando}
+                style={{flex:1,background:'transparent',border:'none',outline:'none',resize:'none',fontSize:'14px',color:'#1E1B4B',lineHeight:'1.6',fontFamily:"'Plus Jakarta Sans',sans-serif"}}
+              />
+              <button onClick={()=>enviarPregunta()} disabled={cargando||!pregunta.trim()}
+                style={{background:'linear-gradient(135deg,#7C3AED,#6D28D9)',border:'none',borderRadius:'12px',width:'42px',height:'42px',display:'flex',alignItems:'center',justifyContent:'center',cursor:'pointer',flexShrink:0,opacity:(!pregunta.trim()||cargando)?0.4:1}}>
+                <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="white" strokeWidth={2.2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/>
+                </svg>
+              </button>
+            </div>
+
+            {/* Mensajes recientes */}
+            {mensajes.length > 1 && (
+              <div style={{width:'90%',maxWidth:'500px',maxHeight:'180px',overflowY:'auto',display:'flex',flexDirection:'column',gap:'8px'}} className="scrollbar-hide">
+                {mensajes.slice(-4).filter(m=>m.id!=='bienvenida').map(m=>(
+                  <div key={m.id} style={{display:'flex',justifyContent:m.rol==='usuario'?'flex-end':'flex-start'}}>
+                    <div style={{background:m.rol==='usuario'?'linear-gradient(135deg,#6D28D9,#5B21B6)':'white',color:m.rol==='usuario'?'#EDE9FE':'#2D2B55',borderRadius:m.rol==='usuario'?'16px 4px 16px 16px':'4px 16px 16px 16px',padding:'8px 14px',fontSize:'13px',maxWidth:'80%',border:m.rol==='usuario'?'none':'1px solid rgba(109,40,217,.1)'}}>
+                      {m.contenido.substring(0,120)}{m.contenido.length>120?'...':''}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Botón terminar */}
+            <button onClick={()=>{setModoConversacion(false); setEstadoChat('esperando_materia'); setSugerencias([])}}
+              style={{background:'white',border:'1.5px solid rgba(220,38,38,.3)',borderRadius:'12px',padding:'10px 28px',fontSize:'13px',fontWeight:600,color:'#DC2626',cursor:'pointer',boxShadow:'0 2px 12px rgba(220,38,38,.1)',transition:'all .2s'}}>
+              {idiomaIngles ? '✕ End conversation' : '✕ Terminar conversación'}
             </button>
-            <style>{`@keyframes buhoHabla { from{transform:translateY(0) scale(1)} to{transform:translateY(-8px) scale(1.05)} }`}</style>
+
+            <style>{`
+              @keyframes pulseGlow { 0%,100%{transform:scale(1);opacity:.6} 50%{transform:scale(1.1);opacity:1} }
+            `}</style>
           </div>
         ) : (
           <div className="o-float" style={{position:'fixed',bottom:'24px',left:'24px',zIndex:40,pointerEvents:'none'}}>
