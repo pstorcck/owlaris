@@ -580,7 +580,7 @@ export async function POST(req: NextRequest) {
         // Siempre agregar Olimpiadas de Ciencias
         if (!carpetas.includes('Olimpiadas de Ciencias')) carpetas.push('Olimpiadas de Ciencias')
         // Agregar opción de inglés conversacional
-        carpetas.push(idiomaIngles ? '🎙️ English Conversation' : '🎙️ Conversar en Inglés')
+        carpetas.push(idiomaIngles ? '» English Conversation' : '» Conversar en Inglés')
         // Traducir nombres al inglés si aplica
         const traducirMateria = (m: string) => {
           if (!idiomaIngles) return m
@@ -657,7 +657,7 @@ export async function POST(req: NextRequest) {
         }
       }
       if (!carpetasG.includes('Olimpiadas de Ciencias')) carpetasG.push('Olimpiadas de Ciencias')
-      carpetasG.push(idiomaIngles ? '🎙️ English Conversation' : '🎙️ Conversar en Inglés')
+      carpetasG.push(idiomaIngles ? '» English Conversation' : '» Conversar en Inglés')
 
       const tradG: Record<string,string> = {'Matem\u00e1tica':'Mathematics','F\u00edsica':'Physics','Qu\u00edmica':'Chemistry','Biolog\u00eda':'Biology','Historia':'History','Espa\u00f1ol':'Spanish','Ingl\u00e9s':'English','Ciencias Naturales':'Natural Sciences','Mineduc - Lenguaje':'Mineduc - Language','Mineduc - Matem\u00e1tica':'Mineduc - Mathematics','Olimpiadas de Ciencias':'Science Olympiad'}
       const listaG = carpetasG.map((m, i) => (i+1) + '. ' + (idiomaIngles ? (tradG[m] || m) : m)).join('\n')
