@@ -234,7 +234,6 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
   async function reproducirTTS(texto: string) {
     if (!modoConversacion) return
     try {
-      setReproduciendo(true) // Activa inmediatamente — búho abre pico
       const res = await fetch('/api/tts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -245,6 +244,7 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
       const url  = URL.createObjectURL(blob)
       const audio = new Audio(url)
       audioRef.current = audio
+      audio.onplay  = () => setReproduciendo(true)  // Solo cuando realmente suena
       audio.onended = () => { setReproduciendo(false); URL.revokeObjectURL(url) }
       await audio.play()
     } catch { setReproduciendo(false) }
@@ -695,18 +695,18 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
                 <div style={{position:'absolute',width:'280px',height:'280px',borderRadius:'50%',border:`2px solid ${grabando?'rgba(220,38,38,.4)':reproduciendo?'rgba(109,40,217,.4)':'rgba(109,40,217,.15)'}`,animation:`ringPulse ${grabando?'0.5s':reproduciendo?'0.8s':'2s'} ease-in-out infinite`,transition:'all .3s'}}/>
                 <div style={{position:'absolute',width:'240px',height:'240px',borderRadius:'50%',border:`2px solid ${grabando?'rgba(220,38,38,.2)':reproduciendo?'rgba(109,40,217,.2)':'rgba(109,40,217,.08)'}`,animation:`ringPulse ${grabando?'0.5s':reproduciendo?'0.8s':'2s'} ease-in-out infinite 0.2s`}}/>
                 
-                {/* Búho WebM */}
-                <video
-                  key={cargando ? 'pensando' : reproduciendo ? 'hablando' : grabando ? 'escuchando' : 'feliz'}
-                  autoPlay loop muted playsInline
-                  style={{width:'260px',height:'260px',objectFit:'contain',background:'transparent'}}>
-                  <source src={
-                    cargando ? '/assets/buho-pensando.webm' :
-                    reproduciendo ? '/assets/buho-hablando.webm' :
-                    grabando ? '/assets/buho-escuchando.webm' :
-                    '/assets/buho-feliz.webm'
-                  } type='video/webm'/>
-                </video>
+                {/* Búho PNG con CSS animation */}
+                <img src="/buho.png" alt="Owlaris"
+                  style={{
+                    width:'240px', height:'240px', objectFit:'contain',
+                    filter:'drop-shadow(0 12px 40px rgba(109,40,217,.25))',
+                    animation: reproduciendo ? 'buhoHabla 0.4s ease-in-out infinite alternate' :
+                               grabando ? 'buhoEscucha 1.5s ease-in-out infinite' :
+                               cargando ? 'buhoPensando 1s ease-in-out infinite' :
+                               'buhoIdle 3s ease-in-out infinite',
+                    transformOrigin: 'center bottom',
+                  }}
+                />
               </div>
 
               {/* Último mensaje de Owlaris */}
@@ -752,6 +752,10 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
               @keyframes ringPulse { 0%,100%{transform:scale(1);opacity:.4} 50%{transform:scale(1.06);opacity:1} }
               @keyframes dotBlink { 0%,100%{opacity:1} 50%{opacity:.3} }
               @keyframes micPulse { 0%,100%{box-shadow:0 0 0 8px rgba(220,38,38,.2),0 8px 32px rgba(220,38,38,.4)} 50%{box-shadow:0 0 0 16px rgba(220,38,38,.1),0 8px 32px rgba(220,38,38,.5)} }
+              @keyframes buhoHabla { from{transform:translateY(0) scale(1) rotate(-2deg)} to{transform:translateY(-10px) scale(1.05) rotate(2deg)} }
+              @keyframes buhoEscucha { 0%,100%{transform:rotate(-3deg) scale(1)} 50%{transform:rotate(3deg) scale(1.02)} }
+              @keyframes buhoPensando { 0%,100%{transform:translateY(0) rotate(-1deg)} 50%{transform:translateY(-8px) rotate(1deg)} }
+              @keyframes buhoIdle { 0%,100%{transform:translateY(0) rotate(-1deg)} 50%{transform:translateY(-6px) rotate(1deg)} }
             `}</style>
           </div>
         ) : (
