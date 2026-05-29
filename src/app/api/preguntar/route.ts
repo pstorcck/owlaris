@@ -107,6 +107,9 @@ function normalizarMateria(texto: string, esOlimpiadas = false): string {
     if (/cien/i.test(t)) return 'Olimpiadas - Ciencias Naturales'
   }
 
+  if (/mineduc.*leng|leng.*mineduc/i.test(t)) return 'Mineduc - Lenguaje'
+  if (/mineduc.*mat|mat.*mineduc/i.test(t)) return 'Mineduc - Matemática'
+  if (/mineduc/i.test(t)) return 'Mineduc - Lenguaje'
   if (/matem|math/i.test(t)) return 'Matemática'
   if (/leng|espan|español|castell|spanish/i.test(t)) return 'Español'
   if (/ingles|english|inglés/i.test(t)) return 'Inglés'
@@ -115,8 +118,6 @@ function normalizarMateria(texto: string, esOlimpiadas = false): string {
   if (/quim|chemistry/i.test(t)) return 'Química'
   if (/hist|history/i.test(t)) return 'Historia'
   if (/cien.*nat|natural science|natural/i.test(t)) return 'Ciencias Naturales'
-  if (/mineduc.*leng/i.test(t)) return 'Mineduc - Lenguaje'
-  if (/mineduc.*mat/i.test(t)) return 'Mineduc - Matemática'
   return texto.trim()
 }
 
