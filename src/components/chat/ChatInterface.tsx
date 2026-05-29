@@ -8,6 +8,7 @@ import type { Usuario, Materia, MensajeChat } from '@/types'
 interface Props {
   usuario: Usuario
   materias: Materia[]
+  materiasDisponibles?: string[]
 }
 
 type EstadoChat = 'esperando_nombre' | 'esperando_confirmacion_grado' | 'esperando_grado' | 'esperando_materia' | 'esperando_materia_olimpiadas' | 'esperando_confirmacion_cambio_materia' | 'activo'
@@ -51,7 +52,7 @@ function renderTexto(texto: string): React.ReactNode[] {
   })
 }
 
-export default function ChatInterface({ usuario }: Props) {
+export default function ChatInterface({ usuario, materiasDisponibles: materiasIniciales = [] }: Props) {
   const [mensajes, setMensajes]         = useState<MensajeChat[]>([])
   const [pregunta, setPregunta]         = useState('')
   const [cargando, setCargando]         = useState(false)
@@ -62,7 +63,7 @@ export default function ChatInterface({ usuario }: Props) {
   const [nivelDificultad, setNivelDificultad] = useState(1)
   const [aciertosConsec, setAciertosConsec]   = useState(0)
   const [materiaSugerida, setMateriaSugerida] = useState('')
-  const [chipsMateria, setChipsMateria]         = useState<string[]>([])
+  const [chipsMateria, setChipsMateria]         = useState<string[]>(materiasIniciales)
   const [mostrandoSubOlimpiadas, setMostrandoSubOlimpiadas] = useState(false)
   const [idiomaIngles, setIdiomaIngles]       = useState(false)
   const [modoConversacion, setModoConversacion] = useState(false)
