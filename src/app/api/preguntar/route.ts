@@ -558,18 +558,41 @@ export async function POST(req: NextRequest) {
 
     if (estado === 'esperando_confirmacion_grado') {
       const resp = pregunta.toLowerCase().trim()
-      const esAfirmativo = /^(si|sí|yes|s|claro|correcto|asi|así|efectivamente)/.test(resp)
+      const esAfirmativo = /^(si|sí|yes|s|claro|correcto|asi|así|efectivamente|yep|yup|ok|sure)/.test(resp)
       if (esAfirmativo) {
-        // Asegurar que el grado esté guardado
         if (userId && gradoAlumno) {
           await supabase.from('usuarios').update({ grado: gradoAlumno }).eq('id', userId)
-          console.log('Grado confirmado y guardado:', gradoAlumno, 'para userId:', userId)
         }
+        // Leer carpetas disponibles en SharePoint para este grado
+        const token = await getToken()
+        const driveId = process.env.SHAREPOINT_DRIVE_ID!
+        const carpetas: string[] = []
+        if (token) {
+          const rutaGrado = encodeURIComponent('Owlaris') + '/' + encodeURIComponent(CARPETA_COMPARTIDA) + '/' + encodeURIComponent(gradoAlumno)
+          const url = 'https://graph.microsoft.com/v1.0/drives/' + driveId + '/root:/' + rutaGrado + ':/children'
+          const res = await fetch(url, { headers: { Authorization: 'Bearer ' + token } })
+          if (res.ok) {
+            const data = await res.json()
+            const items: string[] = (data.value || []).filter((i: {folder?:unknown}) => i.folder).map((i: {name:string}) => i.name)
+            carpetas.push(...items)
+          }
+        }
+        // Siempre agregar Olimpiadas de Ciencias
+        if (!carpetas.includes('Olimpiadas de Ciencias')) carpetas.push('Olimpiadas de Ciencias')
+        // Agregar opción de inglés conversacional
+        carpetas.push(idiomaIngles ? '🎙️ English Conversation' : '🎙️ Conversar en Inglés')
+
+        const lista = carpetas.map((m, i) => (i+1) + '. ' + m).join('\n')
+        const intro = idiomaIngles ? 'Perfect! Here are the available subjects for your grade:' : 'Perfecto. Estas son las materias disponibles para tu grado:'
+        const cierre = idiomaIngles ? 'Which one would you like to study?' : '¿Cuál quieres estudiar?'
+        const preguntaMateria = intro + '\n\n' + lista + '\n\n' + cierre
+
         return NextResponse.json({
-          respuesta: idiomaIngles ? 'Perfect. What subject do you want to study today?' : 'Perfecto. ¿Qué materia quieres estudiar hoy?',
+          respuesta: preguntaMateria,
           nuevo_estado: 'esperando_materia',
           nombre_alumno: nombreAlumno,
           grado_detectado: gradoAlumno,
+          materias_disponibles: carpetas,
           tokens: 0,
         })
       } else {
@@ -605,11 +628,34 @@ export async function POST(req: NextRequest) {
       // Guardar grado en Supabase
       if (userId) await supabase.from('usuarios').update({ grado: gradoDetectado }).eq('id', userId)
 
+      // Leer carpetas disponibles para el grado detectado
+      const tokenG = await getToken()
+      const driveIdG = process.env.SHAREPOINT_DRIVE_ID!
+      const carpetasG: string[] = []
+      if (tokenG) {
+        const rutaG = encodeURIComponent('Owlaris') + '/' + encodeURIComponent(CARPETA_COMPARTIDA) + '/' + encodeURIComponent(gradoDetectado)
+        const urlG = 'https://graph.microsoft.com/v1.0/drives/' + driveIdG + '/root:/' + rutaG + ':/children'
+        const resG = await fetch(urlG, { headers: { Authorization: 'Bearer ' + tokenG } })
+        if (resG.ok) {
+          const dataG = await resG.json()
+          const itemsG: string[] = (dataG.value || []).filter((i: {folder?:unknown}) => i.folder).map((i: {name:string}) => i.name)
+          carpetasG.push(...itemsG)
+        }
+      }
+      if (!carpetasG.includes('Olimpiadas de Ciencias')) carpetasG.push('Olimpiadas de Ciencias')
+      carpetasG.push(idiomaIngles ? '🎙️ English Conversation' : '🎙️ Conversar en Inglés')
+
+      const listaG = carpetasG.map((m, i) => (i+1) + '. ' + m).join('\n')
+      const introG = idiomaIngles ? 'Perfect, ' + nombreAlumno + '! Here are the available subjects:' : 'Perfecto, ' + nombreAlumno + '. Estas son las materias disponibles:'
+      const cierreG = idiomaIngles ? 'Which one would you like to study?' : '¿Cuál quieres estudiar?'
+      const preguntaG = introG + '\n\n' + listaG + '\n\n' + cierreG
+
       return NextResponse.json({
-        respuesta: idiomaIngles ? 'Perfect, ' + nombreAlumno + '. What subject do you want to study today?' : 'Perfecto, ' + nombreAlumno + '. ¿Qué materia quieres estudiar hoy?',
+        respuesta: preguntaG,
         nuevo_estado: 'esperando_materia',
         nombre_alumno: nombreAlumno,
         grado_detectado: gradoDetectado,
+        materias_disponibles: carpetasG,
         tokens: 0,
       })
     }
