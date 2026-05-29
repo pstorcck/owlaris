@@ -824,7 +824,7 @@ ${contextoContenido}`
     mensajesOpenAI.push({ role: 'user', content: pregunta })
 
     const completion = await openai.chat.completions.create({
-      model: 'gpt-4o-mini', messages: mensajesOpenAI, max_tokens: 700, temperature: 0.7,
+      model: 'gpt-4o-mini', messages: mensajesOpenAI, max_tokens: esModoConversacion ? 150 : 700, temperature: 0.7,
     })
 
     let respuesta = completion.choices[0].message.content || 'No pude generar una respuesta.'
