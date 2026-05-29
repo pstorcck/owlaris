@@ -668,85 +668,90 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
           </div>
         </div>
 
-        {/* Búho flotante / Modo conversación */}
+        {/* MODO CONVERSACIÓN — pantalla completa tipo asistente de voz */}
         {modoConversacion ? (
-          <div style={{position:'fixed',inset:0,zIndex:50,background:'rgba(248,247,255,.97)',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:'20px'}}>
-            {/* Bubble de estado */}
-            <div style={{background:'white',borderRadius:'20px',padding:'12px 24px',boxShadow:'0 4px 24px rgba(109,40,217,.15)',border:'1px solid rgba(109,40,217,.1)',fontSize:'15px',color:'#6D28D9',fontWeight:600,letterSpacing:'.2px'}}>
-              {cargando ? (idiomaIngles ? '💬 Owlaris is thinking...' : '💬 Owlaris está pensando...') : (idiomaIngles ? '🎙️ Listening...' : '🎙️ Escuchando...')}
+          <div style={{position:'fixed',inset:0,zIndex:50,background:'linear-gradient(160deg,#F0EBFF 0%,#F8F7FF 50%,#EBF5FF 100%)',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'space-between',padding:'24px 20px 40px'}}>
+
+            {/* Header — botón salir */}
+            <div style={{width:'100%',display:'flex',justifyContent:'flex-end'}}>
+              <button onClick={()=>{setModoConversacion(false);setEstadoChat('esperando_materia');setSugerencias([]);if(grabando){mediaRecorderRef.current?.stop();setGrabando(false)}}}
+                style={{background:'rgba(220,38,38,.08)',border:'1px solid rgba(220,38,38,.2)',borderRadius:'12px',padding:'8px 16px',fontSize:'12px',fontWeight:600,color:'#DC2626',cursor:'pointer',display:'flex',alignItems:'center',gap:'6px'}}>
+                <span>✕</span><span>End</span>
+              </button>
             </div>
 
-            {/* Búho animado WebM con transparencia */}
-            <div style={{position:'relative',width:'300px',height:'300px',display:'flex',alignItems:'center',justifyContent:'center'}}>
-              <div style={{position:'absolute',width:'300px',height:'300px',borderRadius:'50%',border:'2px solid rgba(109,40,217,.2)',animation:cargando?'ringPulse 0.6s ease-in-out infinite':'ringPulse 2s ease-in-out infinite'}}/>
-              <div style={{position:'absolute',width:'260px',height:'260px',borderRadius:'50%',border:'2px solid rgba(109,40,217,.1)',animation:cargando?'ringPulse 0.6s ease-in-out infinite 0.2s':'ringPulse 2s ease-in-out infinite 0.5s'}}/>
-              <video
-                key={reproduciendo ? 'hablando' : 'escuchando'}
-                autoPlay loop muted playsInline
-                style={{width:'280px',height:'280px',objectFit:'contain',background:'transparent'}}>
-                <source src={reproduciendo ? '/assets/buho-hablando.webm' : '/assets/buho-escuchando.webm'} type='video/webm'/>
-              </video>
+            {/* Centro — búho */}
+            <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:'16px',flex:1,justifyContent:'center'}}>
+              
+              {/* Estado label */}
+              <div style={{background:'white',borderRadius:'20px',padding:'10px 20px',boxShadow:'0 4px 20px rgba(109,40,217,.12)',border:'1px solid rgba(109,40,217,.08)',fontSize:'14px',fontWeight:600,color:grabando?'#DC2626':cargando?'#D97706':reproduciendo?'#6D28D9':'#10B981',display:'flex',alignItems:'center',gap:'8px',transition:'all .3s'}}>
+                <span style={{width:'8px',height:'8px',borderRadius:'50%',background:grabando?'#DC2626':cargando?'#D97706':reproduciendo?'#6D28D9':'#10B981',display:'inline-block',animation:'dotBlink 1s infinite'}}/>
+                {grabando ? 'Listening...' : cargando ? 'Thinking...' : reproduciendo ? 'Speaking...' : 'Tap to speak'}
+              </div>
+
+              {/* Búho con rings */}
+              <div style={{position:'relative',width:'280px',height:'280px',display:'flex',alignItems:'center',justifyContent:'center'}}>
+                {/* Ring externo — activo cuando graba o habla */}
+                <div style={{position:'absolute',width:'280px',height:'280px',borderRadius:'50%',border:`2px solid ${grabando?'rgba(220,38,38,.4)':reproduciendo?'rgba(109,40,217,.4)':'rgba(109,40,217,.15)'}`,animation:`ringPulse ${grabando?'0.5s':reproduciendo?'0.8s':'2s'} ease-in-out infinite`,transition:'all .3s'}}/>
+                <div style={{position:'absolute',width:'240px',height:'240px',borderRadius:'50%',border:`2px solid ${grabando?'rgba(220,38,38,.2)':reproduciendo?'rgba(109,40,217,.2)':'rgba(109,40,217,.08)'}`,animation:`ringPulse ${grabando?'0.5s':reproduciendo?'0.8s':'2s'} ease-in-out infinite 0.2s`}}/>
+                
+                {/* Búho WebM */}
+                <video
+                  key={cargando ? 'pensando' : reproduciendo ? 'hablando' : grabando ? 'escuchando' : 'feliz'}
+                  autoPlay loop muted playsInline
+                  style={{width:'260px',height:'260px',objectFit:'contain',background:'transparent'}}>
+                  <source src={
+                    cargando ? '/assets/buho-pensando.webm' :
+                    reproduciendo ? '/assets/buho-hablando.webm' :
+                    grabando ? '/assets/buho-escuchando.webm' :
+                    '/assets/buho-feliz.webm'
+                  } type='video/webm'/>
+                </video>
+              </div>
+
+              {/* Último mensaje de Owlaris */}
+              {mensajes.filter(m=>m.rol==='asistente').slice(-1).map(m=>(
+                <div key={m.id} style={{background:'white',borderRadius:'16px',padding:'12px 18px',maxWidth:'320px',textAlign:'center',boxShadow:'0 2px 16px rgba(109,40,217,.08)',border:'1px solid rgba(109,40,217,.06)',fontSize:'13px',color:'#4B4570',lineHeight:'1.6'}}>
+                  {m.contenido.substring(0,100)}{m.contenido.length>100?'...':''}
+                </div>
+              ))}
             </div>
 
-            {/* Input de texto + micrófono */}
-            <div style={{width:'90%',maxWidth:'500px',background:'white',borderRadius:'16px',border:'1.5px solid rgba(109,40,217,.2)',padding:'12px 16px',boxShadow:'0 4px 20px rgba(109,40,217,.08)',display:'flex',gap:'10px',alignItems:'flex-end'}}>
-              <textarea
-                value={pregunta}
-                onChange={e=>setPregunta(e.target.value)}
-                onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();enviarPregunta()}}}
-                placeholder={grabando ? '🎙️ Recording...' : (idiomaIngles ? 'Type or use mic...' : 'Escribe o usa el mic...')}
-                rows={2} disabled={cargando||grabando}
-                style={{flex:1,background:'transparent',border:'none',outline:'none',resize:'none',fontSize:'14px',color:'#1E1B4B',lineHeight:'1.6',fontFamily:"'Plus Jakarta Sans',sans-serif"}}
-              />
-              {/* Botón micrófono toggle */}
+            {/* Botón micrófono grande */}
+            <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:'12px'}}>
               <button
                 onClick={toggleGrabacion}
                 disabled={cargando||reproduciendo}
-                style={{background:grabando?'linear-gradient(135deg,#DC2626,#B91C1C)':'linear-gradient(135deg,#10B981,#059669)',border:'none',borderRadius:'12px',width:'42px',height:'42px',display:'flex',alignItems:'center',justifyContent:'center',cursor:'pointer',flexShrink:0,boxShadow:grabando?'0 0 0 4px rgba(220,38,38,.2)':'none',transition:'all .2s',opacity:(cargando||reproduciendo)?0.4:1}}>
+                style={{
+                  width:'80px',height:'80px',borderRadius:'50%',border:'none',cursor:(cargando||reproduciendo)?'not-allowed':'pointer',
+                  background:grabando?'linear-gradient(135deg,#DC2626,#B91C1C)':'linear-gradient(135deg,#7C3AED,#5B21B6)',
+                  boxShadow:grabando?'0 0 0 8px rgba(220,38,38,.2),0 8px 32px rgba(220,38,38,.4)':'0 0 0 8px rgba(109,40,217,.1),0 8px 32px rgba(109,40,217,.3)',
+                  display:'flex',alignItems:'center',justifyContent:'center',
+                  transform:(cargando||reproduciendo)?'scale(0.9)':'scale(1)',
+                  transition:'all .2s',
+                  opacity:(cargando||reproduciendo)?0.5:1,
+                  animation:grabando?'micPulse 1s ease-in-out infinite':'none',
+                }}>
                 {grabando ? (
-                  <svg width="18" height="18" fill="white" viewBox="0 0 24 24">
+                  <svg width="28" height="28" fill="white" viewBox="0 0 24 24">
                     <rect x="6" y="6" width="12" height="12" rx="2"/>
                   </svg>
                 ) : (
-                  <svg width="18" height="18" fill="white" viewBox="0 0 24 24">
+                  <svg width="28" height="28" fill="white" viewBox="0 0 24 24">
                     <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
-                    <path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v4M8 23h8" stroke="white" strokeWidth="1.5" fill="none" strokeLinecap="round"/>
+                    <path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v4M8 23h8" stroke="white" strokeWidth="2" fill="none" strokeLinecap="round"/>
                   </svg>
                 )}
               </button>
-              {/* Botón enviar */}
-              <button onClick={()=>enviarPregunta()} disabled={cargando||!pregunta.trim()||grabando}
-                style={{background:'linear-gradient(135deg,#7C3AED,#6D28D9)',border:'none',borderRadius:'12px',width:'42px',height:'42px',display:'flex',alignItems:'center',justifyContent:'center',cursor:'pointer',flexShrink:0,opacity:(!pregunta.trim()||cargando||grabando)?0.4:1}}>
-                <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="white" strokeWidth={2.2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/>
-                </svg>
-              </button>
+              <p style={{fontSize:'11px',color:'#9490B8',fontWeight:500}}>
+                {grabando ? 'Tap to send' : 'Tap to speak'}
+              </p>
             </div>
 
-            {/* Mensajes recientes */}
-            {mensajes.length > 1 && (
-              <div style={{width:'90%',maxWidth:'500px',maxHeight:'180px',overflowY:'auto',display:'flex',flexDirection:'column',gap:'8px'}} className="scrollbar-hide">
-                {mensajes.slice(-4).filter(m=>m.id!=='bienvenida').map(m=>(
-                  <div key={m.id} style={{display:'flex',justifyContent:m.rol==='usuario'?'flex-end':'flex-start'}}>
-                    <div style={{background:m.rol==='usuario'?'linear-gradient(135deg,#6D28D9,#5B21B6)':'white',color:m.rol==='usuario'?'#EDE9FE':'#2D2B55',borderRadius:m.rol==='usuario'?'16px 4px 16px 16px':'4px 16px 16px 16px',padding:'8px 14px',fontSize:'13px',maxWidth:'80%',border:m.rol==='usuario'?'none':'1px solid rgba(109,40,217,.1)'}}>
-                      {m.contenido.substring(0,120)}{m.contenido.length>120?'...':''}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* Botón terminar */}
-            <button onClick={()=>{setModoConversacion(false); setEstadoChat('esperando_materia'); setSugerencias([])}}
-              style={{background:'white',border:'1.5px solid rgba(220,38,38,.3)',borderRadius:'12px',padding:'10px 28px',fontSize:'13px',fontWeight:600,color:'#DC2626',cursor:'pointer',boxShadow:'0 2px 12px rgba(220,38,38,.1)',transition:'all .2s'}}>
-              {idiomaIngles ? '✕ End conversation' : '✕ Terminar conversación'}
-            </button>
-
             <style>{`
-              @keyframes pulseGlow { 0%,100%{transform:scale(1);opacity:.6} 50%{transform:scale(1.1);opacity:1} }
-              @keyframes ringPulse { 0%,100%{transform:scale(1);opacity:.3} 50%{transform:scale(1.08);opacity:.8} }
-              @keyframes buhoHabla { from{transform:translateY(0) scale(1) rotate(-1deg)} to{transform:translateY(-12px) scale(1.04) rotate(1deg)} }
-              @keyframes buhoEscucha { 0%,100%{transform:translateY(0) rotate(-1deg)} 30%{transform:translateY(-6px) rotate(1deg)} 60%{transform:translateY(-3px) rotate(0deg)} }
+              @keyframes ringPulse { 0%,100%{transform:scale(1);opacity:.4} 50%{transform:scale(1.06);opacity:1} }
+              @keyframes dotBlink { 0%,100%{opacity:1} 50%{opacity:.3} }
+              @keyframes micPulse { 0%,100%{box-shadow:0 0 0 8px rgba(220,38,38,.2),0 8px 32px rgba(220,38,38,.4)} 50%{box-shadow:0 0 0 16px rgba(220,38,38,.1),0 8px 32px rgba(220,38,38,.5)} }
             `}</style>
           </div>
         ) : (
