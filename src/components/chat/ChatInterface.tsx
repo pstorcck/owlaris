@@ -62,12 +62,14 @@ export default function ChatInterface({ usuario }: Props) {
   const [nivelDificultad, setNivelDificultad] = useState(1)
   const [aciertosConsec, setAciertosConsec]   = useState(0)
   const [materiaSugerida, setMateriaSugerida] = useState('')
+  const [chipsMateria, setChipsMateria]         = useState<string[]>([])
+  const [mostrandoSubOlimpiadas, setMostrandoSubOlimpiadas] = useState(false)
   const [idiomaIngles, setIdiomaIngles]       = useState(false)
   const [modoConversacion, setModoConversacion] = useState(false)
 
   // Estado onboarding
   const gradoGuardado = usuario.grado || ''
-  const estadoInicial: EstadoChat = gradoGuardado ? 'esperando_confirmacion_grado' : 'esperando_nombre'
+  const estadoInicial: EstadoChat = gradoGuardado ? 'esperando_materia' : 'esperando_nombre'
   const [estadoChat, setEstadoChat]       = useState<EstadoChat>(estadoInicial)
   const [nombreAlumno, setNombreAlumno]   = useState('')
   const [gradoAlumno, setGradoAlumno]     = useState('')
@@ -83,12 +85,34 @@ export default function ChatInterface({ usuario }: Props) {
 
   useEffect(() => { finalRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [mensajes, cargando])
 
+  // Cargar materias desde API al iniciar si hay grado guardado
+  useEffect(() => {
+    if (!gradoGuardado) return
+    fetch('/api/preguntar', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        pregunta: '__CARGAR_MATERIAS__',
+        estado: 'esperando_materia',
+        grado_override: gradoGuardado,
+        user_id: usuario.id,
+        idioma_ingles: idiomaIngles,
+        nombre_alumno: usuario.nombre_completo.split(' ')[0],
+      })
+    }).then(r => r.json()).then(data => {
+      if (data.materias_disponibles) {
+        materiasDisponiblesRef.current = data.materias_disponibles
+        setChipsMateria(data.materias_disponibles)
+      }
+    }).catch(() => {})
+  }, [gradoGuardado, idiomaIngles])
+
   useEffect(() => {
     const nombre = usuario.nombre_completo.split(' ')[0]
     const msg = gradoGuardado
       ? (idiomaIngles
-          ? `Hi, ${nombre}! Welcome back. Are you still in ${gradoGuardado}?`
-          : `¡Hola, ${nombre}! Bienvenido de vuelta. ¿Sigues en ${gradoGuardado}?`)
+          ? `Hi, ${nombre}! What do you want to study today?`
+          : `¡Hola, ${nombre}! ¿Qué quieres estudiar hoy?`)
       : (idiomaIngles
           ? "Hi! I'm Owlaris, your intelligent academic tutor. What's your name?"
           : '¡Hola! Soy Owlaris, tu tutor académico inteligente. ¿Cómo te llamas?')
@@ -143,7 +167,11 @@ export default function ChatInterface({ usuario }: Props) {
       if (data.materia_detectada) setMateriaAlumno(data.materia_detectada)
       if (data.activar_conversacion) { setModoConversacion(true); setIdiomaIngles(true) }
       if (data.nivel_dificultad) setNivelDificultad(data.nivel_dificultad)
-      if (data.materias_disponibles) materiasDisponiblesRef.current = data.materias_disponibles
+      if (data.materias_disponibles) {
+        materiasDisponiblesRef.current = data.materias_disponibles
+        setChipsMateria(data.materias_disponibles)
+        setMostrandoSubOlimpiadas(false)
+      }
       if (data.aciertos_consecutivos !== undefined) setAciertosConsec(data.aciertos_consecutivos)
       if (data.materia_sugerida) setMateriaSugerida(data.materia_sugerida)
       if (data.nuevo_estado && data.nuevo_estado !== 'esperando_confirmacion_cambio_materia') setMateriaSugerida('')

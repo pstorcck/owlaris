@@ -499,6 +499,26 @@ async function registrarPendiente(
   }
 }
 
+async function leerCarpetasGrado(grado: string, idiomaIngles: boolean): Promise<string[]> {
+  const token = await getToken()
+  if (!token) return []
+  const driveId = process.env.SHAREPOINT_DRIVE_ID!
+  const carpetas: string[] = []
+  try {
+    const ruta = encodeURIComponent('Owlaris') + '/' + encodeURIComponent(CARPETA_COMPARTIDA) + '/' + encodeURIComponent(grado)
+    const url = 'https://graph.microsoft.com/v1.0/drives/' + driveId + '/root:/' + ruta + ':/children'
+    const res = await fetch(url, { headers: { Authorization: 'Bearer ' + token } })
+    if (res.ok) {
+      const data = await res.json()
+      const items: string[] = (data.value || []).filter((i: {folder?:unknown}) => i.folder).map((i: {name:string}) => i.name)
+      carpetas.push(...items)
+    }
+  } catch { /* silencioso */ }
+  if (!carpetas.includes('Olimpiadas de Ciencias')) carpetas.push('Olimpiadas de Ciencias')
+  carpetas.push(idiomaIngles ? '» English Conversation' : '» Conversar en Inglés')
+  return carpetas
+}
+
 export async function POST(req: NextRequest) {
   try {
     const OpenAI = (await import('openai')).default
@@ -514,9 +534,7 @@ export async function POST(req: NextRequest) {
     const userId: string  = body.user_id || ''
     const idiomaIngles: boolean = body.idioma_ingles || false
     const materiasDisponibles: string[] = body.materias_disponibles || []
-    console.log('materiasDisponibles:', materiasDisponibles.length, materiasDisponibles)
 
-    console.log('userId recibido:', userId)
     const grado_override = body.grado_override || body.grado_detectado || ''
     if (!pregunta?.trim()) return NextResponse.json({ error: 'Pregunta vacía' }, { status: 400 })
 
@@ -559,64 +577,14 @@ export async function POST(req: NextRequest) {
     const nombreAlumno: string = body.nombre_alumno || ''
     const gradoAlumno: string  = body.grado_override || ''
 
-    if (estado === 'esperando_confirmacion_grado') {
-      const resp = pregunta.toLowerCase().trim()
-      const esAfirmativo = /^(si|sí|yes|s|claro|correcto|asi|así|efectivamente|yep|yup|ok|sure)/.test(resp)
-      if (esAfirmativo) {
-        if (userId && gradoAlumno) {
-          await supabase.from('usuarios').update({ grado: gradoAlumno }).eq('id', userId)
-        }
-        // Leer carpetas disponibles en SharePoint para este grado
-        const token = await getToken()
-        const driveId = process.env.SHAREPOINT_DRIVE_ID!
-        const carpetas: string[] = []
-        if (token) {
-          const rutaGrado = encodeURIComponent('Owlaris') + '/' + encodeURIComponent(CARPETA_COMPARTIDA) + '/' + encodeURIComponent(gradoAlumno)
-          const url = 'https://graph.microsoft.com/v1.0/drives/' + driveId + '/root:/' + rutaGrado + ':/children'
-          const res = await fetch(url, { headers: { Authorization: 'Bearer ' + token } })
-          if (res.ok) {
-            const data = await res.json()
-            const items: string[] = (data.value || []).filter((i: {folder?:unknown}) => i.folder).map((i: {name:string}) => i.name)
-            carpetas.push(...items)
-          }
-        }
-        // Siempre agregar Olimpiadas de Ciencias
-        if (!carpetas.includes('Olimpiadas de Ciencias')) carpetas.push('Olimpiadas de Ciencias')
-        // Agregar opción de inglés conversacional
-        carpetas.push(idiomaIngles ? '» English Conversation' : '» Conversar en Inglés')
-        // Traducir nombres al inglés si aplica
-        const traducirMateria = (m: string) => {
-          if (!idiomaIngles) return m
-          const traducciones: Record<string,string> = {
-            'Matemática': 'Mathematics', 'Física': 'Physics', 'Química': 'Chemistry',
-            'Biología': 'Biology', 'Historia': 'History', 'Español': 'Spanish Language',
-            'Inglés': 'English', 'Ciencias Naturales': 'Natural Sciences',
-            'Mineduc - Lenguaje': 'Mineduc - Language', 'Mineduc - Matemática': 'Mineduc - Mathematics',
-            'Olimpiadas de Ciencias': 'Science Olympiad'
-          }
-          return traducciones[m] || m
-        }
-        const carpetasDisplay = carpetas.map(traducirMateria)
-
-        const trad: Record<string,string> = {'Matem\u00e1tica':'Mathematics','F\u00edsica':'Physics','Qu\u00edmica':'Chemistry','Biolog\u00eda':'Biology','Historia':'History','Espa\u00f1ol':'Spanish','Ingl\u00e9s':'English','Ciencias Naturales':'Natural Sciences','Mineduc - Lenguaje':'Mineduc - Language','Mineduc - Matem\u00e1tica':'Mineduc - Mathematics','Olimpiadas de Ciencias':'Science Olympiad'}
-        const lista = carpetas.map((m, i) => (i+1) + '. ' + (idiomaIngles ? (trad[m] || m) : m)).join('\n')
-        const preguntaMateria = idiomaIngles
-          ? `Perfect! Here are the available subjects:\n\n${lista}\n\nWhich one would you like to study?`
-          : `Perfecto. Estas son las materias disponibles:\n\n${lista}\n\n\u00bfCu\u00e1l quieres estudiar?`
-
+    // Cargar materias disponibles desde SharePoint
+    if (pregunta === '__CARGAR_MATERIAS__' || (estado === 'esperando_materia' && gradoAlumno && !pregunta.trim())) {
+      const grado = gradoAlumno || grado_override || perfil.grado || ''
+      if (grado) {
+        const carpetas = await leerCarpetasGrado(grado, idiomaIngles)
         return NextResponse.json({
-          respuesta: preguntaMateria,
-          nuevo_estado: 'esperando_materia',
-          nombre_alumno: nombreAlumno,
-          grado_detectado: gradoAlumno,
           materias_disponibles: carpetas,
-          tokens: 0,
-        })
-      } else {
-        return NextResponse.json({
-          respuesta: idiomaIngles ? 'No problem. What grade are you in?' : 'Sin problema. ¿En qué grado estás ahora?',
-          nuevo_estado: 'esperando_grado',
-          nombre_alumno: nombreAlumno,
+          respuesta: '',
           tokens: 0,
         })
       }
@@ -645,31 +613,13 @@ export async function POST(req: NextRequest) {
       // Guardar grado en Supabase
       if (userId) await supabase.from('usuarios').update({ grado: gradoDetectado }).eq('id', userId)
 
-      // Leer carpetas disponibles para el grado detectado
-      const tokenG = await getToken()
-      const driveIdG = process.env.SHAREPOINT_DRIVE_ID!
-      const carpetasG: string[] = []
-      if (tokenG) {
-        const rutaG = encodeURIComponent('Owlaris') + '/' + encodeURIComponent(CARPETA_COMPARTIDA) + '/' + encodeURIComponent(gradoDetectado)
-        const urlG = 'https://graph.microsoft.com/v1.0/drives/' + driveIdG + '/root:/' + rutaG + ':/children'
-        const resG = await fetch(urlG, { headers: { Authorization: 'Bearer ' + tokenG } })
-        if (resG.ok) {
-          const dataG = await resG.json()
-          const itemsG: string[] = (dataG.value || []).filter((i: {folder?:unknown}) => i.folder).map((i: {name:string}) => i.name)
-          carpetasG.push(...itemsG)
-        }
-      }
-      if (!carpetasG.includes('Olimpiadas de Ciencias')) carpetasG.push('Olimpiadas de Ciencias')
-      carpetasG.push(idiomaIngles ? '» English Conversation' : '» Conversar en Inglés')
 
-      const tradG: Record<string,string> = {'Matem\u00e1tica':'Mathematics','F\u00edsica':'Physics','Qu\u00edmica':'Chemistry','Biolog\u00eda':'Biology','Historia':'History','Espa\u00f1ol':'Spanish','Ingl\u00e9s':'English','Ciencias Naturales':'Natural Sciences','Mineduc - Lenguaje':'Mineduc - Language','Mineduc - Matem\u00e1tica':'Mineduc - Mathematics','Olimpiadas de Ciencias':'Science Olympiad'}
-      const listaG = carpetasG.map((m, i) => (i+1) + '. ' + (idiomaIngles ? (tradG[m] || m) : m)).join('\n')
-      const preguntaG = idiomaIngles
-        ? `Perfect, ${nombreAlumno}! Here are the available subjects:\n\n${listaG}\n\nWhich one would you like to study?`
-        : `Perfecto, ${nombreAlumno}. Estas son las materias disponibles:\n\n${listaG}\n\n\u00bfCu\u00e1l quieres estudiar?`
-
+      const carpetasG = await leerCarpetasGrado(gradoDetectado, idiomaIngles)
+      const msgGrado = idiomaIngles
+        ? `Perfect, ${nombreAlumno}! What would you like to study?`
+        : `Perfecto, ${nombreAlumno}. ¿Qué quieres estudiar hoy?`
       return NextResponse.json({
-        respuesta: preguntaG,
+        respuesta: msgGrado,
         nuevo_estado: 'esperando_materia',
         nombre_alumno: nombreAlumno,
         grado_detectado: gradoDetectado,
