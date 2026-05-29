@@ -240,13 +240,18 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
         body: JSON.stringify({ texto }),
       })
       if (!res.ok) return
-      const blob = await res.blob()
-      const url  = URL.createObjectURL(blob)
-      const audio = new Audio(url)
-      audioRef.current = audio
-      audio.onplay  = () => setReproduciendo(true)  // Solo cuando realmente suena
-      audio.onended = () => { setReproduciendo(false); URL.revokeObjectURL(url) }
-      await audio.play()
+      const arrayBuffer = await res.arrayBuffer()
+      
+      // Usar AudioContext para compatibilidad con Safari
+      const AudioCtx = window.AudioContext || (window as unknown as {webkitAudioContext: typeof AudioContext}).webkitAudioContext
+      const ctx = new AudioCtx()
+      const audioBuffer = await ctx.decodeAudioData(arrayBuffer)
+      const source = ctx.createBufferSource()
+      source.buffer = audioBuffer
+      source.connect(ctx.destination)
+      source.onended = () => { setReproduciendo(false); ctx.close() }
+      setReproduciendo(true)
+      source.start(0)
     } catch { setReproduciendo(false) }
   }
 
