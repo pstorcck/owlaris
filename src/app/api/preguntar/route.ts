@@ -778,7 +778,12 @@ export async function POST(req: NextRequest) {
     const contextoValidacion = validacionOM ? `
 
 INSTRUCCIÓN CRÍTICA DE EVALUACIÓN: ${validacionOM}` : ''
-    const contextoIdioma = idiomaIngles ? '\n\nLANGUAGE INSTRUCTION: You MUST respond entirely in English. All explanations, questions, feedback and conversation must be in English only.' : ''
+    const esModoConversacion = body.modo_conversacion || false
+    const contextoIdioma = idiomaIngles
+      ? esModoConversacion
+        ? '\n\nCONVERSATION MODE: You are now an English conversation partner, not a tutor. Have a natural, friendly conversation in English. Keep responses SHORT (2-4 sentences max). Ask ONE follow-up question. Gently correct grammar mistakes by using the correct form naturally in your response without explicitly pointing them out. Topics: daily life, school, hobbies, culture, travel. Start with simple vocabulary and gradually increase complexity based on the student\'s level.'
+        : '\n\nLANGUAGE INSTRUCTION: You MUST respond entirely in English. All explanations, questions, feedback and conversation must be in English only.'
+      : ''
 
     // Contexto según tipo de pregunta
     let contextoContenido = ''

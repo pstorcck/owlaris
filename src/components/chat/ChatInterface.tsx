@@ -150,6 +150,7 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
           materia_sugerida: materiaSugerida,
           materias_disponibles: materiasDisponiblesRef.current,
           idioma_ingles: idiomaIngles,
+          modo_conversacion: modoConversacion,
           nivel_dificultad: nivelDificultad,
           aciertos_consecutivos: aciertosConsec,
         })
