@@ -63,7 +63,17 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
   const [nivelDificultad, setNivelDificultad] = useState(1)
   const [aciertosConsec, setAciertosConsec]   = useState(0)
   const [materiaSugerida, setMateriaSugerida] = useState('')
-  const [chipsMateria, setChipsMateria]         = useState<string[]>(materiasIniciales)
+  const TRAD_MATERIAS: Record<string,string> = {
+    'Matemática':'Mathematics','Física':'Physics','Química':'Chemistry',
+    'Biología':'Biology','Historia':'History','Español':'Spanish',
+    'Inglés':'English','Ciencias Naturales':'Natural Sciences',
+    'Mineduc - Lenguaje':'Mineduc - Language','Mineduc - Matemática':'Mineduc - Mathematics',
+    'Olimpiadas de Ciencias':'Science Olympiad',
+    '» Conversar en Inglés':'» English Conversation',
+  }
+  const traducirChips = (chips: string[], enIngles: boolean) =>
+    chips.map(m => enIngles ? (TRAD_MATERIAS[m] || m) : m)
+  const [chipsMateria, setChipsMateria] = useState<string[]>(materiasIniciales)
   const [mostrandoSubOlimpiadas, setMostrandoSubOlimpiadas] = useState(false)
   const [idiomaIngles, setIdiomaIngles]       = useState(false)
   const [modoConversacion, setModoConversacion] = useState(false)
@@ -126,6 +136,13 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
     if (gradoGuardado) setNombreAlumno(nombre)
   }, [idiomaIngles])
 
+  // Traducir chips cuando cambia idioma
+  useEffect(() => {
+    if (materiasIniciales.length > 0) {
+      setChipsMateria(traducirChips(materiasIniciales, idiomaIngles))
+    }
+  }, [idiomaIngles])
+
   async function enviarPregunta(texto?: string) {
     const tp = (texto || pregunta).trim()
     if (!tp || cargando) return
@@ -171,7 +188,7 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
       if (data.nivel_dificultad) setNivelDificultad(data.nivel_dificultad)
       if (data.materias_disponibles) {
         materiasDisponiblesRef.current = data.materias_disponibles
-        setChipsMateria(data.materias_disponibles)
+        setChipsMateria(traducirChips(data.materias_disponibles, idiomaIngles))
         setMostrandoSubOlimpiadas(false)
       }
       if (data.aciertos_consecutivos !== undefined) setAciertosConsec(data.aciertos_consecutivos)
