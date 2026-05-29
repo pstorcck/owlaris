@@ -139,6 +139,7 @@ export default function ChatInterface({ usuario }: Props) {
         supabase.from('usuarios').update({ grado: data.grado_detectado }).eq('id', usuario.id)
       }
       if (data.materia_detectada) setMateriaAlumno(data.materia_detectada)
+      if (data.activar_conversacion) { setModoConversacion(true); setIdiomaIngles(true) }
       if (data.nivel_dificultad) setNivelDificultad(data.nivel_dificultad)
       if (data.aciertos_consecutivos !== undefined) setAciertosConsec(data.aciertos_consecutivos)
       if (data.materia_sugerida) setMateriaSugerida(data.materia_sugerida)

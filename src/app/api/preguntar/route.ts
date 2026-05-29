@@ -513,6 +513,8 @@ export async function POST(req: NextRequest) {
     const materia_id      = body.materia_id || body.materia_detectada || ''
     const userId: string  = body.user_id || ''
     const idiomaIngles: boolean = body.idioma_ingles || false
+    const materiasDisponibles: string[] = body.materias_disponibles || []
+
     console.log('userId recibido:', userId)
     const grado_override = body.grado_override || body.grado_detectado || ''
     if (!pregunta?.trim()) return NextResponse.json({ error: 'Pregunta vacía' }, { status: 400 })
