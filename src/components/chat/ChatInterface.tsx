@@ -80,6 +80,14 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
   const [mostrandoSubOlimpiadas, setMostrandoSubOlimpiadas] = useState(false)
   const [mostrandoGrados, setMostrandoGrados]               = useState(false)
   const [gradosDisponibles, setGradosDisponibles]           = useState<string[]>([])
+
+  // Cargar grados al iniciar
+  useEffect(() => {
+    fetch('/api/grados')
+      .then(r => r.json())
+      .then(data => { if (data.grados) setGradosDisponibles(data.grados) })
+      .catch(() => {})
+  }, [])
   const [idiomaIngles, setIdiomaIngles]       = useState(false)
   const [modoConversacion, setModoConversacion] = useState(false)
   const [grabando, setGrabando]               = useState(false)
@@ -614,14 +622,7 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
                     })}
                     <button className="o-chip"
                       style={{background:'#F3F0FF',color:'#9490B8',border:'1px solid rgba(109,40,217,.08)',fontWeight:500}}
-                      onClick={async () => {
-                        if (gradosDisponibles.length === 0) {
-                          const res = await fetch('/api/grados')
-                          const data = await res.json()
-                          setGradosDisponibles(data.grados || [])
-                        }
-                        setMostrandoGrados(true)
-                      }}>
+                      onClick={() => setMostrandoGrados(true)}>
                       {idiomaIngles ? 'Change grade' : 'Cambiar grado'}
                     </button>
                   </div>
