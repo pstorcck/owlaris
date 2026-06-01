@@ -78,6 +78,8 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
     materiasIniciales  // se traducirán via useEffect si idiomaIngles
   )
   const [mostrandoSubOlimpiadas, setMostrandoSubOlimpiadas] = useState(false)
+  const [mostrandoGrados, setMostrandoGrados]               = useState(false)
+  const [gradosDisponibles, setGradosDisponibles]           = useState<string[]>([])
   const [idiomaIngles, setIdiomaIngles]       = useState(false)
   const [modoConversacion, setModoConversacion] = useState(false)
   const [grabando, setGrabando]               = useState(false)
@@ -612,13 +614,15 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
                     })}
                     <button className="o-chip"
                       style={{background:'#F3F0FF',color:'#9490B8',border:'1px solid rgba(109,40,217,.08)',fontWeight:500}}
-                      onClick={() => { 
-                        setEstadoChat('esperando_grado')
-                        setChipsMateria([])
-                        setMateriaAlumno('')
-                        setSugerencias([])
+                      onClick={async () => {
+                        if (gradosDisponibles.length === 0) {
+                          const res = await fetch('/api/grados')
+                          const data = await res.json()
+                          setGradosDisponibles(data.grados || [])
+                        }
+                        setMostrandoGrados(true)
                       }}>
-                      {idiomaIngles ? '✏️ Change grade' : '✏️ Cambiar grado'}
+                      {idiomaIngles ? 'Change grade' : 'Cambiar grado'}
                     </button>
                   </div>
                 ) : (
@@ -640,6 +644,65 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
                     </button>
                   </div>
                 )}
+              </div>
+            )}
+
+            {/* PANEL DE GRADOS */}
+            {mostrandoGrados && (
+              <div style={{position:'fixed',inset:0,zIndex:60,background:'rgba(30,27,75,.5)',backdropFilter:'blur(8px)',display:'flex',alignItems:'center',justifyContent:'center',padding:'20px'}}>
+                <div style={{background:'white',borderRadius:'24px',padding:'28px',width:'100%',maxWidth:'420px',boxShadow:'0 24px 80px rgba(30,27,75,.2)'}}>
+                  <p style={{fontSize:'18px',fontWeight:700,color:'#1E1B4B',marginBottom:'6px',fontFamily:"'Syne',sans-serif"}}>
+                    {idiomaIngles ? 'Select your grade' : 'Selecciona tu grado'}
+                  </p>
+                  <p style={{fontSize:'12px',color:'#9490B8',marginBottom:'20px',fontWeight:500}}>
+                    {idiomaIngles ? 'Available grades from your school' : 'Grados disponibles en tu colegio'}
+                  </p>
+                  <div style={{display:'flex',flexWrap:'wrap',gap:'10px',marginBottom:'20px'}}>
+                    {gradosDisponibles.map(grado => (
+                      <button key={grado}
+                        onClick={async () => {
+                          setMostrandoGrados(false)
+                          setGradoAlumno(grado)
+                          setMateriaAlumno('')
+                          setSugerencias([])
+                          setEstadoChat('esperando_materia')
+                          // Guardar en Supabase
+                          supabase.from('usuarios').update({ grado }).eq('id', usuario.id)
+                          // Cargar materias del nuevo grado
+                          const res = await fetch('/api/preguntar', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                              pregunta: '__CARGAR_MATERIAS__',
+                              estado: 'esperando_materia',
+                              grado_override: grado,
+                              user_id: usuario.id,
+                              idioma_ingles: idiomaIngles,
+                              nombre_alumno: nombreAlumno,
+                            })
+                          })
+                          const data = await res.json()
+                          if (data.materias_disponibles) {
+                            materiasBaseRef.current = data.materias_disponibles
+                            setChipsMateria(traducirChips(data.materias_disponibles, idiomaIngles))
+                          }
+                        }}
+                        style={{
+                          background: grado === gradoAlumno ? 'linear-gradient(135deg,#7C3AED,#5B21B6)' : '#F3F0FF',
+                          color: grado === gradoAlumno ? 'white' : '#6D28D9',
+                          border: grado === gradoAlumno ? 'none' : '1px solid rgba(109,40,217,.15)',
+                          borderRadius:'12px',padding:'10px 16px',fontSize:'13px',fontWeight:600,
+                          cursor:'pointer',transition:'all .2s',
+                        }}>
+                        {grado}
+                      </button>
+                    ))}
+                  </div>
+                  <button onClick={() => setMostrandoGrados(false)}
+                    style={{width:'100%',background:'#F3F0FF',border:'none',borderRadius:'12px',padding:'12px',fontSize:'13px',fontWeight:600,color:'#9490B8',cursor:'pointer'}}>
+                    {idiomaIngles ? 'Cancel' : 'Cancelar'}
+                  </button>
+                </div>
               </div>
             )}
 
