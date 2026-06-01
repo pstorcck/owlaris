@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useEffect } from 'react'
+import React, { useState, useRef, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import type { Usuario, Materia, MensajeChat } from '@/types'
@@ -73,7 +73,10 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
   }
   const traducirChips = (chips: string[], enIngles: boolean) =>
     chips.map(m => enIngles ? (TRAD_MATERIAS[m] || m) : m)
-  const [chipsMateria, setChipsMateria] = useState<string[]>(materiasIniciales)
+  const materiasBaseRef = React.useRef<string[]>(materiasIniciales)
+  const [chipsMateria, setChipsMateria] = useState<string[]>(
+    materiasIniciales  // se traducirán via useEffect si idiomaIngles
+  )
   const [mostrandoSubOlimpiadas, setMostrandoSubOlimpiadas] = useState(false)
   const [idiomaIngles, setIdiomaIngles]       = useState(false)
   const [modoConversacion, setModoConversacion] = useState(false)
@@ -143,8 +146,9 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
 
   // Traducir chips cuando cambia idioma
   useEffect(() => {
-    if (materiasIniciales.length > 0) {
-      setChipsMateria(traducirChips(materiasIniciales, idiomaIngles))
+    const base = materiasBaseRef.current
+    if (base.length > 0) {
+      setChipsMateria(traducirChips(base, idiomaIngles))
     }
   }, [idiomaIngles])
 
@@ -193,6 +197,7 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
       if (data.nivel_dificultad) setNivelDificultad(data.nivel_dificultad)
       if (data.materias_disponibles) {
         materiasDisponiblesRef.current = data.materias_disponibles
+        materiasBaseRef.current = data.materias_disponibles  // guardar base en español
         setChipsMateria(traducirChips(data.materias_disponibles, idiomaIngles))
         setMostrandoSubOlimpiadas(false)
       }
