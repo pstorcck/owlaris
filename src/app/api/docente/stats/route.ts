@@ -1,0 +1,103 @@
+import { NextResponse } from 'next/server'
+import { createClient } from '@/lib/supabase/server'
+
+export async function GET() {
+  try {
+    const supabase = createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+
+    const { data: perfil } = await supabase
+      .from('usuarios').select('colegio_id, rol').eq('id', user.id).single()
+    if (!perfil || !['maestro','admin','superadmin'].includes(perfil.rol)) {
+      return NextResponse.json({ error: 'Sin acceso' }, { status: 403 })
+    }
+
+    const colegioId = perfil.colegio_id
+    const hoy = new Date()
+    const hace7dias = new Date(hoy.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString()
+    const hace30dias = new Date(hoy.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString()
+    const inicioHoy = new Date(hoy.toISOString().split('T')[0] + 'T00:00:00').toISOString()
+
+    const { data: alumnos } = await supabase
+      .from('usuarios')
+      .select('id, nombre_completo, email, grado, activo, ultimo_acceso')
+      .eq('colegio_id', colegioId)
+      .eq('rol', 'alumno')
+      .order('nombre_completo')
+
+    const { data: interacciones } = await supabase
+      .from('interacciones')
+      .select('usuario_id, grado, tema_detectado, tokens_usados, costo_usd, creado_en, sospecha_copia')
+      .eq('colegio_id', colegioId)
+      .gte('creado_en', hace30dias)
+
+    const { count: activosHoy } = await supabase
+      .from('interacciones')
+      .select('usuario_id', { count: 'exact', head: true })
+      .eq('colegio_id', colegioId)
+      .gte('creado_en', inicioHoy)
+
+    const { count: activosSemana } = await supabase
+      .from('interacciones')
+      .select('usuario_id', { count: 'exact', head: true })
+      .eq('colegio_id', colegioId)
+      .gte('creado_en', hace7dias)
+
+    const temasCount: Record<string, number> = {}
+    interacciones?.forEach(i => {
+      if (i.tema_detectado) {
+        const tema = i.tema_detectado.substring(0, 60)
+        temasCount[tema] = (temasCount[tema] || 0) + 1
+      }
+    })
+    const topTemas = Object.entries(temasCount)
+      .sort((a, b) => b[1] - a[1]).slice(0, 10)
+      .map(([tema, count]) => ({ tema, count }))
+
+    const actividadPorDia: Record<string, number> = {}
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(hoy.getTime() - i * 24 * 60 * 60 * 1000)
+      actividadPorDia[d.toISOString().split('T')[0]] = 0
+    }
+    interacciones?.filter(i => i.creado_en >= hace7dias).forEach(i => {
+      const key = i.creado_en.split('T')[0]
+      if (actividadPorDia[key] !== undefined) actividadPorDia[key]++
+    })
+    const actividadSemana = Object.entries(actividadPorDia).map(([fecha, count]) => ({ fecha, count }))
+
+    const statsPorAlumno: Record<string, { sesiones: number; ultimaSesion: string; temas: Set<string>; sospechas: number }> = {}
+    interacciones?.forEach(i => {
+      if (!statsPorAlumno[i.usuario_id]) {
+        statsPorAlumno[i.usuario_id] = { sesiones: 0, ultimaSesion: '', temas: new Set(), sospechas: 0 }
+      }
+      statsPorAlumno[i.usuario_id].sesiones++
+      if (i.creado_en > statsPorAlumno[i.usuario_id].ultimaSesion) statsPorAlumno[i.usuario_id].ultimaSesion = i.creado_en
+      if (i.tema_detectado) statsPorAlumno[i.usuario_id].temas.add(i.tema_detectado.substring(0, 30))
+      if (i.sospecha_copia) statsPorAlumno[i.usuario_id].sospechas++
+    })
+
+    const alumnosConStats = alumnos?.map(a => ({
+      ...a,
+      sesiones: statsPorAlumno[a.id]?.sesiones || 0,
+      ultimaSesion: statsPorAlumno[a.id]?.ultimaSesion || null,
+      temasUnicos: statsPorAlumno[a.id]?.temas.size || 0,
+      sospechasCopia: statsPorAlumno[a.id]?.sospechas || 0,
+    })) || []
+
+    return NextResponse.json({
+      resumen: {
+        totalAlumnos: alumnos?.length || 0,
+        activosHoy: activosHoy || 0,
+        activosSemana: activosSemana || 0,
+        totalInteracciones: interacciones?.length || 0,
+      },
+      topTemas,
+      actividadSemana,
+      alumnos: alumnosConStats,
+    })
+  } catch (err) {
+    console.error('Dashboard stats error:', err)
+    return NextResponse.json({ error: 'Error interno' }, { status: 500 })
+  }
+}
