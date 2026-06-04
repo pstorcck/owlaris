@@ -13,7 +13,7 @@ export default async function DocentePage() {
     .eq('id', user.id)
     .single()
 
-  if (!perfil || !['docente','admin','superadmin'].includes(perfil.rol)) {
+  if (!perfil || !['maestro','admin','superadmin'].includes(perfil.rol)) {
     redirect('/chat')
   }
 
