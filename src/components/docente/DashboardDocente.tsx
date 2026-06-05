@@ -125,7 +125,7 @@ export default function DashboardDocente({ perfil }: Props) {
     <>
       <style>{`
         *{box-sizing:border-box;margin:0;padding:0}
-        .dash{min-height:100vh;background:#F5F4FA;font-family:'DM Sans',sans-serif;color:#1E1B4B}
+        .dash{min-height:100vh;background:#F5F4FA;font-family:system-ui,-apple-system,sans-serif;color:#1E1B4B}
         .sidebar{position:fixed;left:0;top:0;bottom:0;width:220px;background:white;border-right:1px solid rgba(109,40,217,.08);padding:24px 16px;display:flex;flex-direction:column;gap:4px;z-index:10;box-shadow:4px 0 24px rgba(109,40,217,.04)}
         .logo{display:flex;align-items:center;gap:10px;padding:8px 12px;margin-bottom:24px}
         .logo img{width:32px;height:32px;object-fit:contain}
