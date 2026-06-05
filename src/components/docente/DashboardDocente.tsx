@@ -198,7 +198,7 @@ export default function DashboardDocente({ perfil }: Props) {
           <button className={`nav-item ${tab==='general'?'active':''}`} onClick={()=>setTab('general')}>📊 General</button>
           <button className={`nav-item ${tab==='alumnos'?'active':''}`} onClick={()=>setTab('alumnos')}>👥 Mis alumnos</button>
           <button className={`nav-item ${tab==='temas'?'active':''}`} onClick={()=>setTab('temas')}>📚 Temas populares</button>
-          <button className={`nav-item ${tab==='reportes'?'active':''}`} onClick={()=>setTab('reportes')}>📄 Reportes</button>
+
           <div style={{marginTop:'auto',borderTop:'1px solid rgba(109,40,217,.06)',paddingTop:'16px',display:'flex',flexDirection:'column',gap:'4px'}}>
             <button className="nav-item" onClick={()=>setChatAbierto(true)}>💬 Hablar con Owlaris</button>
             <button className="nav-item" onClick={cerrarSesion}>↩ Cerrar sesión</button>
@@ -222,7 +222,6 @@ export default function DashboardDocente({ perfil }: Props) {
               <button className={`tab ${tab==='general'?'active':''}`} onClick={()=>setTab('general')}>General</button>
               <button className={`tab ${tab==='alumnos'?'active':''}`} onClick={()=>setTab('alumnos')}>Alumnos</button>
               <button className={`tab ${tab==='temas'?'active':''}`} onClick={()=>setTab('temas')}>Temas</button>
-              <button className={`tab ${tab==='reportes'?'active':''}`} onClick={()=>setTab('reportes')}>Reportes</button>
             </div>
 
             {tab==='general' && <>
@@ -425,27 +424,36 @@ export default function DashboardDocente({ perfil }: Props) {
           </>}
         </main>
       </div>
-      {/* Panel de chat deslizable */}
+      {/* Botón flotante asistente */}
+      {!chatAbierto && (
+        <button onClick={()=>setChatAbierto(true)}
+          style={{position:'fixed',bottom:'28px',right:'28px',zIndex:100,width:'56px',height:'56px',borderRadius:'50%',background:'linear-gradient(135deg,#7C3AED,#5B21B6)',border:'none',cursor:'pointer',boxShadow:'0 8px 32px rgba(109,40,217,.4)',display:'flex',alignItems:'center',justifyContent:'center',transition:'all .2s'}}
+          title="Asistente docente">
+          <img src="/buho.png" alt="Owlaris" style={{width:'32px',height:'32px',objectFit:'contain'}}/>
+        </button>
+      )}
+
+      {/* Panel asistente docente */}
       {chatAbierto && (
         <>
           <div onClick={()=>setChatAbierto(false)}
-            style={{position:'fixed',inset:0,background:'rgba(30,27,75,.3)',backdropFilter:'blur(4px)',zIndex:200}}/>
-          <div style={{position:'fixed',top:0,right:0,bottom:0,width:'420px',background:'white',zIndex:201,boxShadow:'-8px 0 40px rgba(30,27,75,.15)',display:'flex',flexDirection:'column'}}>
-            <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'16px 20px',borderBottom:'1px solid rgba(109,40,217,.08)'}}>
+            style={{position:'fixed',inset:0,background:'rgba(30,27,75,.2)',backdropFilter:'blur(4px)',zIndex:200}}/>
+          <div style={{position:'fixed',bottom:'24px',right:'24px',width:'380px',height:'560px',background:'white',zIndex:201,borderRadius:'24px',boxShadow:'0 24px 80px rgba(30,27,75,.2)',display:'flex',flexDirection:'column',overflow:'hidden'}}>
+            {/* Header */}
+            <div style={{background:'linear-gradient(135deg,#7C3AED,#5B21B6)',padding:'16px 20px',display:'flex',alignItems:'center',justifyContent:'space-between'}}>
               <div style={{display:'flex',alignItems:'center',gap:'10px'}}>
-                <img src="/buho.png" alt="Owlaris" style={{width:'28px',height:'28px',objectFit:'contain'}}/>
-                <span style={{fontWeight:700,color:'#1E1B4B',fontSize:'15px'}}>Owlaris</span>
+                <img src="/buho.png" alt="Owlaris" style={{width:'32px',height:'32px',objectFit:'contain'}}/>
+                <div>
+                  <div style={{fontWeight:700,color:'white',fontSize:'14px'}}>Asistente Docente</div>
+                  <div style={{fontSize:'11px',color:'rgba(255,255,255,.6)'}}>Powered by Owlaris AI</div>
+                </div>
               </div>
               <button onClick={()=>setChatAbierto(false)}
-                style={{background:'#F3F0FF',border:'none',borderRadius:'8px',width:'32px',height:'32px',cursor:'pointer',fontSize:'16px',color:'#6D28D9',display:'flex',alignItems:'center',justifyContent:'center'}}>
+                style={{background:'rgba(255,255,255,.15)',border:'none',borderRadius:'8px',width:'28px',height:'28px',cursor:'pointer',color:'white',fontSize:'14px',display:'flex',alignItems:'center',justifyContent:'center'}}>
                 ✕
               </button>
             </div>
-            <iframe
-              src="/chat"
-              style={{flex:1,border:'none',width:'100%'}}
-              title="Owlaris Chat"
-            />
+            <AsistenteDocente stats={stats} colegio={perfil.colegio.nombre}/>
           </div>
         </>
       )}
