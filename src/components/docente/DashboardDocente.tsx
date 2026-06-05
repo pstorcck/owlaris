@@ -45,6 +45,7 @@ export default function DashboardDocente({ perfil }: Props) {
   const [alumnoReporte, setAlumnoReporte] = useState<Alumno | null>(null)
   const [sesionesAlumno, setSesionesAlumno] = useState<{pregunta:string;respuesta:string;creado_en:string;documento_fuente:string|null}[]>([])
   const [cargandoReporte, setCargandoReporte] = useState(false)
+  const [chatAbierto, setChatAbierto]           = useState(false)
   const router = useRouter()
   const supabase = createClient()
 
@@ -199,7 +200,7 @@ export default function DashboardDocente({ perfil }: Props) {
           <button className={`nav-item ${tab==='temas'?'active':''}`} onClick={()=>setTab('temas')}>📚 Temas populares</button>
           <button className={`nav-item ${tab==='reportes'?'active':''}`} onClick={()=>setTab('reportes')}>📄 Reportes</button>
           <div style={{marginTop:'auto',borderTop:'1px solid rgba(109,40,217,.06)',paddingTop:'16px',display:'flex',flexDirection:'column',gap:'4px'}}>
-            <a href="/chat" className="nav-item" style={{textDecoration:'none'}}>💬 Ir al chat</a>
+            <button className="nav-item" onClick={()=>setChatAbierto(true)}>💬 Hablar con Owlaris</button>
             <button className="nav-item" onClick={cerrarSesion}>↩ Cerrar sesión</button>
           </div>
         </aside>
@@ -424,6 +425,30 @@ export default function DashboardDocente({ perfil }: Props) {
           </>}
         </main>
       </div>
+      {/* Panel de chat deslizable */}
+      {chatAbierto && (
+        <>
+          <div onClick={()=>setChatAbierto(false)}
+            style={{position:'fixed',inset:0,background:'rgba(30,27,75,.3)',backdropFilter:'blur(4px)',zIndex:200}}/>
+          <div style={{position:'fixed',top:0,right:0,bottom:0,width:'420px',background:'white',zIndex:201,boxShadow:'-8px 0 40px rgba(30,27,75,.15)',display:'flex',flexDirection:'column'}}>
+            <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'16px 20px',borderBottom:'1px solid rgba(109,40,217,.08)'}}>
+              <div style={{display:'flex',alignItems:'center',gap:'10px'}}>
+                <img src="/buho.png" alt="Owlaris" style={{width:'28px',height:'28px',objectFit:'contain'}}/>
+                <span style={{fontWeight:700,color:'#1E1B4B',fontSize:'15px'}}>Owlaris</span>
+              </div>
+              <button onClick={()=>setChatAbierto(false)}
+                style={{background:'#F3F0FF',border:'none',borderRadius:'8px',width:'32px',height:'32px',cursor:'pointer',fontSize:'16px',color:'#6D28D9',display:'flex',alignItems:'center',justifyContent:'center'}}>
+                ✕
+              </button>
+            </div>
+            <iframe
+              src="/chat"
+              style={{flex:1,border:'none',width:'100%'}}
+              title="Owlaris Chat"
+            />
+          </div>
+        </>
+      )}
     </>
   )
 }
