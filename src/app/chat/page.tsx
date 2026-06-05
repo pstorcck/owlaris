@@ -68,9 +68,7 @@ export default async function ChatPage() {
 
   // Cargar materias disponibles desde SharePoint
   const grado = perfil?.grado || ''
-  console.log('Cargando materias para grado:', grado)
-  const materiasDisponibles = await leerCarpetasGrado(grado)
-  console.log('Materias cargadas:', materiasDisponibles)
+  const materiasDisponibles = perfil?.rol === 'maestro' ? [] : await leerCarpetasGrado(grado)
 
   return (
     <ChatInterface
