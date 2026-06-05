@@ -129,7 +129,7 @@ Datos del dashboard de ${colegio}:
           </svg>
         </button>
       </div>
-      <style>{\`@keyframes bounce{0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)}}\`}</style>
+      <style>{`@keyframes bounce{0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)}}`}</style>
     </div>
   )
 }
