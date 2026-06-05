@@ -187,6 +187,7 @@ export default function DashboardDocente({ perfil }: Props) {
       `}</style>
 
       <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap"/>
+      <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap"/>
       <div className="dash">
         <aside className="sidebar">
           <div className="logo">
