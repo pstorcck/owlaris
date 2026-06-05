@@ -198,7 +198,7 @@ export default function DashboardDocente({ perfil }: Props) {
           <button className={`nav-item ${tab==='temas'?'active':''}`} onClick={()=>setTab('temas')}>📚 Temas populares</button>
           <button className={`nav-item ${tab==='reportes'?'active':''}`} onClick={()=>setTab('reportes')}>📄 Reportes</button>
           <div style={{marginTop:'auto',borderTop:'1px solid rgba(109,40,217,.06)',paddingTop:'16px',display:'flex',flexDirection:'column',gap:'4px'}}>
-            <button className="nav-item" onClick={()=>router.push('/chat')}>💬 Ir al chat</button>
+            <a href="/chat" className="nav-item" style={{textDecoration:'none'}}>💬 Ir al chat</a>
             <button className="nav-item" onClick={cerrarSesion}>↩ Cerrar sesión</button>
           </div>
         </aside>
