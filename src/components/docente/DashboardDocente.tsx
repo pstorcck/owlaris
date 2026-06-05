@@ -124,7 +124,6 @@ export default function DashboardDocente({ perfil }: Props) {
   return (
     <>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap');
         *{box-sizing:border-box;margin:0;padding:0}
         .dash{min-height:100vh;background:#F5F4FA;font-family:'DM Sans',sans-serif;color:#1E1B4B}
         .sidebar{position:fixed;left:0;top:0;bottom:0;width:220px;background:white;border-right:1px solid rgba(109,40,217,.08);padding:24px 16px;display:flex;flex-direction:column;gap:4px;z-index:10;box-shadow:4px 0 24px rgba(109,40,217,.04)}
@@ -187,6 +186,7 @@ export default function DashboardDocente({ perfil }: Props) {
         @media(max-width:768px){.sidebar{display:none}.main{margin-left:0;padding:16px}.cards{grid-template-columns:1fr 1fr}.grid2{grid-template-columns:1fr}}
       `}</style>
 
+      <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap"/>
       <div className="dash">
         <aside className="sidebar">
           <div className="logo">
