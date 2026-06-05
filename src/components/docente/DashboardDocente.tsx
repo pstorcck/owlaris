@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import AsistenteDocente from '@/components/docente/AsistenteDocente'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 
