@@ -15,7 +15,6 @@ export default async function Home() {
 
   if (!perfil) redirect('/login')
 
-  console.log('HOME ROL:', perfil.rol)
   switch (perfil.rol) {
     case 'alumno':     redirect('/chat')
     case 'maestro':    redirect('/docente')

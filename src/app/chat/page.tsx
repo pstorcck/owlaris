@@ -58,7 +58,6 @@ export default async function ChatPage() {
   
 
   // Si no hay perfil redirigir al login
-  if (!perfil) redirect('/login')
   if (perfil?.rol === 'maestro') redirect('/docente')
   if (perfil?.rol === 'admin') redirect('/admin')
 
