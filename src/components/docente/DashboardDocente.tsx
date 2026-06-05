@@ -88,8 +88,8 @@ export default function DashboardDocente({ perfil }: Props) {
         .search::placeholder{color:#C4C0E0}
         table{width:100%;border-collapse:collapse}
         th{font-size:11px;font-weight:600;color:#9490B8;letter-spacing:.8px;text-transform:uppercase;padding:10px 14px;text-align:left;border-bottom:1px solid rgba(109,40,217,.06)}
-        td{padding:13px 14px;font-size:13px;color:#4B4570;border-bottom:1px solid rgba(109,40,217,.04)}
-        tr:hover td{background:#F8F7FF}
+        td{padding:13px 14px;font-size:13px;color:#2D2B55;border-bottom:1px solid rgba(109,40,217,.06)}
+        tr:hover td{background:#F8F7FF;color:#1E1B4B}
         .pill{display:inline-flex;align-items:center;border-radius:6px;padding:3px 8px;font-size:11px;font-weight:600}
         .pill-green{background:rgba(34,197,94,.08);color:#16A34A}
         .pill-gray{background:#F3F0FF;color:#9490B8}
@@ -210,7 +210,7 @@ export default function DashboardDocente({ perfil }: Props) {
                 <tbody>
                   {alumnosFiltrados.map(a=>(
                     <tr key={a.id}>
-                      <td><div style={{fontWeight:500,color:'white'}}>{a.nombre_completo}</div><div style={{fontSize:'11px',color:'rgba(255,255,255,.25)',marginTop:'2px'}}>{a.email}</div></td>
+                      <td><div style={{fontWeight:600,color:'#1E1B4B'}}>{a.nombre_completo}</div><div style={{fontSize:'11px',color:'#9490B8',marginTop:'2px'}}>{a.email}</div></td>
                       <td>{a.grado||<span style={{color:'rgba(255,255,255,.2)'}}>—</span>}</td>
                       <td><span style={{fontFamily:'DM Mono',color:a.sesiones>0?'#A78BFA':'rgba(255,255,255,.2)'}}>{a.sesiones}</span></td>
                       <td><span style={{fontFamily:'DM Mono',color:'rgba(255,255,255,.4)'}}>{a.temasUnicos}</span></td>
