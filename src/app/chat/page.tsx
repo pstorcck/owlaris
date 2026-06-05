@@ -56,8 +56,7 @@ export default async function ChatPage() {
     .eq('id', user.id)
     .single()
 
-  // Maestros y admins van al dashboard
-  if (perfil?.rol === 'maestro') redirect('/docente')
+  // Admins van al dashboard (maestros pueden usar el chat también)
   if (perfil?.rol === 'admin') redirect('/admin')
 
   const { data: materias } = await supabase
