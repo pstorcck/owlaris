@@ -14,6 +14,7 @@ interface Usuario {
   id: string; nombre_completo: string; email: string; rol: string
   grado: string | null; activo: boolean; ultimo_acceso: string | null
   colegio: { nombre: string; id: string }
+  colegio_id?: string
 }
 
 export default function UsuariosPage() {
@@ -182,7 +183,7 @@ export default function UsuariosPage() {
     const supabase = createClient()
     await supabase.from('usuarios').update({
       rol: modalEditar.rol,
-      colegio_id: (modalEditar as unknown as {colegio_id:string}).colegio_id || colegioId,
+      colegio_id: modalEditar.colegio_id || colegioId,
       grado: modalEditar.grado,
     }).eq('id', modalEditar.id)
     setMensaje('✅ Usuario actualizado')
@@ -306,7 +307,7 @@ export default function UsuariosPage() {
                       className="text-gray-400 hover:text-yellow-300 text-xs px-2 py-1 rounded hover:bg-white/10 transition-colors">
                       🔑
                     </button>
-                    <button onClick={() => setModalEditar({...u, colegio_id: u.colegio?.id || colegioId} as unknown as typeof u)}
+                    <button onClick={() => setModalEditar({...u, colegio_id: u.colegio?.id || colegioId})}
                       className="text-gray-400 hover:text-blue-300 text-xs px-2 py-1 rounded hover:bg-white/10 transition-colors">
                       ✏️
                     </button>
@@ -338,8 +339,8 @@ export default function UsuariosPage() {
               </div>
               <div>
                 <label className="text-xs text-gray-400 mb-1 block">Colegio / Sede</label>
-                <select value={(modalEditar as unknown as {colegio_id:string}).colegio_id || colegioId}
-                  onChange={e => setModalEditar({...modalEditar, colegio_id: e.target.value} as unknown as typeof modalEditar)}
+                <select value={modalEditar.colegio_id || colegioId}
+                  onChange={e => setModalEditar({...modalEditar, colegio_id: e.target.value})}
                   className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white">
                   {colegios.map(col => (
                     <option key={col.id} value={col.id}>{col.nombre}</option>
