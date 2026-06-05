@@ -21,7 +21,6 @@ export default function SignupPage() {
   const router = useRouter()
 
   const COLEGIOS = [
-    { id: '1ed08641-9611-425f-96da-02a67bf9bc54', nombre: 'Colegio Montano' },
     { id: '9fe47d21-5ee3-4aa1-a347-a08f95869a96', nombre: 'Colegio Montano Portal Los Álamos' },
     { id: '4cd950b5-3385-4aa9-84a7-201eb87406f4', nombre: 'Colegio Montano Cortijo' },
     { id: 'be33fb6b-6ba5-449f-876f-0c6ec60a8f58', nombre: 'Colegio Escolaris' },
