@@ -12,12 +12,20 @@ const GRADOS = [
 ]
 
 export default function SignupPage() {
-  const [nombre, setNombre]   = useState('')
-  const [email, setEmail]     = useState('')
-  const [loading, setLoading] = useState(false)
-  const [error, setError]     = useState('')
-  const [exito, setExito]     = useState('')
+  const [nombre, setNombre]     = useState('')
+  const [email, setEmail]       = useState('')
+  const [colegioId, setColegioId] = useState('')
+  const [loading, setLoading]   = useState(false)
+  const [error, setError]       = useState('')
+  const [exito, setExito]       = useState('')
   const router = useRouter()
+
+  const COLEGIOS = [
+    { id: '1ed08641-9611-425f-96da-02a67bf9bc54', nombre: 'Colegio Montano' },
+    { id: '9fe47d21-5ee3-4aa1-a347-a08f95869a96', nombre: 'Colegio Montano Portal Los Álamos' },
+    { id: '4cd950b5-3385-4aa9-84a7-201eb87406f4', nombre: 'Colegio Montano Cortijo' },
+    { id: 'be33fb6b-6ba5-449f-876f-0c6ec60a8f58', nombre: 'Colegio Escolaris' },
+  ]
 
   async function handleSignup(e: React.FormEvent) {
     e.preventDefault()
@@ -28,7 +36,7 @@ export default function SignupPage() {
       const res = await fetch('/api/signup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ nombre_completo: nombre, email, rol: 'alumno' }),
+        body: JSON.stringify({ nombre_completo: nombre, email, rol: 'alumno', colegio_id: colegioId }),
       })
       const data = await res.json()
       setLoading(false)
@@ -71,6 +79,16 @@ export default function SignupPage() {
                 <label className="block text-sm font-medium text-gray-700 mb-1">Nombre completo</label>
                 <input type="text" value={nombre} onChange={e => setNombre(e.target.value)}
                   placeholder="Juan García López" required className="input-base"/>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Colegio / Sede</label>
+                <select value={colegioId} onChange={e => setColegioId(e.target.value)} required
+                  className="input-base">
+                  <option value="">Selecciona tu colegio...</option>
+                  {COLEGIOS.map(col => (
+                    <option key={col.id} value={col.id}>{col.nombre}</option>
+                  ))}
+                </select>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Correo institucional</label>

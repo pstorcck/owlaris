@@ -8,7 +8,7 @@ interface Props { perfil: { nombre_completo: string; colegio: { nombre: string }
 interface Alumno {
   id: string; nombre_completo: string; email: string; grado: string | null
   activo: boolean; sesiones: number; ultimaSesion: string | null
-  temasUnicos: number; sospechasCopia: number
+  temasUnicos: number; sospechasCopia: number; colegio_nombre?: string
 }
 interface Stats {
   resumen: { totalAlumnos: number; activosHoy: number; activosSemana: number; totalInteracciones: number }

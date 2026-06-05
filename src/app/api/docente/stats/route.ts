@@ -21,7 +21,7 @@ export async function GET() {
 
     const { data: alumnos } = await supabase
       .from('usuarios')
-      .select('id, nombre_completo, email, grado, activo, ultimo_acceso')
+      .select('id, nombre_completo, email, grado, activo, ultimo_acceso, colegio:colegios(nombre)')
       .eq('colegio_id', colegioId).eq('rol', 'alumno').order('nombre_completo')
 
     const { data: interacciones } = await supabase
@@ -79,13 +79,19 @@ export async function GET() {
       if (i.sospecha_copia) statsPorAlumno[i.usuario_id].sospechas++
     })
 
-    const alumnosConStats = alumnos?.map(a=>({
-      ...a,
+    const alumnosConStats = (alumnos||[]).map((a)=>({
+      id: a.id,
+      nombre_completo: (a as unknown as {nombre_completo:string}).nombre_completo,
+      email: (a as unknown as {email:string}).email,
+      grado: (a as unknown as {grado:string|null}).grado,
+      activo: (a as unknown as {activo:boolean}).activo,
+      ultimo_acceso: (a as unknown as {ultimo_acceso:string|null}).ultimo_acceso,
+      colegio_nombre: ((a as unknown as {colegio:{nombre:string}|null}).colegio)?.nombre || '',
       sesiones: statsPorAlumno[a.id]?.sesiones||0,
       ultimaSesion: statsPorAlumno[a.id]?.ultimaSesion||null,
       temasUnicos: statsPorAlumno[a.id]?.temas.size||0,
       sospechasCopia: statsPorAlumno[a.id]?.sospechas||0,
-    }))||[]
+    }))
 
     // Top 5 alumnos más activos
     const topAlumnos = alumnosConStats
