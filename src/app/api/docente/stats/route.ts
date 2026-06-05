@@ -22,28 +22,22 @@ export async function GET() {
     const { data: alumnos } = await supabase
       .from('usuarios')
       .select('id, nombre_completo, email, grado, activo, ultimo_acceso')
-      .eq('colegio_id', colegioId)
-      .eq('rol', 'alumno')
-      .order('nombre_completo')
+      .eq('colegio_id', colegioId).eq('rol', 'alumno').order('nombre_completo')
 
     const { data: interacciones } = await supabase
       .from('interacciones')
-      .select('usuario_id, grado, tema_detectado, tokens_usados, costo_usd, creado_en, sospecha_copia')
-      .eq('colegio_id', colegioId)
-      .gte('creado_en', hace30dias)
+      .select('usuario_id, grado, tema_detectado, materia_id, tokens_usados, costo_usd, creado_en, sospecha_copia, documento_fuente')
+      .eq('colegio_id', colegioId).gte('creado_en', hace30dias)
 
     const { count: activosHoy } = await supabase
-      .from('interacciones')
-      .select('usuario_id', { count: 'exact', head: true })
-      .eq('colegio_id', colegioId)
-      .gte('creado_en', inicioHoy)
+      .from('interacciones').select('usuario_id', { count: 'exact', head: true })
+      .eq('colegio_id', colegioId).gte('creado_en', inicioHoy)
 
     const { count: activosSemana } = await supabase
-      .from('interacciones')
-      .select('usuario_id', { count: 'exact', head: true })
-      .eq('colegio_id', colegioId)
-      .gte('creado_en', hace7dias)
+      .from('interacciones').select('usuario_id', { count: 'exact', head: true })
+      .eq('colegio_id', colegioId).gte('creado_en', hace7dias)
 
+    // Top temas
     const temasCount: Record<string, number> = {}
     interacciones?.forEach(i => {
       if (i.tema_detectado) {
@@ -51,50 +45,63 @@ export async function GET() {
         temasCount[tema] = (temasCount[tema] || 0) + 1
       }
     })
-    const topTemas = Object.entries(temasCount)
-      .sort((a, b) => b[1] - a[1]).slice(0, 10)
-      .map(([tema, count]) => ({ tema, count }))
+    const topTemas = Object.entries(temasCount).sort((a,b)=>b[1]-a[1]).slice(0,10).map(([tema,count])=>({tema,count}))
 
+    // Top materias desde documento_fuente
+    const materiasCount: Record<string, number> = {}
+    interacciones?.forEach(i => {
+      if (i.documento_fuente) {
+        const m = i.documento_fuente.replace('.docx','').replace(/-/g,' ').substring(0,40)
+        materiasCount[m] = (materiasCount[m] || 0) + 1
+      }
+    })
+    const topMaterias = Object.entries(materiasCount).sort((a,b)=>b[1]-a[1]).slice(0,6).map(([materia,count])=>({materia,count}))
+
+    // Actividad por día
     const actividadPorDia: Record<string, number> = {}
     for (let i = 6; i >= 0; i--) {
       const d = new Date(hoy.getTime() - i * 24 * 60 * 60 * 1000)
       actividadPorDia[d.toISOString().split('T')[0]] = 0
     }
-    interacciones?.filter(i => i.creado_en >= hace7dias).forEach(i => {
+    interacciones?.filter(i=>i.creado_en>=hace7dias).forEach(i=>{
       const key = i.creado_en.split('T')[0]
-      if (actividadPorDia[key] !== undefined) actividadPorDia[key]++
+      if (actividadPorDia[key]!==undefined) actividadPorDia[key]++
     })
-    const actividadSemana = Object.entries(actividadPorDia).map(([fecha, count]) => ({ fecha, count }))
+    const actividadSemana = Object.entries(actividadPorDia).map(([fecha,count])=>({fecha,count}))
 
-    const statsPorAlumno: Record<string, { sesiones: number; ultimaSesion: string; temas: Set<string>; sospechas: number }> = {}
-    interacciones?.forEach(i => {
-      if (!statsPorAlumno[i.usuario_id]) {
-        statsPorAlumno[i.usuario_id] = { sesiones: 0, ultimaSesion: '', temas: new Set(), sospechas: 0 }
-      }
+    // Stats por alumno
+    const statsPorAlumno: Record<string,{sesiones:number;ultimaSesion:string;temas:Set<string>;sospechas:number}> = {}
+    interacciones?.forEach(i=>{
+      if (!statsPorAlumno[i.usuario_id]) statsPorAlumno[i.usuario_id]={sesiones:0,ultimaSesion:'',temas:new Set(),sospechas:0}
       statsPorAlumno[i.usuario_id].sesiones++
-      if (i.creado_en > statsPorAlumno[i.usuario_id].ultimaSesion) statsPorAlumno[i.usuario_id].ultimaSesion = i.creado_en
-      if (i.tema_detectado) statsPorAlumno[i.usuario_id].temas.add(i.tema_detectado.substring(0, 30))
+      if (i.creado_en>statsPorAlumno[i.usuario_id].ultimaSesion) statsPorAlumno[i.usuario_id].ultimaSesion=i.creado_en
+      if (i.tema_detectado) statsPorAlumno[i.usuario_id].temas.add(i.tema_detectado.substring(0,30))
       if (i.sospecha_copia) statsPorAlumno[i.usuario_id].sospechas++
     })
 
-    const alumnosConStats = alumnos?.map(a => ({
+    const alumnosConStats = alumnos?.map(a=>({
       ...a,
-      sesiones: statsPorAlumno[a.id]?.sesiones || 0,
-      ultimaSesion: statsPorAlumno[a.id]?.ultimaSesion || null,
-      temasUnicos: statsPorAlumno[a.id]?.temas.size || 0,
-      sospechasCopia: statsPorAlumno[a.id]?.sospechas || 0,
-    })) || []
+      sesiones: statsPorAlumno[a.id]?.sesiones||0,
+      ultimaSesion: statsPorAlumno[a.id]?.ultimaSesion||null,
+      temasUnicos: statsPorAlumno[a.id]?.temas.size||0,
+      sospechasCopia: statsPorAlumno[a.id]?.sospechas||0,
+    }))||[]
+
+    // Top 5 alumnos más activos
+    const topAlumnos = alumnosConStats
+      .filter(a=>a.sesiones>0)
+      .sort((a,b)=>b.sesiones-a.sesiones)
+      .slice(0,5)
+      .map(a=>({nombre:a.nombre_completo,sesiones:a.sesiones}))
+
+    const sinActividad = alumnosConStats.filter(a=>a.sesiones===0).length
+    const promedioSesiones = alumnosConStats.length>0
+      ? alumnosConStats.reduce((s,a)=>s+a.sesiones,0)/alumnosConStats.length : 0
 
     return NextResponse.json({
-      resumen: {
-        totalAlumnos: alumnos?.length || 0,
-        activosHoy: activosHoy || 0,
-        activosSemana: activosSemana || 0,
-        totalInteracciones: interacciones?.length || 0,
-      },
-      topTemas,
-      actividadSemana,
-      alumnos: alumnosConStats,
+      resumen: { totalAlumnos: alumnos?.length||0, activosHoy: activosHoy||0, activosSemana: activosSemana||0, totalInteracciones: interacciones?.length||0 },
+      topTemas, topMaterias, actividadSemana, alumnos: alumnosConStats,
+      topAlumnos, sinActividad, promedioSesiones,
     })
   } catch (err) {
     console.error('Dashboard stats error:', err)
