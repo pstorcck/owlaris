@@ -30,6 +30,7 @@ export default function UsuariosPage() {
   const [procesando, setProcesando]     = useState(false)
   const [colegioId, setColegioId]       = useState('')
   const [esSuperAdmin, setEsSuperAdmin] = useState(false)
+  const [colegios, setColegios]         = useState<{id:string;nombre:string}[]>([])
   const fileRef = useRef<HTMLInputElement>(null)
 
   const [form, setForm] = useState({
@@ -37,6 +38,13 @@ export default function UsuariosPage() {
   })
 
   useEffect(() => {
+    async function cargarColegios() {
+      const supabase = createClient()
+      const { data } = await supabase.from('colegios').select('id, nombre').order('nombre')
+      if (data) setColegios(data)
+    }
+    cargarColegios()
+
     async function cargarPerfil() {
       const supabase = createClient()
       const { data: { user } } = await supabase.auth.getUser()
@@ -168,6 +176,21 @@ export default function UsuariosPage() {
     cargarUsuarios()
   }
 
+  async function guardarEdicion() {
+    if (!modalEditar) return
+    setProcesando(true)
+    const supabase = createClient()
+    await supabase.from('usuarios').update({
+      rol: modalEditar.rol,
+      colegio_id: (modalEditar as unknown as {colegio_id:string}).colegio_id || colegioId,
+      grado: modalEditar.grado,
+    }).eq('id', modalEditar.id)
+    setMensaje('✅ Usuario actualizado')
+    setModalEditar(null)
+    setProcesando(false)
+    cargarUsuarios()
+  }
+
   function exportarCSV() {
     const headers = ['Nombre', 'Email', 'Rol', 'Grado', 'Activo', 'Último acceso']
     const rows    = usuarios.map(u => [
@@ -283,6 +306,10 @@ export default function UsuariosPage() {
                       className="text-gray-400 hover:text-yellow-300 text-xs px-2 py-1 rounded hover:bg-white/10 transition-colors">
                       🔑
                     </button>
+                    <button onClick={() => setModalEditar({...u, colegio_id: u.colegio?.id || colegioId} as unknown as typeof u)}
+                      className="text-gray-400 hover:text-blue-300 text-xs px-2 py-1 rounded hover:bg-white/10 transition-colors">
+                      ✏️
+                    </button>
                   </td>
                 </tr>
               ))}
@@ -290,6 +317,55 @@ export default function UsuariosPage() {
           </table>
         </div>
       </main>
+
+      {/* Modal Editar */}
+      {modalEditar && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-gray-900 border border-white/10 rounded-2xl p-6 w-full max-w-md">
+            <h3 className="text-lg font-semibold mb-4">Editar usuario</h3>
+            <p className="text-sm text-gray-400 mb-4">{modalEditar.nombre_completo}</p>
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs text-gray-400 mb-1 block">Rol</label>
+                <select value={modalEditar.rol}
+                  onChange={e => setModalEditar({...modalEditar, rol: e.target.value})}
+                  className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white">
+                  <option value="alumno">Alumno</option>
+                  <option value="maestro">Maestro</option>
+                  <option value="admin">Admin</option>
+                  <option value="superadmin">Superadmin</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-xs text-gray-400 mb-1 block">Colegio / Sede</label>
+                <select value={(modalEditar as unknown as {colegio_id:string}).colegio_id || colegioId}
+                  onChange={e => setModalEditar({...modalEditar, colegio_id: e.target.value} as unknown as typeof modalEditar)}
+                  className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white">
+                  {colegios.map(col => (
+                    <option key={col.id} value={col.id}>{col.nombre}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="text-xs text-gray-400 mb-1 block">Grado</label>
+                <input value={modalEditar.grado || ''} onChange={e => setModalEditar({...modalEditar, grado: e.target.value})}
+                  className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white"
+                  placeholder="Ej: 3ero Básico"/>
+              </div>
+            </div>
+            <div className="flex gap-3 mt-6">
+              <button onClick={() => setModalEditar(null)}
+                className="flex-1 px-4 py-2 rounded-lg text-sm text-gray-400 hover:bg-white/5 border border-white/10">
+                Cancelar
+              </button>
+              <button onClick={guardarEdicion} disabled={procesando}
+                className="flex-1 px-4 py-2 rounded-lg text-sm font-medium bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50">
+                {procesando ? 'Guardando...' : 'Guardar cambios'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modal Crear */}
       {modalCrear && (
