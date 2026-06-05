@@ -50,12 +50,15 @@ export default async function ChatPage() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  const { data: perfil } = await supabase
+  const { data: perfil, error: perfilError } = await supabase
     .from('usuarios')
     .select('*, colegio:colegios(*)')
     .eq('id', user.id)
     .single()
+  
 
+  // Si no hay perfil redirigir al login
+  if (!perfil) redirect('/login')
   // Admins van al dashboard (maestros pueden usar el chat también)
   if (perfil?.rol === 'admin') redirect('/admin')
 

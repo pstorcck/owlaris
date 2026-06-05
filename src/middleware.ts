@@ -36,7 +36,11 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL('/login', request.url))
   }
 
-  return supabaseResponse
+  // Evitar que el caché intercepte rutas específicas
+  const response = supabaseResponse
+  response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate')
+  response.headers.set('x-pathname', pathname)
+  return response
 }
 
 export const config = {
