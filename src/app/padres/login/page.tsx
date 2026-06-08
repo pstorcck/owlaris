@@ -16,7 +16,10 @@ export default function PadresLoginPage() {
     setLoading(true); setError('')
     const { data, error } = await supabase.auth.signInWithPassword({ email, password })
     if (error) { setError('Correo o contraseña incorrectos.'); setLoading(false); return }
-    if (data.user) window.location.href = '/padres'
+    if (data.user) {
+      // Forzar recarga completa para que las cookies de sesión se establezcan
+      setTimeout(() => { window.location.href = '/padres' }, 500)
+    }
   }
 
   return (
