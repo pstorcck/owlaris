@@ -147,11 +147,11 @@ export default function LoginPage() {
               </Link>
             </p>
             <div style={{height:'1px',background:'linear-gradient(90deg,transparent,rgba(13,148,136,.15),transparent)',margin:'8px 0'}}/>
-            <Link href="/padres/login"
-              style={{display:'flex',alignItems:'center',justifyContent:'center',gap:'8px',background:'linear-gradient(135deg,#F0FDFA,#CCFBF1)',border:'1px solid rgba(13,148,136,.2)',borderRadius:'12px',padding:'12px',textDecoration:'none',transition:'all .2s'}}>
-              <span style={{fontSize:'16px'}}>🌿</span>
-              <span style={{fontSize:'13px',fontWeight:600,color:'#0D9488'}}>Soy padre de familia →</span>
-            </Link>
+            <a href="/padres/login"
+              style={{display:'flex',alignItems:'center',justifyContent:'center',gap:'8px',background:'linear-gradient(135deg,#0D9488,#0F766E)',border:'none',borderRadius:'12px',padding:'13px',textDecoration:'none',transition:'all .2s',boxShadow:'0 4px 16px rgba(13,148,136,.25)'}}>
+              <span style={{fontSize:'13px',fontWeight:700,color:'white',letterSpacing:'.2px'}}>Portal para padres de familia</span>
+              <span style={{color:'rgba(255,255,255,.7)',fontSize:'13px'}}>→</span>
+            </a>
           </div>
 
           <p style={{textAlign:'center',fontSize:'11px',color:'#DDD9F5',marginTop:'24px',letterSpacing:'.3px'}}>
