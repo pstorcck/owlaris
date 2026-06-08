@@ -9,6 +9,7 @@ export async function middleware(request: NextRequest) {
   // Rutas completamente públicas — sin verificar sesión
   if (pathname === '/signup' || 
       pathname === '/login' || 
+      pathname === '/padres/login' || 
       pathname.startsWith('/api/signup')) {
     return supabaseResponse
   }
