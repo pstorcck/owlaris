@@ -17,6 +17,7 @@ export default async function Home() {
 
   switch (perfil.rol) {
     case 'alumno':     redirect('/chat')
+    case 'padre':      redirect('/padres')
     case 'maestro':    redirect('/docente')
     case 'admin':
     case 'superadmin': redirect('/admin')

@@ -779,6 +779,9 @@ export async function POST(req: NextRequest) {
 
 INSTRUCCIÓN CRÍTICA DE EVALUACIÓN: ${validacionOM}` : ''
     const esModoConversacion = body.modo_conversacion || false
+    const esPadre = body.rol_usuario === 'padre'
+    const promptPadre = esPadre ? `\n\nROL ESPECIAL - ASISTENTE PARA PADRES: Estás hablando con un padre o madre de familia, NO con un alumno. Tu rol es ser un consejero educativo familiar. Ayuda con: estrategias para apoyar el aprendizaje en casa, hábitos de estudio, comunicación con los hijos sobre el colegio, manejo del estrés académico, tips de motivación, recursos educativos. Sé cálido, empático y práctico. Responde en español, tono de consejero de confianza.` : ''
+    const contextoExtra = promptPadre
     const contextoIdioma = idiomaIngles
       ? esModoConversacion
         ? '\n\nCONVERSATION MODE: You are now an English conversation partner, not a tutor. Have a natural, friendly conversation in English. Keep responses SHORT (2-4 sentences max). Ask ONE follow-up question. Gently correct grammar mistakes by using the correct form naturally in your response without explicitly pointing them out. Topics: daily life, school, hobbies, culture, travel. Start with simple vocabulary and gradually increase complexity based on the student\'s level.'
