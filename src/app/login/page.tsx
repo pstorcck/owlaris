@@ -146,6 +146,12 @@ export default function LoginPage() {
                 Regístrate aquí →
               </Link>
             </p>
+            <div style={{height:'1px',background:'linear-gradient(90deg,transparent,rgba(13,148,136,.15),transparent)',margin:'8px 0'}}/>
+            <Link href="/padres/login"
+              style={{display:'flex',alignItems:'center',justifyContent:'center',gap:'8px',background:'linear-gradient(135deg,#F0FDFA,#CCFBF1)',border:'1px solid rgba(13,148,136,.2)',borderRadius:'12px',padding:'12px',textDecoration:'none',transition:'all .2s'}}>
+              <span style={{fontSize:'16px'}}>🌿</span>
+              <span style={{fontSize:'13px',fontWeight:600,color:'#0D9488'}}>Soy padre de familia →</span>
+            </Link>
           </div>
 
           <p style={{textAlign:'center',fontSize:'11px',color:'#DDD9F5',marginTop:'24px',letterSpacing:'.3px'}}>
