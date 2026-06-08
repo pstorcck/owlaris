@@ -18,7 +18,7 @@ export default function LoginPage() {
     setLoading(true); setError('')
     const { error } = await supabase.auth.signInWithPassword({ email, password })
     if (error) { setError('Correo o contraseña incorrectos.'); setLoading(false); return }
-    window.location.href = '/'
+    router.push('/')
   }
 
   return (
