@@ -16,7 +16,19 @@ export default function PadresLoginPage() {
     setLoading(true); setError('')
     const { data, error } = await supabase.auth.signInWithPassword({ email, password })
     if (error) { setError('Correo o contraseña incorrectos.'); setLoading(false); return }
-    if (data.user) window.location.href = '/padres'
+    if (data.user) {
+      // Verificar que el usuario tiene rol padre
+      const { createClient: createBrowserClient } = await import('@/lib/supabase/client')
+      const sb = createBrowserClient()
+      const { data: perfil } = await sb.from('usuarios').select('rol').eq('id', data.user.id).single()
+      if (perfil?.rol === 'padre') {
+        window.location.href = '/padres'
+      } else {
+        setError('Esta cuenta no tiene acceso al portal de padres.')
+        await supabase.auth.signOut()
+        setLoading(false)
+      }
+    }
   }
 
   return (
