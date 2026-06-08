@@ -62,7 +62,7 @@ export default function ChatPadres({ usuario }: Props) {
           user_id: usuario.id,
           colegio_id: usuario.colegio_id,
           rol_usuario: 'padre',
-          historial: mensajes.slice(-6).map(m => ({
+          historial: mensajes.slice(-6).filter(m => m.contenido?.trim()).map(m => ({
             role: m.rol === 'usuario' ? 'user' : 'assistant',
             content: m.contenido,
           })),
