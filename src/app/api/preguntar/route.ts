@@ -536,10 +536,9 @@ async function leerDocumentosPadres(): Promise<string> {
         const dlUrl = `https://graph.microsoft.com/v1.0/drives/${driveId}/items/${doc.id}/content`
         const dlRes = await fetch(dlUrl, { headers: { Authorization: `Bearer ${token}` } })
         if (dlRes.ok) {
-          const buf = await dlRes.arrayBuffer()
-          const { extractRawText } = await import('mammoth')
-          const result = await extractRawText({ buffer: Buffer.from(buf) })
-          contenido += `\n--- ${doc.name} ---\n${result.value.substring(0, 3000)}\n`
+          // Archivos .md se leen como texto plano directamente
+          const texto = await dlRes.text()
+          contenido += `\n--- ${doc.name} ---\n${texto.substring(0, 3000)}\n`
         }
       } catch { /* silencioso */ }
     }
