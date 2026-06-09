@@ -519,6 +519,34 @@ async function leerCarpetasGrado(grado: string, idiomaIngles: boolean): Promise<
   return carpetas
 }
 
+async function leerDocumentosPadres(): Promise<string> {
+  const token = await getToken()
+  if (!token) return ''
+  const driveId = process.env.SHAREPOINT_DRIVE_ID!
+  let contenido = ''
+  try {
+    const ruta = encodeURIComponent('Owlaris') + '/' + encodeURIComponent('Owlaris padres')
+    const url = `https://graph.microsoft.com/v1.0/drives/${driveId}/root:/${ruta}:/children`
+    const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } })
+    if (!res.ok) return ''
+    const data = await res.json()
+    const docs = (data.value || []).filter((i: {file?:unknown}) => i.file)
+    for (const doc of docs.slice(0, 4)) {
+      try {
+        const dlUrl = `https://graph.microsoft.com/v1.0/drives/${driveId}/items/${doc.id}/content`
+        const dlRes = await fetch(dlUrl, { headers: { Authorization: `Bearer ${token}` } })
+        if (dlRes.ok) {
+          const buf = await dlRes.arrayBuffer()
+          const { extractRawText } = await import('mammoth')
+          const result = await extractRawText({ buffer: Buffer.from(buf) })
+          contenido += `\n--- ${doc.name} ---\n${result.value.substring(0, 3000)}\n`
+        }
+      } catch { /* silencioso */ }
+    }
+  } catch { /* silencioso */ }
+  return contenido
+}
+
 export async function POST(req: NextRequest) {
   try {
     const OpenAI = (await import('openai')).default
@@ -780,7 +808,11 @@ export async function POST(req: NextRequest) {
 INSTRUCCIÓN CRÍTICA DE EVALUACIÓN: ${validacionOM}` : ''
     const esModoConversacion = body.modo_conversacion || false
     const esPadre = body.rol_usuario === 'padre'
-    const promptPadre = esPadre ? `\n\nROL ESPECIAL - ASISTENTE PARA PADRES: Estás hablando con un padre o madre de familia, NO con un alumno. Tu rol es ser un consejero educativo familiar. Ayuda con: estrategias para apoyar el aprendizaje en casa, hábitos de estudio, comunicación con los hijos sobre el colegio, manejo del estrés académico, tips de motivación, recursos educativos. Sé cálido, empático y práctico. Responde en español, tono de consejero de confianza.` : ''
+    let promptPadre = ''
+    if (esPadre) {
+      const docsPadres = await leerDocumentosPadres()
+      promptPadre = `\n\nROL ESPECIAL - ASISTENTE PARA PADRES: Estás hablando con un padre o madre de familia, NO con un alumno. Tu rol es ser un consejero educativo familiar. Usa los siguientes documentos como base de conocimiento para responder:\n${docsPadres}\n\nAyuda con: estrategias para apoyar el aprendizaje en casa, hábitos de estudio, comunicación con los hijos sobre el colegio, manejo del estrés académico, tips de motivación. Sé cálido, empático y práctico. Responde en español, tono de consejero de confianza.`
+    }
     const contextoExtra = promptPadre || ''
     const contextoIdioma = idiomaIngles
       ? esModoConversacion
