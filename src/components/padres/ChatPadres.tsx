@@ -94,40 +94,42 @@ export default function ChatPadres({ usuario }: Props) {
     <>
       <style suppressHydrationWarning>{`
         * { box-sizing: border-box; margin: 0; padding: 0; }
-        .padres-root { min-height: 100vh; background: #F0FDFA; font-family: system-ui, -apple-system, sans-serif; display: flex; flex-direction: column; }
-        .p-header { background: white; border-bottom: 1px solid rgba(13,148,136,.1); padding: 0 20px; height: 60px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 10; box-shadow: 0 2px 12px rgba(13,148,136,.06); }
-        .p-logo { display: flex; align-items: center; gap: 10px; }
-        .p-logo img { width: 32px; height: 32px; object-fit: contain; }
-        .p-logo-text { font-size: 16px; font-weight: 700; color: #0D9488; letter-spacing: -0.3px; }
-        .p-logo-sub { font-size: 10px; color: #14B8A6; font-weight: 500; }
-        .p-badge { background: #F0FDFA; border: 1px solid rgba(13,148,136,.2); border-radius: 8px; padding: 5px 12px; font-size: 12px; color: #0D9488; font-weight: 600; }
-        .p-messages { flex: 1; overflow-y: auto; padding: 24px 16px; display: flex; flex-direction: column; gap: 16px; max-width: 760px; width: 100%; margin: 0 auto; }
-        .p-msg-wrap { display: flex; gap: 10px; align-items: flex-end; }
+        .padres-root { min-height: 100vh; background: #F5F7FA; font-family: system-ui, -apple-system, sans-serif; display: flex; flex-direction: column; }
+        .p-header { background: #2C3E6B; padding: 0 24px; height: 64px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 10; box-shadow: 0 2px 20px rgba(44,62,107,.3); }
+        .p-logo { display: flex; align-items: center; gap: 12px; }
+        .p-logo img { width: 36px; height: 36px; object-fit: contain; }
+        .p-logo-text { font-size: 18px; font-weight: 700; color: white; letter-spacing: -0.3px; }
+        .p-logo-sub { font-size: 10px; color: rgba(255,255,255,.5); font-weight: 500; letter-spacing: .5px; text-transform: uppercase; }
+        .p-badge { background: rgba(255,255,255,.12); border: 1px solid rgba(255,255,255,.2); border-radius: 8px; padding: 5px 12px; font-size: 12px; color: white; font-weight: 500; }
+        .p-messages { flex: 1; overflow-y: auto; padding: 28px 20px; display: flex; flex-direction: column; gap: 20px; max-width: 780px; width: 100%; margin: 0 auto; }
+        .p-msg-wrap { display: flex; gap: 12px; align-items: flex-end; }
         .p-msg-wrap.usuario { flex-direction: row-reverse; }
-        .p-avatar { width: 32px; height: 32px; border-radius: 50%; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; }
-        .p-avatar.asistente { background: linear-gradient(135deg,#0D9488,#14B8A6); }
-        .p-avatar.usuario { background: linear-gradient(135deg,#0D9488,#065F46); color: white; }
-        .p-bubble { max-width: 75%; padding: 12px 16px; border-radius: 16px; font-size: 14px; line-height: 1.65; }
-        .p-bubble.asistente { background: white; color: #134E4A; border: 1px solid rgba(13,148,136,.1); border-radius: 4px 16px 16px 16px; box-shadow: 0 2px 8px rgba(13,148,136,.06); }
-        .p-bubble.usuario { background: linear-gradient(135deg,#0D9488,#0F766E); color: white; border-radius: 16px 4px 16px 16px; }
+        .p-avatar { width: 36px; height: 36px; border-radius: 50%; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; }
+        .p-avatar.asistente { background: linear-gradient(135deg,#2C3E6B,#3D5A9E); box-shadow: 0 4px 12px rgba(44,62,107,.3); }
+        .p-avatar.usuario { background: linear-gradient(135deg,#3D5A9E,#2C3E6B); color: white; }
+        .p-bubble { max-width: 78%; padding: 14px 18px; border-radius: 18px; font-size: 14px; line-height: 1.7; }
+        .p-bubble.asistente { background: white; color: #1A2744; border-radius: 4px 18px 18px 18px; box-shadow: 0 2px 16px rgba(44,62,107,.08); border: 1px solid rgba(44,62,107,.06); }
+        .p-bubble.usuario { background: linear-gradient(135deg,#2C3E6B,#3D5A9E); color: white; border-radius: 18px 4px 18px 18px; box-shadow: 0 4px 16px rgba(44,62,107,.25); }
         .p-time { font-size: 10px; color: #94A3B8; margin-top: 4px; }
-        .p-typing { display: flex; gap: 4px; padding: 12px 16px; background: white; border-radius: 4px 16px 16px 16px; border: 1px solid rgba(13,148,136,.1); width: fit-content; }
-        .p-dot { width: 7px; height: 7px; border-radius: 50%; background: #14B8A6; animation: pdot 1.2s infinite; }
+        .p-typing { display: flex; gap: 5px; padding: 14px 18px; background: white; border-radius: 4px 18px 18px 18px; border: 1px solid rgba(44,62,107,.06); width: fit-content; box-shadow: 0 2px 16px rgba(44,62,107,.08); }
+        .p-dot { width: 7px; height: 7px; border-radius: 50%; background: #5B8DB8; animation: pdot 1.2s infinite; }
         .p-dot:nth-child(2) { animation-delay: .2s; }
         .p-dot:nth-child(3) { animation-delay: .4s; }
         @keyframes pdot { 0%,80%,100%{transform:translateY(0);opacity:.4} 40%{transform:translateY(-6px);opacity:1} }
-        .p-sugerencias { display: flex; gap: 8px; flex-wrap: wrap; padding: 0 16px 12px; max-width: 760px; width: 100%; margin: 0 auto; }
-        .p-chip { background: white; border: 1px solid rgba(13,148,136,.2); border-radius: 20px; padding: 8px 14px; font-size: 12px; font-weight: 500; color: #0D9488; cursor: pointer; transition: all .15s; }
-        .p-chip:hover { background: #F0FDFA; border-color: #14B8A6; }
-        .p-footer { background: white; border-top: 1px solid rgba(13,148,136,.08); padding: 12px 16px; }
-        .p-input-wrap { display: flex; gap: 10px; align-items: flex-end; max-width: 760px; margin: 0 auto; background: #F0FDFA; border: 1.5px solid rgba(13,148,136,.2); border-radius: 16px; padding: 10px 14px; }
-        .p-input { flex: 1; background: transparent; border: none; outline: none; font-size: 14px; color: #134E4A; resize: none; font-family: system-ui, sans-serif; line-height: 1.5; max-height: 120px; }
+        .p-sugerencias { display: flex; gap: 8px; flex-wrap: wrap; padding: 0 20px 16px; max-width: 780px; width: 100%; margin: 0 auto; }
+        .p-chip { background: white; border: 1px solid rgba(44,62,107,.15); border-radius: 20px; padding: 8px 16px; font-size: 12px; font-weight: 500; color: #2C3E6B; cursor: pointer; transition: all .15s; box-shadow: 0 1px 4px rgba(44,62,107,.08); }
+        .p-chip:hover { background: #EEF2FF; border-color: #5B8DB8; }
+        .p-footer { background: white; border-top: 1px solid rgba(44,62,107,.08); padding: 16px 20px; box-shadow: 0 -4px 20px rgba(44,62,107,.04); }
+        .p-input-wrap { display: flex; gap: 10px; align-items: flex-end; max-width: 780px; margin: 0 auto; background: #F5F7FA; border: 1.5px solid rgba(44,62,107,.15); border-radius: 16px; padding: 10px 14px; transition: border-color .2s; }
+        .p-input-wrap:focus-within { border-color: #5B8DB8; background: white; }
+        .p-input { flex: 1; background: transparent; border: none; outline: none; font-size: 14px; color: #1A2744; resize: none; font-family: system-ui, sans-serif; line-height: 1.5; max-height: 120px; }
         .p-input::placeholder { color: #94A3B8; }
-        .p-send { background: linear-gradient(135deg,#0D9488,#0F766E); border: none; border-radius: 10px; width: 38px; height: 38px; display: flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0; transition: all .2s; }
+        .p-send { background: linear-gradient(135deg,#2C3E6B,#3D5A9E); border: none; border-radius: 10px; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0; transition: all .2s; box-shadow: 0 2px 8px rgba(44,62,107,.3); }
         .p-send:disabled { opacity: .4; cursor: not-allowed; }
-        .p-send:hover:not(:disabled) { box-shadow: 0 4px 12px rgba(13,148,136,.4); }
-        .btn-salir { background: transparent; border: 1px solid rgba(13,148,136,.2); border-radius: 8px; padding: 6px 12px; font-size: 12px; color: #64748B; cursor: pointer; font-family: system-ui, sans-serif; }
-      `}</style>
+        .p-send:hover:not(:disabled) { box-shadow: 0 4px 16px rgba(44,62,107,.4); transform: translateY(-1px); }
+        .btn-salir { background: rgba(255,255,255,.1); border: 1px solid rgba(255,255,255,.2); border-radius: 8px; padding: 6px 14px; font-size: 12px; color: rgba(255,255,255,.8); cursor: pointer; font-family: system-ui, sans-serif; transition: all .15s; }
+        .btn-salir:hover { background: rgba(255,255,255,.2); }
+      `}</style>>
 
       <div className="padres-root">
         <header className="p-header">

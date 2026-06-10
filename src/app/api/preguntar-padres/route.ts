@@ -28,10 +28,12 @@ export async function POST(req: NextRequest) {
       content: pregunta,
     })
 
-    // Ejecutar assistant
+    // Ejecutar assistant optimizado
     const run = await openai.beta.threads.runs.createAndPoll(threadId, {
       assistant_id: ASSISTANT_ID,
-    })
+      max_prompt_tokens: 4000,
+      max_completion_tokens: 800,
+    }, { pollIntervalMs: 500 })
 
     if (run.status !== 'completed') {
       return NextResponse.json({ error: 'Error al procesar' }, { status: 500 })
