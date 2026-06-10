@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 
-const ASSISTANT_ID = 'asst_ynZRRlzRZmgfDm2hyHU8B5yN'
+const ASSISTANT_ID = 'asst_gBx2BctXHrWZavDsrP6s8iWn'
 
 export async function POST(req: NextRequest) {
   try {
