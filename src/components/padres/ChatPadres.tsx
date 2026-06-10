@@ -29,6 +29,7 @@ export default function ChatPadres({ usuario }: Props) {
   }])
   const [pregunta, setPregunta] = useState('')
   const [cargando, setCargando] = useState(false)
+  const [threadId, setThreadId] = useState<string | null>(null)
   const [menuAbierto, setMenuAbierto] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
   const router = useRouter()
@@ -53,22 +54,13 @@ export default function ChatPadres({ usuario }: Props) {
     setCargando(true)
 
     try {
-      const res = await fetch('/api/preguntar', {
+      const res = await fetch('/api/preguntar-padres', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          pregunta: tp,
-          estado: 'activo',
-          user_id: usuario.id,
-          colegio_id: usuario.colegio_id,
-          rol_usuario: 'padre',
-          historial: mensajes.slice(-6).filter(m => m.contenido?.trim()).map(m => ({
-            rol: m.rol,
-            contenido: m.contenido,
-          })),
-        }),
+        body: JSON.stringify({ pregunta: tp, thread_id: threadId }),
       })
       const data = await res.json()
+      if (data.thread_id) setThreadId(data.thread_id)
       setMensajes(prev => [...prev, {
         id: (Date.now()+1).toString(),
         rol: 'asistente',
