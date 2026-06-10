@@ -153,7 +153,19 @@ export default function ChatPadres({ usuario }: Props) {
                   : usuario.nombre_completo[0].toUpperCase()}
               </div>
               <div>
-                <div className={`p-bubble ${m.rol}`}>{m.contenido}</div>
+                <div className={`p-bubble ${m.rol}`}>{(() => {
+                  const limpio = m.contenido.replace(/【[^】]*】/g, '').trim()
+                  return limpio.split('\n').map((linea, li) => {
+                    const linkMatch = linea.match(/(https?:\/\/[^\s]+)/)
+                    if (linkMatch) {
+                      const url = linkMatch[1]
+                      const antes = linea.substring(0, linea.indexOf(url))
+                      return <span key={li}>{antes}<a href={url} target="_blank" rel="noopener noreferrer" style={{color:m.rol==='usuario'?'#99f6e4':'#0D9488',textDecoration:'underline',wordBreak:'break-all'}}>{url}</a><br/></span>
+                    }
+                    const partes = linea.split('**')
+                    return <span key={li}>{partes.map((p,pi)=>pi%2===1?<strong key={pi}>{p}</strong>:p)}{li<limpio.split('\n').length-1&&<br/>}</span>
+                  })
+                })()}</div>
                 <div className="p-time" style={{textAlign:m.rol==='usuario'?'right':'left'}}>
                   {m.timestamp.toLocaleTimeString('es-GT',{hour:'2-digit',minute:'2-digit'})}
                 </div>
