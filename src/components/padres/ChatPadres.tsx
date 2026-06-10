@@ -128,8 +128,8 @@ export default function ChatPadres({ usuario }: Props) {
         .p-send:disabled { opacity: .4; cursor: not-allowed; }
         .p-send:hover:not(:disabled) { box-shadow: 0 4px 16px rgba(44,62,107,.4); transform: translateY(-1px); }
         .btn-salir { background: rgba(255,255,255,.1); border: 1px solid rgba(255,255,255,.2); border-radius: 8px; padding: 6px 14px; font-size: 12px; color: rgba(255,255,255,.8); cursor: pointer; font-family: system-ui, sans-serif; transition: all .15s; }
-        .btn-salir:hover { background: rgba(255,255,255,.2); }
-      `}</style>>
+        .btn-salir:hover { background: rgba(255,255,255,0.2); }
+      `}</style>
 
       <div className="padres-root">
         <header className="p-header">
