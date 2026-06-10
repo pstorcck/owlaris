@@ -6,7 +6,7 @@ let docsCache: string | null = null
 let docsCacheTime = 0
 const CACHE_TTL = 3600000 // 1 hora
 
-async function getDocsPadres(): Promise<string> {
+async function getDocsPadres(query?: string): Promise<string> {
   const now = Date.now()
   if (docsCache && now - docsCacheTime < CACHE_TTL) return docsCache
 
