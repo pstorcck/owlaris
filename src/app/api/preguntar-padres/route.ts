@@ -1,7 +1,44 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 
-const ASSISTANT_ID = 'asst_gBx2BctXHrWZavDsrP6s8iWn'
+// Cache de documentos — se carga una vez
+let docsCache: string | null = null
+let docsCacheTime = 0
+const CACHE_TTL = 3600000 // 1 hora
+
+async function getDocsPadres(): Promise<string> {
+  const now = Date.now()
+  if (docsCache && now - docsCacheTime < CACHE_TTL) return docsCache
+
+  try {
+    const tokenRes = await fetch(
+      `https://login.microsoftonline.com/${process.env.AZURE_TENANT_ID}/oauth2/v2.0/token`,
+      { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ client_id: process.env.AZURE_CLIENT_ID!, client_secret: process.env.AZURE_CLIENT_SECRET!, scope: 'https://graph.microsoft.com/.default', grant_type: 'client_credentials' }) }
+    )
+    const { access_token } = await tokenRes.json()
+    const driveId = process.env.SHAREPOINT_DRIVE_ID!
+    const ruta = encodeURIComponent('Owlaris') + '/' + encodeURIComponent('Owlaris padres')
+    const listRes = await fetch(`https://graph.microsoft.com/v1.0/drives/${driveId}/root:/${ruta}:/children`, { headers: { Authorization: `Bearer ${access_token}` } })
+    const { value: files } = await listRes.json()
+
+    let contenido = ''
+    for (const file of (files || []).filter((f: {file?:unknown}) => f.file)) {
+      const dlRes = await fetch(`https://graph.microsoft.com/v1.0/drives/${driveId}/items/${file.id}/content`, { headers: { Authorization: `Bearer ${access_token}` } })
+      if (dlRes.ok) {
+        const texto = await dlRes.text()
+        contenido += `\n=== ${file.name} ===\n${texto.substring(0, 8000)}\n`
+      }
+    }
+    docsCache = contenido
+    docsCacheTime = now
+    console.log('Docs padres cargados:', contenido.length, 'chars')
+    return contenido
+  } catch (e) {
+    console.error('Error cargando docs padres:', e)
+    return ''
+  }
+}
 
 export async function POST(req: NextRequest) {
   try {
@@ -9,58 +46,53 @@ export async function POST(req: NextRequest) {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
 
-    const { pregunta, thread_id } = await req.json()
+    const { pregunta, historial } = await req.json()
     if (!pregunta?.trim()) return NextResponse.json({ error: 'Pregunta vacía' }, { status: 400 })
 
+    const docs = await getDocsPadres()
     const OpenAI = (await import('openai')).default
     const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
 
-    // Crear o reutilizar thread
-    let threadId = thread_id
-    if (!threadId) {
-      const thread = await openai.beta.threads.create()
-      threadId = thread.id
-    }
+    const systemPrompt = `Eres Owlaris, consejero educativo familiar de Colegio Montano y Escolaris en Guatemala. Acompañas a padres de familia en su rol como primeros educadores.
 
-    // Agregar mensaje
-    await openai.beta.threads.messages.create(threadId, {
-      role: 'user',
-      content: pregunta,
+DOCUMENTOS BASE (usa siempre este contenido para responder):
+${docs}
+
+REGLAS:
+1. Basa tus respuestas en los documentos. Cita ideas específicas de los libros.
+2. Si hay videos relevantes en los documentos, incluye el link completo.
+3. Tono cálido, empático, práctico. Como un amigo experto en educación.
+4. Responde en español. Máximo 4-5 puntos por respuesta.
+5. Termina siempre con una acción concreta para hoy y una pregunta de seguimiento.
+6. Para temas sensibles, recomienda apoyo profesional además de orientar.
+7. NUNCA generes culpa. Siempre desde el apoyo y la comprensión.`
+
+    const messages: {role: 'system'|'user'|'assistant'; content: string}[] = [
+      { role: 'system', content: systemPrompt },
+      ...(historial || []).slice(-6),
+      { role: 'user', content: pregunta },
+    ]
+
+    const completion = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages,
+      max_tokens: 600,
+      temperature: 0.7,
     })
 
-    // Ejecutar assistant optimizado
-    const run = await openai.beta.threads.runs.createAndPoll(threadId, {
-      assistant_id: ASSISTANT_ID,
-      max_prompt_tokens: 4000,
-      max_completion_tokens: 800,
-    }, { pollIntervalMs: 500 })
+    const respuesta = completion.choices[0].message.content || 'No pude generar una respuesta.'
 
-    if (run.status !== 'completed') {
-      return NextResponse.json({ error: 'Error al procesar' }, { status: 500 })
-    }
-
-    // Obtener respuesta
-    const messages = await openai.beta.threads.messages.list(threadId, { limit: 1 })
-    const msg = messages.data[0]
-    let respuesta = ''
-    for (const block of msg.content) {
-      if (block.type === 'text') {
-        respuesta += block.text.value
-      }
-    }
-
-    // Guardar interacción en Supabase
     const { data: perfil } = await supabase.from('usuarios').select('colegio_id').eq('id', user.id).single()
     await supabase.from('interacciones').insert({
       usuario_id: user.id,
       colegio_id: perfil?.colegio_id,
       pregunta: pregunta.substring(0, 500),
       respuesta: respuesta.substring(0, 1000),
-      modelo_usado: 'asst_padres',
-      tokens_usados: 0,
+      modelo_usado: 'gpt-4o-mini-padres',
+      tokens_usados: completion.usage?.total_tokens || 0,
     })
 
-    return NextResponse.json({ respuesta, thread_id: threadId })
+    return NextResponse.json({ respuesta })
   } catch (err) {
     console.error('Error agente padres:', err)
     return NextResponse.json({ error: 'Error interno' }, { status: 500 })
