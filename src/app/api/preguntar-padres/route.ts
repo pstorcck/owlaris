@@ -49,7 +49,7 @@ export async function POST(req: NextRequest) {
     const { pregunta, historial } = await req.json()
     if (!pregunta?.trim()) return NextResponse.json({ error: 'Pregunta vacía' }, { status: 400 })
 
-    const docs = await getDocsPadres()
+    const docs = await getDocsPadres(pregunta)
     const OpenAI = (await import('openai')).default
     const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
 
