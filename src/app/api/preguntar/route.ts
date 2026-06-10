@@ -531,14 +531,18 @@ async function leerDocumentosPadres(): Promise<string> {
     if (!res.ok) return ''
     const data = await res.json()
     const docs = (data.value || []).filter((i: {file?:unknown}) => i.file)
-    for (const doc of docs.slice(0, 4)) {
+    for (const doc of docs) {
       try {
         const dlUrl = `https://graph.microsoft.com/v1.0/drives/${driveId}/items/${doc.id}/content`
         const dlRes = await fetch(dlUrl, { headers: { Authorization: `Bearer ${token}` } })
         if (dlRes.ok) {
-          // Archivos .md se leen como texto plano directamente
           const texto = await dlRes.text()
-          contenido += `\n--- ${doc.name} ---\n${texto.substring(0, 3000)}\n`
+          // Tomar secciones distribuidas del documento para mayor cobertura
+          const chunk1 = texto.substring(0, 1000)
+          const mid = Math.floor(texto.length / 2)
+          const chunk2 = texto.substring(mid, mid + 1000)
+          const chunk3 = texto.substring(texto.length - 1000)
+          contenido += `\n--- ${doc.name} ---\n${chunk1}\n...\n${chunk2}\n...\n${chunk3}\n`
         }
       } catch { /* silencioso */ }
     }
