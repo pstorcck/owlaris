@@ -267,10 +267,8 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
       const source = ctx.createBufferSource()
       source.buffer = audioBuffer
       source.connect(ctx.destination)
-      source.onended = () => { setReproduciendo(false); ctx.close() }
-      // Timeout de seguridad — si el audio no termina en 30s, resetear
-      const safetyTimeout = setTimeout(() => setReproduciendo(false), 30000)
-      source.onended = () => { setReproduciendo(false); ctx.close(); clearTimeout(safetyTimeout) }
+      const safetyTimeout = setTimeout(() => { setReproduciendo(false); try { ctx.close() } catch(e) {} }, 30000)
+      source.onended = () => { setReproduciendo(false); clearTimeout(safetyTimeout); try { ctx.close() } catch(e) {} }
       setReproduciendo(true)
       source.start(0)
     } catch { setReproduciendo(false) }
