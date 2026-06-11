@@ -17,7 +17,7 @@ declare global {
         'shadow-intensity'?: string
         exposure?: string
         'tone-mapping'?: string
-        'camera-controls'?: string
+        'camera-controls'?: string | boolean
         'disable-zoom'?: boolean | string
         'interaction-prompt'?: string
       }, HTMLElement>
