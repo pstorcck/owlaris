@@ -255,22 +255,16 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ texto }),
       })
-      if (!res.ok) return
-      const arrayBuffer = await res.arrayBuffer()
-      
-      // AudioContext con resume para Safari
-      const AudioCtx = window.AudioContext || (window as unknown as {webkitAudioContext: typeof AudioContext}).webkitAudioContext
-      const ctx = new AudioCtx()
-      // Safari requiere resume explícito
-      if (ctx.state === 'suspended') await ctx.resume()
-      const audioBuffer = await ctx.decodeAudioData(arrayBuffer.slice(0))
-      const source = ctx.createBufferSource()
-      source.buffer = audioBuffer
-      source.connect(ctx.destination)
-      const safetyTimeout = setTimeout(() => { setReproduciendo(false); try { ctx.close() } catch(e) {} }, 30000)
-      source.onended = () => { setReproduciendo(false); clearTimeout(safetyTimeout); try { ctx.close() } catch(e) {} }
+      if (!res.ok) { setReproduciendo(false); return }
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const audio = new Audio(url)
+      audioRef.current = audio
+      audio.onplay = () => setReproduciendo(true)
+      audio.onended = () => { setReproduciendo(false); URL.revokeObjectURL(url) }
+      audio.onerror = () => { setReproduciendo(false); URL.revokeObjectURL(url) }
       setReproduciendo(true)
-      source.start(0)
+      await audio.play()
     } catch { setReproduciendo(false) }
   }
 
@@ -285,14 +279,20 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
       if (audioRef.current) { try { audioRef.current.pause() } catch { /* */ } }
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-        const mr = new MediaRecorder(stream, { mimeType: 'audio/webm' })
+        const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') 
+          ? 'audio/webm;codecs=opus'
+          : MediaRecorder.isTypeSupported('audio/mp4')
+          ? 'audio/mp4'
+          : 'audio/webm'
+        const mr = new MediaRecorder(stream, { mimeType })
         audioChunksRef.current = []
         mr.ondataavailable = e => audioChunksRef.current.push(e.data)
         mr.onstop = async () => {
           stream.getTracks().forEach(t => t.stop())
-          const blob = new Blob(audioChunksRef.current, { type: 'audio/webm' })
+          const blob = new Blob(audioChunksRef.current, { type: mimeType })
+          const ext = mimeType.includes('mp4') ? 'mp4' : 'webm'
           const fd   = new FormData()
-          fd.append('audio', blob, 'audio.webm')
+          fd.append('audio', blob, `audio.${ext}`)
           try {
             const res  = await fetch('/api/transcribir', { method: 'POST', body: fd })
             const data = await res.json()
