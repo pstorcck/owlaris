@@ -261,11 +261,10 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
       const url = URL.createObjectURL(blob)
       const audio = new Audio(url)
       audioRef.current = audio
-      const tOut = setTimeout(() => setReproduciendo(false), 20000)
-      audio.oncanplaythrough = () => { setReproduciendo(true); audio.play().catch(() => { setReproduciendo(false); clearTimeout(tOut) }) }
-      audio.onended = () => { setReproduciendo(false); URL.revokeObjectURL(url); clearTimeout(tOut) }
-      audio.onerror = () => { setReproduciendo(false); URL.revokeObjectURL(url); clearTimeout(tOut) }
-      audio.load()
+      audio.onended = () => { setReproduciendo(false); URL.revokeObjectURL(url) }
+      audio.onerror = () => { setReproduciendo(false); URL.revokeObjectURL(url) }
+      setReproduciendo(true)
+      await audio.play().catch(() => setReproduciendo(false))
     } catch { setReproduciendo(false) }
   }
 
