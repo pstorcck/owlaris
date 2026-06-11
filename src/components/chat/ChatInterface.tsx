@@ -261,9 +261,10 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
       const url = URL.createObjectURL(blob)
       const audio = new Audio(url)
       audioRef.current = audio
-      audio.oncanplaythrough = () => { setReproduciendo(true); audio.play().catch(() => setReproduciendo(false)) }
-      audio.onended = () => { setReproduciendo(false); URL.revokeObjectURL(url) }
-      audio.onerror = () => { setReproduciendo(false); URL.revokeObjectURL(url) }
+      const tOut = setTimeout(() => setReproduciendo(false), 20000)
+      audio.oncanplaythrough = () => { setReproduciendo(true); audio.play().catch(() => { setReproduciendo(false); clearTimeout(tOut) }) }
+      audio.onended = () => { setReproduciendo(false); URL.revokeObjectURL(url); clearTimeout(tOut) }
+      audio.onerror = () => { setReproduciendo(false); URL.revokeObjectURL(url); clearTimeout(tOut) }
       audio.load()
     } catch { setReproduciendo(false) }
   }
@@ -793,7 +794,7 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
                 onClick={toggleGrabacion}
                 disabled={cargando}
                 style={{
-                  width:'80px',height:'80px',borderRadius:'50%',border:'none',cursor:(cargando||reproduciendo)?'not-allowed':'pointer',
+                  width:'80px',height:'80px',borderRadius:'50%',border:'none',cursor:cargando?'not-allowed':'pointer',
                   background:grabando?'linear-gradient(135deg,#DC2626,#B91C1C)':'linear-gradient(135deg,#7C3AED,#5B21B6)',
                   boxShadow:grabando?'0 0 0 8px rgba(220,38,38,.2),0 8px 32px rgba(220,38,38,.4)':'0 0 0 8px rgba(109,40,217,.1),0 8px 32px rgba(109,40,217,.3)',
                   display:'flex',alignItems:'center',justifyContent:'center',
