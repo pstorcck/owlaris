@@ -257,14 +257,14 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
       })
       if (!res.ok) { setReproduciendo(false); return }
       const blob = await res.blob()
+      if (blob.size === 0) { setReproduciendo(false); return }
       const url = URL.createObjectURL(blob)
       const audio = new Audio(url)
       audioRef.current = audio
-      audio.onplay = () => setReproduciendo(true)
+      audio.oncanplaythrough = () => { setReproduciendo(true); audio.play().catch(() => setReproduciendo(false)) }
       audio.onended = () => { setReproduciendo(false); URL.revokeObjectURL(url) }
       audio.onerror = () => { setReproduciendo(false); URL.revokeObjectURL(url) }
-      setReproduciendo(true)
-      await audio.play()
+      audio.load()
     } catch { setReproduciendo(false) }
   }
 
