@@ -810,6 +810,28 @@ export async function POST(req: NextRequest) {
 
 INSTRUCCIÓN CRÍTICA DE EVALUACIÓN: ${validacionOM}` : ''
     const esModoConversacion = body.modo_conversacion || false
+
+    // Modo conversación inglés — respuesta directa sin SharePoint
+    if (esModoConversacion) {
+      const OpenAI = (await import('openai')).default
+      const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+      const historialConv = (historial || []).slice(-4).map((m: {rol:string;contenido:string}) => ({
+        role: m.rol === 'usuario' ? 'user' as const : 'assistant' as const,
+        content: m.contenido
+      }))
+      const completion = await openai.chat.completions.create({
+        model: 'gpt-4o-mini',
+        max_tokens: 60,
+        temperature: 0.8,
+        messages: [
+          { role: 'system', content: 'You are a friendly English conversation tutor. RULES: 1) ALWAYS respond in English only, never Spanish. 2) Max 1-2 short sentences. 3) Naturally correct grammar by modeling correct form. 4) Ask one simple follow-up question. 5) Be warm and encouraging.' },
+          ...historialConv,
+          { role: 'user', content: pregunta }
+        ]
+      })
+      const respuesta = completion.choices[0].message.content || ''
+      return NextResponse.json({ respuesta, nuevo_estado: 'activo', tokens: completion.usage?.total_tokens || 0 })
+    }
     const esPadre = body.rol_usuario === 'padre'
     let promptPadre = ''
     if (esPadre) {
