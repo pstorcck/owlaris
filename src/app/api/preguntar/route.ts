@@ -830,6 +830,19 @@ INSTRUCCIÓN CRÍTICA DE EVALUACIÓN: ${validacionOM}` : ''
         ]
       })
       const respuesta = completion.choices[0].message.content || ''
+      // Guardar interacción
+      await supabase.from('interacciones').insert({
+        usuario_id: user.id,
+        colegio_id: perfil.colegio_id,
+        grado: perfil.grado || '',
+        tema_detectado: 'Conversación en Inglés',
+        pregunta: pregunta.substring(0, 500),
+        respuesta: respuesta.substring(0, 1000),
+        tokens_usados: completion.usage?.total_tokens || 0,
+        costo_usd: (completion.usage?.total_tokens || 0) * 0.00000015,
+        modelo_usado: 'gpt-4o-mini',
+        sospecha_copia: false,
+      })
       return NextResponse.json({ respuesta, nuevo_estado: 'activo', tokens: completion.usage?.total_tokens || 0 })
     }
     const esPadre = body.rol_usuario === 'padre'
