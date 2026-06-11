@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useState, useRef, useEffect } from 'react'
+import OwlarisOwl3D from '@/components/chat/OwlarisOwl3D'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import type { Usuario, Materia, MensajeChat } from '@/types'
@@ -768,17 +769,10 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
                 <div style={{position:'absolute',width:'280px',height:'280px',borderRadius:'50%',border:`2px solid ${grabando?'rgba(220,38,38,.4)':reproduciendo?'rgba(109,40,217,.4)':'rgba(109,40,217,.15)'}`,animation:`ringPulse ${grabando?'0.5s':reproduciendo?'0.8s':'2s'} ease-in-out infinite`,transition:'all .3s'}}/>
                 <div style={{position:'absolute',width:'240px',height:'240px',borderRadius:'50%',border:`2px solid ${grabando?'rgba(220,38,38,.2)':reproduciendo?'rgba(109,40,217,.2)':'rgba(109,40,217,.08)'}`,animation:`ringPulse ${grabando?'0.5s':reproduciendo?'0.8s':'2s'} ease-in-out infinite 0.2s`}}/>
                 
-                {/* Búho PNG con CSS animation */}
-                <img src="/buho.png" alt="Owlaris"
-                  style={{
-                    width:'240px', height:'240px', objectFit:'contain',
-                    filter:'drop-shadow(0 12px 40px rgba(109,40,217,.25))',
-                    animation: reproduciendo ? 'buhoHabla 0.4s ease-in-out infinite alternate' :
-                               grabando ? 'buhoEscucha 1.5s ease-in-out infinite' :
-                               cargando ? 'buhoPensando 1s ease-in-out infinite' :
-                               'buhoIdle 3s ease-in-out infinite',
-                    transformOrigin: 'center bottom',
-                  }}
+                {/* Búho 3D */}
+                <OwlarisOwl3D
+                  pose={reproduciendo ? 'talking' : cargando ? 'thinking' : grabando ? 'thinking' : 'waving'}
+                  size={260}
                 />
               </div>
 
