@@ -187,7 +187,7 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
           materia_sugerida: materiaSugerida,
           materias_disponibles: materiasDisponiblesRef.current,
           idioma_ingles: idiomaIngles,
-          modo_conversacion: modoConversacion,
+          modo_conversacion: modoConversacion || estadoChat === 'activo' && idiomaIngles,
           nivel_dificultad: nivelDificultad,
           aciertos_consecutivos: aciertosConsec,
         })
@@ -284,6 +284,7 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
     } else {
       // Iniciar grabación — detener audio si está sonando
       setReproduciendo(false)
+      if (audioRef.current) { try { audioRef.current.pause() } catch { /* */ } }
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
         const mr = new MediaRecorder(stream, { mimeType: 'audio/webm' })

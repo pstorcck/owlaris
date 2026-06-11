@@ -819,7 +819,7 @@ INSTRUCCIÓN CRÍTICA DE EVALUACIÓN: ${validacionOM}` : ''
     const contextoExtra = promptPadre || ''
     const contextoIdioma = idiomaIngles
       ? esModoConversacion
-        ? '\n\nCONVERSATION MODE: You are now an English conversation partner, not a tutor. Have a natural, friendly conversation in English. Keep responses SHORT (2-4 sentences max). Ask ONE follow-up question. Gently correct grammar mistakes by using the correct form naturally in your response without explicitly pointing them out. Topics: daily life, school, hobbies, culture, travel. Start with simple vocabulary and gradually increase complexity based on the student\'s level.'
+        ? '\n\nCONVERSATION MODE - CRITICAL RULES:\n1. ALWAYS respond in ENGLISH ONLY. Never use Spanish. Even if the student writes in Spanish, respond in English.\n2. Keep responses VERY SHORT: 1-2 sentences maximum.\n3. Gently correct grammar by modeling the correct form in your response.\n4. Ask ONE simple follow-up question.\n5. Be warm and encouraging.\n6. Topics: daily life, school, hobbies, food, travel.'
         : '\n\nLANGUAGE INSTRUCTION: You MUST respond entirely in English. All explanations, questions, feedback and conversation must be in English only.'
       : ''
 
@@ -862,7 +862,7 @@ ${contextoContenido}`
     mensajesOpenAI.push({ role: 'user', content: pregunta })
 
     const completion = await openai.chat.completions.create({
-      model: 'gpt-4o-mini', messages: mensajesOpenAI, max_tokens: esModoConversacion ? 150 : 700, temperature: 0.7,
+      model: 'gpt-4o-mini', messages: mensajesOpenAI, max_tokens: esModoConversacion ? 80 : 700, temperature: 0.7,
     })
 
     let respuesta = completion.choices[0].message.content || 'No pude generar una respuesta.'
