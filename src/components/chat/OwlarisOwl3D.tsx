@@ -45,13 +45,10 @@ export default function OwlarisOwl3D({ pose = 'thinking', size = 280 }: Props) {
   return (
     <model-viewer
       src={modelMap[pose]}
-      auto-rotate
-      rotation-per-second="20deg"
       shadow-intensity="0"
       exposure="1.2"
       tone-mapping="aces"
-      camera-controls="false"
-      disable-zoom
+      camera-controls
       interaction-prompt="none"
       style={{
         width: `${size}px`,
