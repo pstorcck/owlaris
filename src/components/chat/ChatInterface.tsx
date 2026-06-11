@@ -268,6 +268,9 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
       source.buffer = audioBuffer
       source.connect(ctx.destination)
       source.onended = () => { setReproduciendo(false); ctx.close() }
+      // Timeout de seguridad — si el audio no termina en 30s, resetear
+      const safetyTimeout = setTimeout(() => setReproduciendo(false), 30000)
+      source.onended = () => { setReproduciendo(false); ctx.close(); clearTimeout(safetyTimeout) }
       setReproduciendo(true)
       source.start(0)
     } catch { setReproduciendo(false) }
@@ -279,7 +282,8 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
       mediaRecorderRef.current?.stop()
       setGrabando(false)
     } else {
-      // Iniciar grabación
+      // Iniciar grabación — detener audio si está sonando
+      setReproduciendo(false)
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
         const mr = new MediaRecorder(stream, { mimeType: 'audio/webm' })
@@ -788,7 +792,7 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
             <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:'12px'}}>
               <button
                 onClick={toggleGrabacion}
-                disabled={cargando||reproduciendo}
+                disabled={cargando}
                 style={{
                   width:'80px',height:'80px',borderRadius:'50%',border:'none',cursor:(cargando||reproduciendo)?'not-allowed':'pointer',
                   background:grabando?'linear-gradient(135deg,#DC2626,#B91C1C)':'linear-gradient(135deg,#7C3AED,#5B21B6)',
