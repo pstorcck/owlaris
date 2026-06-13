@@ -57,9 +57,6 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
   const [mensajes, setMensajes]         = useState<MensajeChat[]>([])
   const [pregunta, setPregunta]         = useState('')
   const [cargando, setCargando]         = useState(false)
-  const [imagenBase64, setImagenBase64]   = useState<string | null>(null)
-  const [imagenPreview, setImagenPreview] = useState<string | null>(null)
-  const inputImagenRef                     = useRef<HTMLInputElement>(null)
   const [error, setError]               = useState('')
   const [sugerencias, setSugerencias]   = useState<{icon:string;text:string}[]>([])
   const [expandido, setExpandido]       = useState<string | null>(null)
@@ -170,7 +167,6 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
     const tp = (texto || pregunta).trim()
     if (!tp || cargando) return
     setPregunta(''); setError(''); setSugerencias([])
-    setImagenBase64(null); setImagenPreview(null)
 
     const msgU: MensajeChat = { id: Date.now().toString(), rol: 'usuario', contenido: tp, timestamp: new Date() }
     setMensajes(prev => [...prev, msgU])
@@ -182,7 +178,6 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           pregunta: tp,
-          imagen_base64: imagenBase64 || undefined,
           estado: estadoChat,
           nombre_alumno: nombreAlumno,
           grado_override: gradoAlumno || gradoGuardado,
