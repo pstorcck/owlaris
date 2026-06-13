@@ -167,6 +167,7 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
     const tp = (texto || pregunta).trim()
     if (!tp || cargando) return
     setPregunta(''); setError(''); setSugerencias([])
+    setImagenBase64(null); setImagenPreview(null)
 
     const msgU: MensajeChat = { id: Date.now().toString(), rol: 'usuario', contenido: tp, timestamp: new Date() }
     setMensajes(prev => [...prev, msgU])
@@ -178,6 +179,7 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           pregunta: tp,
+          imagen_base64: imagenBase64 || undefined,
           estado: estadoChat,
           nombre_alumno: nombreAlumno,
           grado_override: gradoAlumno || gradoGuardado,
@@ -733,6 +735,7 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
                 placeholder={placeholder} rows={2} disabled={cargando}
                 style={{flex:1,background:'transparent',border:'none',outline:'none',resize:'none',fontSize:'14px',color:'#1E1B4B',lineHeight:'1.6',fontFamily:"'Plus Jakarta Sans',sans-serif",fontWeight:400}}
               />
+              </div>
               <button onClick={()=>enviarPregunta()} disabled={cargando||!pregunta.trim()} className="o-send">
                 <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="white" strokeWidth={2.2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/>
