@@ -514,7 +514,6 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
                     {grado}
                   </button>
                 ))}
-              </div>
               <button onClick={() => setMostrandoGrados(false)}
                 style={{width:'100%',background:'#F8F7FF',border:'1px solid rgba(109,40,217,.1)',borderRadius:'14px',padding:'13px',fontSize:'13px',fontWeight:600,color:'#9490B8',cursor:'pointer'}}>
                 {idiomaIngles ? 'Cancel' : 'Cancelar'}
