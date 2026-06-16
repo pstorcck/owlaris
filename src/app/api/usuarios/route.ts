@@ -114,3 +114,31 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: msg }, { status: 500 })
   }
 }
+
+export async function DELETE(req: NextRequest) {
+  try {
+    const supabase = createClient()
+    const admin = createAdminClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+
+    const { data: perfil } = await supabase.from('usuarios').select('rol').eq('id', user.id).single()
+    if (!perfil || !['admin', 'superadmin'].includes(perfil.rol)) {
+      return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
+    }
+
+    const { id } = await req.json()
+    if (!id) return NextResponse.json({ error: 'ID requerido' }, { status: 400 })
+
+    // Eliminar de BD primero
+    await admin.from('usuarios').delete().eq('id', id)
+    // Eliminar de Auth
+    const { error } = await admin.auth.admin.deleteUser(id)
+    if (error) throw error
+
+    return NextResponse.json({ ok: true })
+  } catch (err) {
+    console.error('Error DELETE /api/usuarios:', err)
+    return NextResponse.json({ error: 'Error al eliminar usuario' }, { status: 500 })
+  }
+}

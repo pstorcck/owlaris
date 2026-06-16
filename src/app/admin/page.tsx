@@ -52,10 +52,8 @@ export default async function AdminPage() {
           {[
             { href: '/admin', label: '🏠 Inicio', active: true },
             { href: '/admin/usuarios', label: '👥 Usuarios y Guías' },
-            { href: '/admin/configuracion', label: '⚙️ Configuración' },
             { href: '/guia', label: '🎓 Panel del Guía' },
             { href: '/docente', label: '📊 Dashboard Docente' },
-            { href: '/chat', label: '🦉 Ir al Chat' },
           ].map(item => (
             <a key={item.href} href={item.href} style={{display:'block',padding:'10px 12px',borderRadius:'8px',color: item.active ? 'white' : 'rgba(255,255,255,.6)',background: item.active ? 'rgba(255,255,255,.15)' : 'transparent',textDecoration:'none',fontSize:'13px',fontWeight: item.active ? 600 : 400,marginBottom:'2px',transition:'all .15s'}}>
               {item.label}
@@ -63,6 +61,7 @@ export default async function AdminPage() {
           ))}
         </nav>
         <div style={{padding:'16px 20px',borderTop:'1px solid rgba(255,255,255,.1)'}}>
+          <a href="/admin/configuracion" style={{display:'block',padding:'10px 12px',borderRadius:'8px',color:'rgba(255,255,255,.6)',textDecoration:'none',fontSize:'13px',marginBottom:'8px',transition:'all .15s'}}>⚙️ Configuración</a>
           <p style={{color:'rgba(255,255,255,.6)',fontSize:'12px',margin:'0 0 4px'}}>{perfil.nombre_completo}</p>
           <p style={{color:'rgba(255,255,255,.4)',fontSize:'11px',margin:'0 0 12px'}}>{esSuperAdmin ? 'Super Admin' : perfil.colegio?.nombre}</p>
           <LogoutButton/>
