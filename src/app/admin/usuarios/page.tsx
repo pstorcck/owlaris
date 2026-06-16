@@ -234,6 +234,20 @@ export default function UsuariosPage() {
     cargarUsuarios()
   }
 
+  async function eliminarUsuario(u: Usuario) {
+    if (!confirm(`¿Eliminar permanentemente a ${u.nombre_completo}? Esta acción no se puede deshacer.`)) return
+    setProcesando(true)
+    const res = await fetch('/api/usuarios', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: u.id }),
+    })
+    const data = await res.json()
+    setProcesando(false)
+    setMensaje(data.ok ? `✅ Usuario ${u.nombre_completo} eliminado` : `❌ ${data.error}`)
+    cargarUsuarios()
+  }
+
   async function guardarEdicion() {
     if (!modalEditar) return
     setProcesando(true)
@@ -268,16 +282,42 @@ export default function UsuariosPage() {
   )
 
   return (
-    <div className="min-h-screen bg-owlaris-dark text-white">
-      <header className="border-b border-white/10 px-6 py-4">
-        <div className="max-w-6xl mx-auto flex items-center gap-4">
-          <Link href="/admin" className="text-gray-400 hover:text-white">← Admin</Link>
-          <h1 className="font-bold text-lg">👥 Usuarios</h1>
-          <span className="text-gray-500 text-sm">{filtrados.length} usuarios</span>
+    <div style={{minHeight:'100vh',background:'#F5F7FA',fontFamily:'system-ui,-apple-system,sans-serif',display:'flex'}}>
+      {/* Sidebar */}
+      <aside style={{width:'240px',background:'#2C3E6B',minHeight:'100vh',display:'flex',flexDirection:'column',flexShrink:0}}>
+        <div style={{padding:'24px 20px',borderBottom:'1px solid rgba(255,255,255,.1)'}}>
+          <div style={{display:'flex',alignItems:'center',gap:'10px',marginBottom:'4px'}}>
+            <img src="/buho.png" alt="Owlaris" style={{width:'32px',height:'32px',objectFit:'contain'}}/>
+            <span style={{color:'white',fontWeight:700,fontSize:'16px'}}>Owlaris</span>
+          </div>
+          <p style={{color:'rgba(255,255,255,.5)',fontSize:'11px',margin:0}}>Panel de administración</p>
         </div>
-      </header>
+        <nav style={{padding:'16px 12px',flex:1}}>
+          {[
+            { href: '/admin', label: '🏠 Inicio' },
+            { href: '/admin/usuarios', label: '👥 Usuarios y Guías', active: true },
+            { href: '/admin/configuracion', label: '⚙️ Configuración' },
+            { href: '/guia', label: '🎓 Panel del Guía' },
+            { href: '/docente', label: '📊 Dashboard Docente' },
+            { href: '/chat', label: '🦉 Ir al Chat' },
+          ].map(item => (
+            <a key={item.href} href={item.href} style={{display:'block',padding:'10px 12px',borderRadius:'8px',color: item.active ? 'white' : 'rgba(255,255,255,.6)',background: item.active ? 'rgba(255,255,255,.15)' : 'transparent',textDecoration:'none',fontSize:'13px',fontWeight: item.active ? 600 : 400,marginBottom:'2px',transition:'all .15s'}}>
+              {item.label}
+            </a>
+          ))}
+        </nav>
+        <div style={{padding:'16px 20px',borderTop:'1px solid rgba(255,255,255,.1)'}}>
+          <p style={{color:'rgba(255,255,255,.4)',fontSize:'11px',margin:'0 0 12px'}}>© 2026 Owlaris</p>
+        </div>
+      </aside>
 
-      <main className="max-w-6xl mx-auto px-6 py-6">
+      <main style={{flex:1,padding:'32px',overflowX:'auto'}}>
+        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'24px'}}>
+          <div>
+            <h1 style={{fontSize:'22px',fontWeight:700,color:'#1A2744',margin:'0 0 4px'}}>👥 Usuarios y Guías</h1>
+            <p style={{color:'#64748B',fontSize:'13px',margin:0}}>{filtrados.length} usuarios encontrados</p>
+          </div>
+        </div>
         {mensaje && (
           <div className={`mb-4 px-4 py-3 rounded-xl text-sm ${mensaje.startsWith('✅') ? 'bg-green-500/20 text-green-300' : 'bg-red-500/20 text-red-300'}`}>
             {mensaje} <button onClick={() => setMensaje('')} className="ml-2 opacity-60">×</button>
@@ -425,6 +465,10 @@ export default function UsuariosPage() {
                     <button onClick={() => setModalEditar({...u, colegio_id: u.colegio?.id || colegioId})}
                       className="text-gray-400 hover:text-blue-300 text-xs px-2 py-1 rounded hover:bg-white/10 transition-colors">
                       ✏️
+                    </button>
+                    <button onClick={() => eliminarUsuario(u)}
+                      className="text-gray-400 hover:text-red-300 text-xs px-2 py-1 rounded hover:bg-white/10 transition-colors">
+                      🗑️
                     </button>
                   </td>
                 </tr>
