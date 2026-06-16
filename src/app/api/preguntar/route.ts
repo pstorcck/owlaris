@@ -121,70 +121,51 @@ function normalizarMateria(texto: string, esOlimpiadas = false): string {
   return texto.trim()
 }
 
-// Calculadora matemática para verificar respuestas numéricas
+// Calculadora matemática — verifica por sustitución usando mathjs
 function extraerYResolverEcuacion(textoTutor: string, respuestaAlumno: string): string | null {
   try {
-    const { evaluate, parse, simplify } = require('mathjs') as typeof import('mathjs')
-    
-    // Extraer número de la respuesta del alumno (ignorar = y otros símbolos)
+    const math = require('mathjs') as { evaluate: (expr: string) => number }
+
+    // Extraer número de la respuesta del alumno
     const numMatch = respuestaAlumno.replace(/[=]/g, ' ').match(/-?\d+([.,]\d+)?/)
     if (!numMatch) return null
     const numAlumno = parseFloat(numMatch[0].replace(',', '.'))
-    
-    // Buscar ecuaciones SOLO en el último mensaje del tutor
-    const textoCompleto = textoTutor
+    if (isNaN(numAlumno)) return null
 
-    // Tipo 1: ax + b = c o ax - b = c (con coeficiente)
-    const ecCoef = /(\d*)\s*([a-z])\s*([+\-])\s*(\d+)\s*=\s*(\d+)/gi
+    // Buscar ecuaciones en el texto del tutor: ax ± b = c o x ± b = c
+    const ecuacionRegex = /(\d*)?\s*([a-z])\s*([+\-])\s*(\d+)\s*=\s*(\d+)/gi
     let match
-    while ((match = ecCoef.exec(textoCompleto)) !== null) {
-      const coef = parseFloat(match[1] || '1')
-      const operador = match[3]
-      const num1 = parseFloat(match[4])
-      const resultado = parseFloat(match[5])
-      
-      let respuestaCorrecta: number
-      if (operador === '+') respuestaCorrecta = (resultado - num1) / coef
-      else respuestaCorrecta = (resultado + num1) / coef
-      
-      const esCorrecta = Math.abs(numAlumno - respuestaCorrecta) < 0.001
-      if (esCorrecta) {
-        return `CALCULADORA_CORRECTO: ${numAlumno} ES la respuesta correcta. DEBES confirmar inmediatamente que está correcto sin dudar.`
-      } else {
-        return `CALCULADORA_INCORRECTO: ${numAlumno} es incorrecto. La respuesta correcta es ${respuestaCorrecta}. Explica el error paso a paso.`
-      }
+    while ((match = ecuacionRegex.exec(textoTutor)) !== null) {
+      const [_, coefStr, _variable, _op, _b, _c] = match
+      try {
+        // Sustituir el valor del alumno en el lado izquierdo
+        const izq = match[0].split('=')[0].trim()
+        const der = parseFloat(match[0].split('=')[1].trim())
+        
+        // Preparar expresión: reemplazar variable por número, añadir * para coeficientes
+        const expr = izq
+          .replace(/(\d)([a-z])/gi, '$1*$2')  // 2x → 2*x
+          .replace(/[a-z]/gi, numAlumno.toString()) // x → 7
+        
+        const resultado = math.evaluate(expr)
+        const esCorrecta = Math.abs(resultado - der) < 0.001
+
+        if (esCorrecta) {
+          return `CALCULADORA_CORRECTO: Verificado matemáticamente. ${numAlumno} ES correcto.`
+        } else {
+          return `CALCULADORA_INCORRECTO: Verificado matemáticamente. ${numAlumno} es incorrecto. Al sustituir: ${expr.replace(/\*/g,'×')} = ${resultado}, pero debería ser ${der}.`
+        }
+      } catch { continue }
     }
 
-    // Tipo 2: x + b = c (sin coeficiente)
-    const ecSimple = /([a-z])\s*([+\-])\s*(\d+)\s*=\s*(\d+)/gi
-    while ((match = ecSimple.exec(textoCompleto)) !== null) {
-      const operador = match[2]
-      const num1 = parseFloat(match[3])
-      const resultado = parseFloat(match[4])
-      
-      const respuestaCorrecta = operador === '+' ? resultado - num1 : resultado + num1
-      
-      const esCorrecta = Math.abs(numAlumno - respuestaCorrecta) < 0.001
-      if (esCorrecta) {
-        return `CALCULADORA_CORRECTO: ${numAlumno} ES la respuesta correcta. DEBES confirmar inmediatamente que está correcto sin dudar.`
-      } else {
-        return `CALCULADORA_INCORRECTO: ${numAlumno} es incorrecto. La respuesta correcta es ${respuestaCorrecta}. Explica el error.`
-      }
-    }
-
-    // Buscar operaciones simples (25% de 200, etc.)
-    const porcentajeRegex = (/(\d+)%\s+de\s+(\d+)/i)
-    const pMatch = textoTutor.match(porcentajeRegex)
+    // Buscar porcentajes: N% de M
+    const pctRegex = /(\d+)%\s+de\s+(\d+)/i
+    const pMatch = textoTutor.match(pctRegex)
     if (pMatch) {
-      const pct = parseFloat(pMatch[1])
-      const base = parseFloat(pMatch[2])
-      const correcto = (pct / 100) * base
+      const correcto = (parseFloat(pMatch[1]) / 100) * parseFloat(pMatch[2])
       const esCorrecta = Math.abs(numAlumno - correcto) < 0.001
-      if (esCorrecta) {
-        return `CALCULADORA_CORRECTO: ${numAlumno} ES correcto (${pct}% de ${base} = ${correcto}). Confirma y felicita.`
-      } else {
-        return `CALCULADORA_INCORRECTO: ${numAlumno} es incorrecto. ${pct}% de ${base} = ${correcto}. Explica.`
-      }
+      if (esCorrecta) return `CALCULADORA_CORRECTO: ${numAlumno} ES correcto.`
+      return `CALCULADORA_INCORRECTO: La respuesta correcta es ${correcto}.`
     }
 
     return null
