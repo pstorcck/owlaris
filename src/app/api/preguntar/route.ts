@@ -126,15 +126,16 @@ function extraerYResolverEcuacion(textoTutor: string, respuestaAlumno: string): 
   try {
     const { evaluate, parse, simplify } = require('mathjs') as typeof import('mathjs')
     
-    // Extraer número de la respuesta del alumno
-    const numMatch = respuestaAlumno.match(/-?\d+([.,]\d+)?/)
+    // Extraer número de la respuesta del alumno (ignorar = y otros símbolos)
+    const numMatch = respuestaAlumno.replace(/[=]/g, ' ').match(/-?\d+([.,]\d+)?/)
     if (!numMatch) return null
     const numAlumno = parseFloat(numMatch[0].replace(',', '.'))
     
-    // Buscar ecuaciones en el texto del tutor (x + 8 = 20, y - 7 = 15, etc.)
+    // Buscar ecuaciones en TODO el historial reciente
+    const textoCompleto = textoTutor + ' ' + respuestaAlumno
     const ecuacionRegex = /([a-z])\s*([+\-*\/])\s*(\d+)\s*=\s*(\d+)/gi
     let match
-    while ((match = ecuacionRegex.exec(textoTutor)) !== null) {
+    while ((match = ecuacionRegex.exec(textoCompleto)) !== null) {
       const variable = match[1]
       const operador = match[2]
       const num1 = parseFloat(match[3])
