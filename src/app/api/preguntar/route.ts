@@ -125,8 +125,10 @@ function normalizarMateria(texto: string, esOlimpiadas = false): string {
 function validarOpcionMultiple(preguntaAlumno: string, historial: {rol:string; contenido:string}[]): string | null {
   // Solo aplica si el alumno respondió con una sola letra
   const respLetra = preguntaAlumno.trim().toUpperCase()
-  if (!/^[ABCD]$/.test(respLetra)) return null
-
+  // Detectar también si el alumno dio el valor numérico en lugar de la letra
+  // Ej: dice "es 12" cuando la opción C es 12
+  const esRespuestaDirecta = !/^[ABCD]$/.test(respLetra)
+  
   // Buscar la última pregunta del tutor con opciones A) B) C) D)
   const mensajesTutor = historial.filter(m => m.rol === 'asistente')
   const ultimoMensaje = mensajesTutor[mensajesTutor.length - 1]
@@ -144,6 +146,18 @@ function validarOpcionMultiple(preguntaAlumno: string, historial: {rol:string; c
   }
 
   if (Object.keys(opciones).length < 2) return null
+
+  // Si el alumno dio valor directo (no letra), buscar qué letra corresponde
+  if (esRespuestaDirecta) {
+    const valorAlumno = pregunta.trim().toLowerCase().replace(/[^\w\s.,]/g, '')
+    for (const [letra, valor] of Object.entries(opciones)) {
+      const valorLimpio = valor.toLowerCase().replace(/[^\w\s.,]/g, '')
+      if (valorLimpio.includes(valorAlumno) || valorAlumno.includes(valorLimpio)) {
+        return `VALIDACIÓN_VALOR_DIRECTO: El alumno dijo "${pregunta.trim()}" que corresponde a la opción ${letra}) ${valor}. Evalúa si ${letra} es la respuesta correcta según la pregunta anterior.`
+      }
+    }
+    return null // No se pudo mapear el valor a ninguna opción
+  }
 
   const respCorrectaRegex = new RegExp('respuesta\\s+(?:correcta\\s+)?(?:es\\s+)?[lael]*\\s*(?:opci[oó]n\\s+)?([A-D])', 'gi')
   const matchCorrecta = respCorrectaRegex.exec(texto)
