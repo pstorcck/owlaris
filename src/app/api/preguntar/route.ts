@@ -131,8 +131,8 @@ function extraerYResolverEcuacion(textoTutor: string, respuestaAlumno: string): 
     if (!numMatch) return null
     const numAlumno = parseFloat(numMatch[0].replace(',', '.'))
     
-    // Buscar ecuaciones en TODO el historial reciente
-    const textoCompleto = textoTutor + ' ' + respuestaAlumno
+    // Buscar ecuaciones SOLO en el último mensaje del tutor
+    const textoCompleto = textoTutor
     const ecuacionRegex = /([a-z])\s*([+\-*\/])\s*(\d+)\s*=\s*(\d+)/gi
     let match
     while ((match = ecuacionRegex.exec(textoCompleto)) !== null) {
