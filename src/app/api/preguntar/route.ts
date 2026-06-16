@@ -149,11 +149,11 @@ function validarOpcionMultiple(preguntaAlumno: string, historial: {rol:string; c
 
   // Si el alumno dio valor directo (no letra), buscar qué letra corresponde
   if (esRespuestaDirecta) {
-    const valorAlumno = pregunta.trim().toLowerCase().replace(/[^\w\s.,]/g, '')
+    const valorAlumno = preguntaAlumno.trim().toLowerCase().replace(/[^\w\s.,]/g, '')
     for (const [letra, valor] of Object.entries(opciones)) {
       const valorLimpio = valor.toLowerCase().replace(/[^\w\s.,]/g, '')
       if (valorLimpio.includes(valorAlumno) || valorAlumno.includes(valorLimpio)) {
-        return `VALIDACIÓN_VALOR_DIRECTO: El alumno dijo "${pregunta.trim()}" que corresponde a la opción ${letra}) ${valor}. Evalúa si ${letra} es la respuesta correcta según la pregunta anterior.`
+        return `VALIDACIÓN_VALOR_DIRECTO: El alumno dijo "${preguntaAlumno.trim()}" que corresponde a la opción ${letra}) ${valor}. Evalúa si ${letra} es la respuesta correcta según la pregunta anterior.`
       }
     }
     return null // No se pudo mapear el valor a ninguna opción
