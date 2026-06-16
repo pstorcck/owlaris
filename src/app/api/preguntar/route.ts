@@ -133,28 +133,42 @@ function extraerYResolverEcuacion(textoTutor: string, respuestaAlumno: string): 
     
     // Buscar ecuaciones SOLO en el último mensaje del tutor
     const textoCompleto = textoTutor
-    const ecuacionRegex = /([a-z])\s*([+\-*\/])\s*(\d+)\s*=\s*(\d+)/gi
+
+    // Tipo 1: ax + b = c o ax - b = c (con coeficiente)
+    const ecCoef = /(\d*)\s*([a-z])\s*([+\-])\s*(\d+)\s*=\s*(\d+)/gi
     let match
-    while ((match = ecuacionRegex.exec(textoCompleto)) !== null) {
-      const variable = match[1]
+    while ((match = ecCoef.exec(textoCompleto)) !== null) {
+      const coef = parseFloat(match[1] || '1')
+      const operador = match[3]
+      const num1 = parseFloat(match[4])
+      const resultado = parseFloat(match[5])
+      
+      let respuestaCorrecta: number
+      if (operador === '+') respuestaCorrecta = (resultado - num1) / coef
+      else respuestaCorrecta = (resultado + num1) / coef
+      
+      const esCorrecta = Math.abs(numAlumno - respuestaCorrecta) < 0.001
+      if (esCorrecta) {
+        return `CALCULADORA_CORRECTO: ${numAlumno} ES la respuesta correcta. DEBES confirmar inmediatamente que está correcto sin dudar.`
+      } else {
+        return `CALCULADORA_INCORRECTO: ${numAlumno} es incorrecto. La respuesta correcta es ${respuestaCorrecta}. Explica el error paso a paso.`
+      }
+    }
+
+    // Tipo 2: x + b = c (sin coeficiente)
+    const ecSimple = /([a-z])\s*([+\-])\s*(\d+)\s*=\s*(\d+)/gi
+    while ((match = ecSimple.exec(textoCompleto)) !== null) {
       const operador = match[2]
       const num1 = parseFloat(match[3])
       const resultado = parseFloat(match[4])
       
-      let respuestaCorrecta: number
-      switch (operador) {
-        case '+': respuestaCorrecta = resultado - num1; break
-        case '-': respuestaCorrecta = resultado + num1; break
-        case '*': respuestaCorrecta = resultado / num1; break
-        case '/': respuestaCorrecta = resultado * num1; break
-        default: continue
-      }
+      const respuestaCorrecta = operador === '+' ? resultado - num1 : resultado + num1
       
       const esCorrecta = Math.abs(numAlumno - respuestaCorrecta) < 0.001
       if (esCorrecta) {
-        return `CALCULADORA_CORRECTO: El alumno respondió ${numAlumno} que ES correcto para ${variable}${operador}${num1}=${resultado}. Confirma inmediatamente y felicita.`
+        return `CALCULADORA_CORRECTO: ${numAlumno} ES la respuesta correcta. DEBES confirmar inmediatamente que está correcto sin dudar.`
       } else {
-        return `CALCULADORA_INCORRECTO: El alumno respondió ${numAlumno} pero la respuesta correcta es ${respuestaCorrecta} para ${variable}${operador}${num1}=${resultado}. Explica el error.`
+        return `CALCULADORA_INCORRECTO: ${numAlumno} es incorrecto. La respuesta correcta es ${respuestaCorrecta}. Explica el error.`
       }
     }
 
