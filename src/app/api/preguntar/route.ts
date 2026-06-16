@@ -883,6 +883,20 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // Si la calculadora confirma que es CORRECTO, responder directo sin OpenAI
+    if (validacionCalc?.startsWith('CALCULADORA_CORRECTO')) {
+      const numMatch = pregunta.replace(/[=]/g, ' ').match(/-?\d+([.,]\d+)?/)
+      const valor = numMatch ? numMatch[0] : pregunta.trim()
+      const respuesta = `¡Correcto! ${valor} es la respuesta correcta. Bien hecho. ¿Puedes explicarme cómo llegaste a ese resultado?`
+      await supabase.from('interacciones').insert({
+        usuario_id: user.id, colegio_id: perfil.colegio_id, materia_id: materia_id || null,
+        grado: gradoEfectivo, tema_detectado: pregunta.substring(0, 100),
+        pregunta, respuesta, tokens_usados: 0, costo_usd: 0,
+        modelo_usado: 'calculadora', documento_fuente: null, sospecha_copia: false,
+      })
+      return NextResponse.json({ respuesta, tokens: 0 })
+    }
+
     const tipoPregunta = detectarTipoPregunta(pregunta)
     const esBienvenida = esSaludo(pregunta) && (!historial || historial.length === 0)
 
