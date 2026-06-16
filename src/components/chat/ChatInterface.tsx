@@ -257,14 +257,14 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
       })
       if (!res.ok) { setReproduciendo(false); return }
       const blob = await res.blob()
-      if (blob.size === 0) { setReproduciendo(false); return }
       const url = URL.createObjectURL(blob)
       const audio = new Audio(url)
       audioRef.current = audio
+      audio.onplay = () => setReproduciendo(true)
       audio.onended = () => { setReproduciendo(false); URL.revokeObjectURL(url) }
       audio.onerror = () => { setReproduciendo(false); URL.revokeObjectURL(url) }
       setReproduciendo(true)
-      await audio.play().catch(() => setReproduciendo(false))
+      await audio.play()
     } catch { setReproduciendo(false) }
   }
 
@@ -512,6 +512,7 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
                     {grado}
                   </button>
                 ))}
+              </div>
               <button onClick={() => setMostrandoGrados(false)}
                 style={{width:'100%',background:'#F8F7FF',border:'1px solid rgba(109,40,217,.1)',borderRadius:'14px',padding:'13px',fontSize:'13px',fontWeight:600,color:'#9490B8',cursor:'pointer'}}>
                 {idiomaIngles ? 'Cancel' : 'Cancelar'}
@@ -732,7 +733,6 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
                 placeholder={placeholder} rows={2} disabled={cargando}
                 style={{flex:1,background:'transparent',border:'none',outline:'none',resize:'none',fontSize:'14px',color:'#1E1B4B',lineHeight:'1.6',fontFamily:"'Plus Jakarta Sans',sans-serif",fontWeight:400}}
               />
-              </div>
               <button onClick={()=>enviarPregunta()} disabled={cargando||!pregunta.trim()} className="o-send">
                 <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="white" strokeWidth={2.2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/>
@@ -793,7 +793,7 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
                 onClick={toggleGrabacion}
                 disabled={cargando}
                 style={{
-                  width:'80px',height:'80px',borderRadius:'50%',border:'none',cursor:cargando?'not-allowed':'pointer',
+                  width:'80px',height:'80px',borderRadius:'50%',border:'none',cursor:(cargando||reproduciendo)?'not-allowed':'pointer',
                   background:grabando?'linear-gradient(135deg,#DC2626,#B91C1C)':'linear-gradient(135deg,#7C3AED,#5B21B6)',
                   boxShadow:grabando?'0 0 0 8px rgba(220,38,38,.2),0 8px 32px rgba(220,38,38,.4)':'0 0 0 8px rgba(109,40,217,.1),0 8px 32px rgba(109,40,217,.3)',
                   display:'flex',alignItems:'center',justifyContent:'center',

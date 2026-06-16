@@ -921,6 +921,73 @@ ${contextoContenido}`
       await registrarPendiente(supabase, perfil, materia, pregunta)
     }
 
+    // Detectar alertas pedagógicas
+    try {
+      const baseUrl = process.env.NEXT_PUBLIC_URL || 'https://owlaris.app'
+      
+      // Alerta riesgo de copia
+      if (detectarCopia(pregunta)) {
+        fetch(`${baseUrl}/api/alertas`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            alumno_id: user.id,
+            colegio_id: perfil.colegio_id,
+            tipo: 'riesgo_copia',
+            descripcion: 'El alumno solicitó respuesta directa o entrega sospechosa.',
+            contexto: pregunta.substring(0, 200)
+          })
+        })
+      }
+
+      // Alerta baja comprensión — detectar retroalimentación negativa
+      const indicadoresBajaComprension = ['no entiendo', 'no entendí', 'no me queda claro', 'sigo sin entender', 'todavía no entiendo', "i don't understand", 'confused']
+      const esBajaComprension = indicadoresBajaComprension.some(i => pregunta.toLowerCase().includes(i))
+      if (esBajaComprension) {
+        // Verificar si ya hubo intentos fallidos recientes
+        const { count } = await supabase.from('interacciones')
+          .select('*', { count: 'exact', head: true })
+          .eq('usuario_id', user.id)
+          .gte('creado_en', new Date(Date.now() - 1800000).toISOString()) // última media hora
+        if ((count || 0) >= 2) {
+          fetch(`${baseUrl}/api/alertas`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              alumno_id: user.id,
+              colegio_id: perfil.colegio_id,
+              tipo: 'baja_comprension',
+              descripcion: 'El alumno expresó no entender después de varios intentos.',
+              contexto: pregunta.substring(0, 200)
+            })
+          })
+        }
+      }
+
+      // Alerta bloqueo recurrente — mismo tema varias veces
+      if (materia && gradoEfectivo) {
+        const { count: countTema } = await supabase.from('interacciones')
+          .select('*', { count: 'exact', head: true })
+          .eq('usuario_id', user.id)
+          .eq('grado', gradoEfectivo)
+          .ilike('tema_detectado', `%${pregunta.substring(0,30)}%`)
+          .gte('creado_en', new Date(Date.now() - 3600000).toISOString())
+        if ((countTema || 0) >= 3) {
+          fetch(`${baseUrl}/api/alertas`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              alumno_id: user.id,
+              colegio_id: perfil.colegio_id,
+              tipo: 'bloqueo_recurrente',
+              descripcion: `El alumno ha preguntado sobre el mismo tema más de 3 veces en la última hora.`,
+              contexto: `Materia: ${materia?.nombre || ''} | Tema: ${pregunta.substring(0, 100)}`
+            })
+          })
+        }
+      }
+    } catch { /* silencioso */ }
+
     return NextResponse.json({ respuesta, tokens: tokensUsados, documento_fuente: documentoFuente })
 
   } catch (err) {

@@ -1,0 +1,132 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { createClient } from '@/lib/supabase/server'
+import { Resend } from 'resend'
+
+const resend = new Resend(process.env.RESEND_API_KEY)
+
+export async function GET(req: NextRequest) {
+  const supabase = createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+
+  const { data: perfil } = await supabase.from('usuarios').select('rol, colegio_id').eq('id', user.id).single()
+  if (!perfil || !['maestro', 'admin', 'superadmin'].includes(perfil.rol)) {
+    return NextResponse.json({ error: 'Sin permiso' }, { status: 403 })
+  }
+
+  const { data: alertas } = await supabase
+    .from('alertas')
+    .select('*, alumno:alumno_id(nombre_completo, email, grado), guia:guia_id(nombre_completo)')
+    .eq('colegio_id', perfil.colegio_id)
+    .eq('resuelta', false)
+    .order('creado_en', { ascending: false })
+    .limit(50)
+
+  return NextResponse.json({ alertas })
+}
+
+export async function POST(req: NextRequest) {
+  const supabase = createClient()
+  const body = await req.json()
+  const { alumno_id, tipo, descripcion, contexto, colegio_id } = body
+
+  // Evitar alertas duplicadas recientes (última hora)
+  const unaHoraAtras = new Date(Date.now() - 3600000).toISOString()
+  const { data: existente } = await supabase
+    .from('alertas')
+    .select('id')
+    .eq('alumno_id', alumno_id)
+    .eq('tipo', tipo)
+    .eq('resuelta', false)
+    .gte('creado_en', unaHoraAtras)
+    .single()
+
+  if (existente) return NextResponse.json({ ok: true, duplicada: true })
+
+  // Buscar guía asignado
+  const { data: alumno } = await supabase
+    .from('usuarios')
+    .select('nombre_completo, grado, colegio_id')
+    .eq('id', alumno_id)
+    .single()
+
+  let guiaId = null
+  let guiaEmail = null
+  let guiaNombre = null
+
+  // Buscar por alumno específico primero, luego por grado
+  const { data: asignacionAlumno } = await supabase
+    .from('guia_asignaciones')
+    .select('guia_id, guia:guia_id(email, nombre_completo)')
+    .eq('alumno_id', alumno_id)
+    .eq('tipo', 'alumno')
+    .eq('activo', true)
+    .single()
+
+  if (asignacionAlumno) {
+    guiaId = asignacionAlumno.guia_id
+    guiaEmail = (asignacionAlumno.guia as {email:string, nombre_completo:string}).email
+    guiaNombre = (asignacionAlumno.guia as {email:string, nombre_completo:string}).nombre_completo
+  } else if (alumno?.grado) {
+    const { data: asignacionGrado } = await supabase
+      .from('guia_asignaciones')
+      .select('guia_id, guia:guia_id(email, nombre_completo)')
+      .eq('grado', alumno.grado)
+      .eq('colegio_id', colegio_id)
+      .eq('tipo', 'grado')
+      .eq('activo', true)
+      .single()
+
+    if (asignacionGrado) {
+      guiaId = asignacionGrado.guia_id
+      guiaEmail = (asignacionGrado.guia as {email:string, nombre_completo:string}).email
+      guiaNombre = (asignacionGrado.guia as {email:string, nombre_completo:string}).nombre_completo
+    }
+  }
+
+  // Crear alerta
+  await supabase.from('alertas').insert({
+    colegio_id, alumno_id, guia_id: guiaId, tipo, descripcion, contexto
+  })
+
+  // Enviar email si hay guía
+  if (guiaEmail) {
+    const tipoLabel: Record<string,string> = {
+      baja_comprension: '⚠️ Baja comprensión',
+      bloqueo_recurrente: '🔄 Bloqueo recurrente',
+      riesgo_copia: '🚨 Riesgo de copia'
+    }
+    await resend.emails.send({
+      from: 'Owlaris <noreply@owlaris.app>',
+      to: guiaEmail,
+      subject: `${tipoLabel[tipo] || 'Alerta'} — ${alumno?.nombre_completo}`,
+      html: `
+        <div style="font-family:system-ui,sans-serif;max-width:600px;margin:0 auto;background:#F8F7FF;padding:32px;border-radius:16px;">
+          <div style="background:#7C3AED;padding:20px 24px;border-radius:12px;margin-bottom:24px;">
+            <h1 style="color:white;margin:0;font-size:20px;">🦉 Owlaris — Alerta Pedagógica</h1>
+          </div>
+          <p style="color:#4B5563;margin-bottom:8px;">Hola <strong>${guiaNombre}</strong>,</p>
+          <p style="color:#4B5563;margin-bottom:24px;">Se ha detectado una alerta para uno de tus alumnos:</p>
+          <div style="background:white;border:1px solid #E5E7EB;border-radius:12px;padding:20px;margin-bottom:24px;">
+            <p style="margin:0 0 8px;"><strong>Alumno:</strong> ${alumno?.nombre_completo}</p>
+            <p style="margin:0 0 8px;"><strong>Grado:</strong> ${alumno?.grado}</p>
+            <p style="margin:0 0 8px;"><strong>Tipo:</strong> ${tipoLabel[tipo]}</p>
+            <p style="margin:0 0 8px;"><strong>Descripción:</strong> ${descripcion}</p>
+            ${contexto ? `<p style="margin:0;"><strong>Contexto:</strong> ${contexto}</p>` : ''}
+          </div>
+          <a href="https://owlaris.app/guia" style="background:#7C3AED;color:white;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600;">Ver en Owlaris →</a>
+          <p style="color:#9CA3AF;font-size:12px;margin-top:24px;">Owlaris · Tu tutor académico inteligente</p>
+        </div>
+      `
+    })
+  }
+
+  return NextResponse.json({ ok: true, guia_notificado: !!guiaEmail })
+}
+
+export async function PATCH(req: NextRequest) {
+  const supabase = createClient()
+  const { id } = await req.json()
+  await supabase.from('alertas').update({ resuelta: true, resuelta_en: new Date().toISOString() }).eq('id', id)
+  return NextResponse.json({ ok: true })
+}
