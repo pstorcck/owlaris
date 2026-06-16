@@ -65,8 +65,8 @@ export async function POST(req: NextRequest) {
 
   if (asignacionAlumno) {
     guiaId = asignacionAlumno.guia_id
-    guiaEmail = (asignacionAlumno.guia as {email:string, nombre_completo:string}).email
-    guiaNombre = (asignacionAlumno.guia as {email:string, nombre_completo:string}).nombre_completo
+    guiaEmail = (asignacionAlumno.guia as unknown as {email:string, nombre_completo:string}).email
+    guiaNombre = (asignacionAlumno.guia as unknown as {email:string, nombre_completo:string}).nombre_completo
   } else if (alumno?.grado) {
     const { data: asignacionGrado } = await supabase
       .from('guia_asignaciones')
@@ -79,8 +79,8 @@ export async function POST(req: NextRequest) {
 
     if (asignacionGrado) {
       guiaId = asignacionGrado.guia_id
-      guiaEmail = (asignacionGrado.guia as {email:string, nombre_completo:string}).email
-      guiaNombre = (asignacionGrado.guia as {email:string, nombre_completo:string}).nombre_completo
+      guiaEmail = (asignacionGrado.guia as unknown as {email:string, nombre_completo:string}).email
+      guiaNombre = (asignacionGrado.guia as unknown as {email:string, nombre_completo:string}).nombre_completo
     }
   }
 
