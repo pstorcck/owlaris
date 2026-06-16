@@ -133,9 +133,8 @@ function extraerYResolverEcuacion(textoTutor: string, respuestaAlumno: string): 
     
     // Buscar ecuaciones en el texto del tutor (x + 8 = 20, y - 7 = 15, etc.)
     const ecuacionRegex = /([a-z])\s*([+\-*\/])\s*(\d+)\s*=\s*(\d+)/gi
-    const matches = [...textoTutor.matchAll(ecuacionRegex)]
-    
-    for (const match of matches) {
+    let match
+    while ((match = ecuacionRegex.exec(textoTutor)) !== null) {
       const variable = match[1]
       const operador = match[2]
       const num1 = parseFloat(match[3])
