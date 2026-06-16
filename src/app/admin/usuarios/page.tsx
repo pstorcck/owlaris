@@ -37,6 +37,12 @@ export default function UsuariosPage() {
   const [form, setForm] = useState({
     nombre_completo: '', email: '', rol: 'alumno', grado: ''
   })
+  const [tabActivo, setTabActivo]           = useState<'usuarios'|'guias'>('usuarios')
+  const [guias, setGuias]                   = useState<Usuario[]>([])
+  const [asignaciones, setAsignaciones]     = useState<{id:string;guia_id:string;tipo:string;alumno_id?:string;grado?:string;guia?:{nombre_completo:string}}[]>([])
+  const [modalGuia, setModalGuia]           = useState(false)
+  const [formGuia, setFormGuia]             = useState({ guia_id: '', tipo: 'grado', grado: '', alumno_id: '' })
+  const [procesandoGuia, setProcesandoGuia] = useState(false)
 
   useEffect(() => {
     async function cargarColegios() {
@@ -61,8 +67,59 @@ export default function UsuariosPage() {
   }, [])
 
   useEffect(() => {
-    if (colegioId) cargarUsuarios()
+    if (colegioId) {
+      cargarUsuarios()
+      cargarGuias()
+      cargarAsignaciones()
+    }
   }, [buscar, filtroRol, filtroGrado, colegioId])
+
+  async function cargarGuias() {
+    const supabase = createClient()
+    const { data } = await supabase
+      .from('usuarios')
+      .select('id, nombre_completo, email, rol, grado, activo, ultimo_acceso, colegio:colegios(nombre, id)')
+      .eq('colegio_id', colegioId)
+      .in('rol', ['maestro', 'admin'])
+      .eq('activo', true)
+      .order('nombre_completo')
+    setGuias((data as unknown as Usuario[]) || [])
+  }
+
+  async function cargarAsignaciones() {
+    const supabase = createClient()
+    const { data } = await supabase
+      .from('guia_asignaciones')
+      .select('id, guia_id, tipo, alumno_id, grado, guia:guia_id(nombre_completo)')
+      .eq('colegio_id', colegioId)
+      .eq('activo', true)
+      .order('creado_en', { ascending: false })
+    setAsignaciones((data as unknown as typeof asignaciones) || [])
+  }
+
+  async function crearAsignacion() {
+    setProcesandoGuia(true)
+    const supabase = createClient()
+    await supabase.from('guia_asignaciones').insert({
+      guia_id: formGuia.guia_id,
+      colegio_id: colegioId,
+      tipo: formGuia.tipo,
+      grado: formGuia.tipo === 'grado' ? formGuia.grado : null,
+      alumno_id: formGuia.tipo === 'alumno' ? formGuia.alumno_id : null,
+    })
+    setProcesandoGuia(false)
+    setModalGuia(false)
+    setFormGuia({ guia_id: '', tipo: 'grado', grado: '', alumno_id: '' })
+    cargarAsignaciones()
+    setMensaje('✅ Guía asignado correctamente')
+  }
+
+  async function eliminarAsignacion(id: string) {
+    const supabase = createClient()
+    await supabase.from('guia_asignaciones').update({ activo: false }).eq('id', id)
+    cargarAsignaciones()
+    setMensaje('✅ Asignación eliminada')
+  }
 
   async function cargarUsuarios() {
     setCargando(true)
@@ -227,6 +284,64 @@ export default function UsuariosPage() {
           </div>
         )}
 
+        {/* Tabs */}
+        <div className="flex gap-2 mb-6 border-b border-white/10 pb-0">
+          <button onClick={() => setTabActivo('usuarios')}
+            className={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors ${tabActivo === 'usuarios' ? 'bg-white/10 text-white border-b-2 border-owlaris-primary' : 'text-gray-400 hover:text-white'}`}>
+            👥 Usuarios
+          </button>
+          <button onClick={() => setTabActivo('guias')}
+            className={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors ${tabActivo === 'guias' ? 'bg-white/10 text-white border-b-2 border-owlaris-primary' : 'text-gray-400 hover:text-white'}`}>
+            🎓 Guías
+          </button>
+        </div>
+
+        {tabActivo === 'guias' && (
+          <div>
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-lg font-semibold">Asignaciones de Guías</h2>
+              <button onClick={() => setModalGuia(true)}
+                className="bg-owlaris-primary hover:bg-purple-700 px-4 py-2 rounded-xl text-sm font-medium transition-colors">
+                + Nueva asignación
+              </button>
+            </div>
+            <div className="bg-white/5 rounded-2xl border border-white/10 overflow-hidden">
+              <table className="w-full text-sm">
+                <thead className="bg-white/5 border-b border-white/10">
+                  <tr>
+                    {['Guía', 'Tipo', 'Asignado a', 'Acciones'].map(h => (
+                      <th key={h} className="text-left px-4 py-3 text-gray-400 font-medium text-xs">{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {asignaciones.length === 0 ? (
+                    <tr><td colSpan={4} className="text-center py-12 text-gray-500">Sin asignaciones aún</td></tr>
+                  ) : asignaciones.map(a => (
+                    <tr key={a.id} className="border-b border-white/5 hover:bg-white/5">
+                      <td className="px-4 py-3 font-medium">{(a.guia as {nombre_completo:string})?.nombre_completo}</td>
+                      <td className="px-4 py-3">
+                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${a.tipo === 'grado' ? 'bg-blue-500/20 text-blue-300' : 'bg-purple-500/20 text-purple-300'}`}>
+                          {a.tipo === 'grado' ? '📚 Por grado' : '👤 Individual'}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-gray-400 text-xs">{a.grado || a.alumno_id || '—'}</td>
+                      <td className="px-4 py-3">
+                        <button onClick={() => eliminarAsignacion(a.id)}
+                          className="text-red-400 hover:text-red-300 text-xs px-2 py-1 rounded hover:bg-white/10">
+                          🗑️ Eliminar
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {tabActivo === 'usuarios' && (
+          <>
         {/* Barra herramientas */}
         <div className="flex flex-wrap gap-3 mb-6">
           <input value={buscar} onChange={e => setBuscar(e.target.value)}
@@ -317,7 +432,59 @@ export default function UsuariosPage() {
             </tbody>
           </table>
         </div>
+          </>
+        )}
       </main>
+
+      {/* Modal Asignar Guía */}
+      {modalGuia && (
+        <Modal titulo="Nueva asignación de guía" onClose={() => setModalGuia(false)}>
+          <div className="space-y-3">
+            <div>
+              <label className="text-xs text-gray-400 mb-1 block">Guía (Maestro o Admin)</label>
+              <select value={formGuia.guia_id} onChange={e => setFormGuia(p => ({...p, guia_id: e.target.value}))}
+                className="w-full bg-white/10 border border-white/20 rounded-lg px-3 py-2 text-sm text-white">
+                <option value="">Seleccionar guía...</option>
+                {guias.map(g => <option key={g.id} value={g.id} className="text-gray-900">{g.nombre_completo} ({g.rol})</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="text-xs text-gray-400 mb-1 block">Tipo de asignación</label>
+              <select value={formGuia.tipo} onChange={e => setFormGuia(p => ({...p, tipo: e.target.value}))}
+                className="w-full bg-white/10 border border-white/20 rounded-lg px-3 py-2 text-sm text-white">
+                <option value="grado" className="text-gray-900">📚 Por grado (lote)</option>
+                <option value="alumno" className="text-gray-900">👤 Alumno individual</option>
+              </select>
+            </div>
+            {formGuia.tipo === 'grado' && (
+              <div>
+                <label className="text-xs text-gray-400 mb-1 block">Grado</label>
+                <select value={formGuia.grado} onChange={e => setFormGuia(p => ({...p, grado: e.target.value}))}
+                  className="w-full bg-white/10 border border-white/20 rounded-lg px-3 py-2 text-sm text-white">
+                  <option value="">Seleccionar grado...</option>
+                  {GRADOS.map(g => <option key={g} value={g} className="text-gray-900">{g}</option>)}
+                </select>
+              </div>
+            )}
+            {formGuia.tipo === 'alumno' && (
+              <div>
+                <label className="text-xs text-gray-400 mb-1 block">Alumno</label>
+                <select value={formGuia.alumno_id} onChange={e => setFormGuia(p => ({...p, alumno_id: e.target.value}))}
+                  className="w-full bg-white/10 border border-white/20 rounded-lg px-3 py-2 text-sm text-white">
+                  <option value="">Seleccionar alumno...</option>
+                  {usuarios.filter(u => u.rol === 'alumno').map(u => (
+                    <option key={u.id} value={u.id} className="text-gray-900">{u.nombre_completo} — {u.grado}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+            <button onClick={crearAsignacion} disabled={procesandoGuia || !formGuia.guia_id}
+              className="w-full bg-owlaris-primary hover:bg-purple-700 py-2 rounded-xl text-sm font-medium transition-colors disabled:opacity-50 mt-2">
+              {procesandoGuia ? 'Asignando...' : 'Crear asignación'}
+            </button>
+          </div>
+        </Modal>
+      )}
 
       {/* Modal Editar */}
       {modalEditar && (
