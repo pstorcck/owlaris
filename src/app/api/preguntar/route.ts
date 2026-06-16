@@ -121,6 +121,62 @@ function normalizarMateria(texto: string, esOlimpiadas = false): string {
   return texto.trim()
 }
 
+// Calculadora matemática para verificar respuestas numéricas
+function extraerYResolverEcuacion(textoTutor: string, respuestaAlumno: string): string | null {
+  try {
+    const { evaluate, parse, simplify } = require('mathjs') as typeof import('mathjs')
+    
+    // Extraer número de la respuesta del alumno
+    const numMatch = respuestaAlumno.match(/-?\d+([.,]\d+)?/)
+    if (!numMatch) return null
+    const numAlumno = parseFloat(numMatch[0].replace(',', '.'))
+    
+    // Buscar ecuaciones en el texto del tutor (x + 8 = 20, y - 7 = 15, etc.)
+    const ecuacionRegex = /([a-z])\s*([+\-*\/])\s*(\d+)\s*=\s*(\d+)/gi
+    const matches = [...textoTutor.matchAll(ecuacionRegex)]
+    
+    for (const match of matches) {
+      const variable = match[1]
+      const operador = match[2]
+      const num1 = parseFloat(match[3])
+      const resultado = parseFloat(match[4])
+      
+      let respuestaCorrecta: number
+      switch (operador) {
+        case '+': respuestaCorrecta = resultado - num1; break
+        case '-': respuestaCorrecta = resultado + num1; break
+        case '*': respuestaCorrecta = resultado / num1; break
+        case '/': respuestaCorrecta = resultado * num1; break
+        default: continue
+      }
+      
+      const esCorrecta = Math.abs(numAlumno - respuestaCorrecta) < 0.001
+      if (esCorrecta) {
+        return `CALCULADORA_CORRECTO: El alumno respondió ${numAlumno} que ES correcto para ${variable}${operador}${num1}=${resultado}. Confirma inmediatamente y felicita.`
+      } else {
+        return `CALCULADORA_INCORRECTO: El alumno respondió ${numAlumno} pero la respuesta correcta es ${respuestaCorrecta} para ${variable}${operador}${num1}=${resultado}. Explica el error.`
+      }
+    }
+
+    // Buscar operaciones simples (25% de 200, etc.)
+    const porcentajeRegex = (/(\d+)%\s+de\s+(\d+)/i)
+    const pMatch = textoTutor.match(porcentajeRegex)
+    if (pMatch) {
+      const pct = parseFloat(pMatch[1])
+      const base = parseFloat(pMatch[2])
+      const correcto = (pct / 100) * base
+      const esCorrecta = Math.abs(numAlumno - correcto) < 0.001
+      if (esCorrecta) {
+        return `CALCULADORA_CORRECTO: ${numAlumno} ES correcto (${pct}% de ${base} = ${correcto}). Confirma y felicita.`
+      } else {
+        return `CALCULADORA_INCORRECTO: ${numAlumno} es incorrecto. ${pct}% de ${base} = ${correcto}. Explica.`
+      }
+    }
+
+    return null
+  } catch { return null }
+}
+
 // Validar respuesta de opción múltiple comparando con el historial
 function validarOpcionMultiple(preguntaAlumno: string, historial: {rol:string; contenido:string}[]): string | null {
   // Solo aplica si el alumno respondió con una sola letra
@@ -803,6 +859,15 @@ export async function POST(req: NextRequest) {
 
     // Validar opción múltiple antes de llamar a OpenAI
     const validacionOM = validarOpcionMultiple(pregunta, historial || [])
+    
+    // Calculadora matemática — verificar respuestas numéricas
+    let validacionCalc: string | null = null
+    if (!validacionOM && historial?.length > 0) {
+      const ultimoTutor = [...(historial || [])].reverse().find(m => m.rol === 'asistente')
+      if (ultimoTutor) {
+        validacionCalc = extraerYResolverEcuacion(ultimoTutor.contenido, pregunta)
+      }
+    }
 
     const tipoPregunta = detectarTipoPregunta(pregunta)
     const esBienvenida = esSaludo(pregunta) && (!historial || historial.length === 0)
@@ -822,7 +887,9 @@ export async function POST(req: NextRequest) {
     const promptBase = cfg.prompt_personalizado || PROMPT_BASE
     const contextoValidacion = validacionOM ? `
 
-INSTRUCCIÓN CRÍTICA DE EVALUACIÓN: ${validacionOM}` : ''
+INSTRUCCIÓN CRÍTICA DE EVALUACIÓN: ${validacionOM}` : validacionCalc ? `
+
+INSTRUCCIÓN CRÍTICA DE EVALUACIÓN: ${validacionCalc}` : ''
     const esModoConversacion = body.modo_conversacion || false
 
     // Modo conversación inglés — respuesta directa sin SharePoint
