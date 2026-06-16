@@ -29,7 +29,7 @@ const SEDES: Record<string, string> = {
 
 function detectarSede(email: string): string {
   const prefijo = email.split('-')[0].toLowerCase()
-  return SEDES[prefijo] || 'Sede Principal'
+  return SEDES[prefijo] || 'Colegio Montano'
 }
 
 function getSedes(alumnos: Alumno[]): string[] {
@@ -445,7 +445,7 @@ export default function DashboardDocente({ perfil }: Props) {
               <div style={{display:'flex',alignItems:'center',gap:'10px'}}>
                 <img src="/buho.png" alt="Owlaris" style={{width:'32px',height:'32px',objectFit:'contain'}}/>
                 <div>
-                  <div style={{fontWeight:700,color:'white',fontSize:'14px'}}>Asistente Docente</div>
+                  <div style={{fontWeight:700,color:'white',fontSize:'14px'}}>Asistente Pedagógico</div>
                   <div style={{fontSize:'11px',color:'rgba(255,255,255,.6)'}}>Powered by Owlaris AI</div>
                 </div>
               </div>
