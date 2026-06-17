@@ -25,7 +25,7 @@ export default async function GuiaPage() {
 
   for (const a of asignaciones || []) {
     if (a.tipo === 'alumno' && a.alumno) {
-      const al = a.alumno as {id:string; nombre_completo:string; grado:string; ultimo_acceso:string|null; email:string}
+      const al = a.alumno as unknown as {id:string; nombre_completo:string; grado:string; ultimo_acceso:string|null; email:string}
       if (!alumnosIds.has(al.id)) { alumnosIds.add(al.id); alumnosList.push(al) }
     } else if (a.tipo === 'grado' && a.grado) {
       // Buscar todos los alumnos de ese grado en el mismo colegio
