@@ -96,12 +96,14 @@ export default function UsuariosPage() {
   async function crearAsignacion() {
     setProcesandoGuia(true)
     const supabase = createClient()
-    await supabase.from('guia_asignaciones').insert({
+    const { error } = await supabase.from('guia_asignaciones').insert({
       guia_id: formGuia.guia_id, colegio_id: colegioId, tipo: formGuia.tipo,
       grado: formGuia.tipo === 'grado' ? formGuia.grado : null,
       alumno_id: formGuia.tipo === 'alumno' ? formGuia.alumno_id : null,
     })
-    setProcesandoGuia(false); setModalGuia(false)
+    setProcesandoGuia(false)
+    if (error) { setMensaje('❌ Error: ' + error.message); return }
+    setModalGuia(false)
     setFormGuia({ guia_id: '', tipo: 'grado', grado: '', alumno_id: '' })
     cargarAsignaciones(); setMensaje('✅ Guía asignado correctamente')
   }
@@ -256,6 +258,13 @@ export default function UsuariosPage() {
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', marginBottom: '16px' }}>
               <input value={buscar} onChange={e => setBuscar(e.target.value)} placeholder="🔍 Buscar..."
                 style={{ flex: 1, minWidth: '200px', padding: '8px 14px', border: '1px solid #E2E8F0', borderRadius: '8px', fontSize: '13px', outline: 'none' }}/>
+              {esSuperAdmin && (
+                <select value={colegioId} onChange={e => setColegioId(e.target.value)}
+                  style={{ padding: '8px 12px', border: '1px solid #E2E8F0', borderRadius: '8px', fontSize: '13px', background: 'white' }}>
+                  <option value="">Todos los colegios</option>
+                  {colegios.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+                </select>
+              )}
               <select value={filtroRol} onChange={e => setFiltroRol(e.target.value)}
                 style={{ padding: '8px 12px', border: '1px solid #E2E8F0', borderRadius: '8px', fontSize: '13px', background: 'white' }}>
                 <option value="">Todos los roles</option>
@@ -354,7 +363,9 @@ export default function UsuariosPage() {
                         </span>
                       </td>
                       <td style={{ padding: '12px 16px', color: '#64748B', fontSize: '12px' }}>
-                        {a.tipo === 'grado' ? a.grado : (a.alumno as {nombre_completo:string})?.nombre_completo || a.alumno_id || '—'}
+                        {a.tipo === 'grado' 
+                          ? `${a.grado} — ${colegios.find(c => c.id === colegioId)?.nombre || 'Colegio'}`
+                          : (a.alumno as {nombre_completo:string})?.nombre_completo || '—'}
                       </td>
                       <td style={{ padding: '12px 16px' }}>
                         <button onClick={() => eliminarAsignacion(a.id)}
