@@ -1019,40 +1019,63 @@ ${contextoContenido}`
       
       // Alerta riesgo de copia
       if (detectarCopia(pregunta)) {
-        fetch(`${baseUrl}/api/alertas`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            alumno_id: user.id,
-            colegio_id: perfil.colegio_id,
+        const { data: alertaCopia } = await supabase.from('alertas')
+          .select('id').eq('alumno_id', user.id).eq('tipo', 'riesgo_copia')
+          .eq('resuelta', false).gte('creado_en', new Date(Date.now() - 3600000).toISOString()).single()
+        if (!alertaCopia) {
+          const { data: asigCopia } = await supabase.from('guia_asignaciones')
+            .select('guia_id').eq('colegio_id', perfil.colegio_id).eq('activo', true)
+            .or(`alumno_id.eq.${user.id},grado.eq.${gradoEfectivo}`).limit(1).single()
+          await supabase.from('alertas').insert({
+            alumno_id: user.id, colegio_id: perfil.colegio_id, guia_id: asigCopia?.guia_id || null,
             tipo: 'riesgo_copia',
             descripcion: 'El alumno solicitó respuesta directa o entrega sospechosa.',
             contexto: pregunta.substring(0, 200)
           })
-        })
+        }
       }
 
       // Alerta baja comprensión — detectar retroalimentación negativa
       const indicadoresBajaComprension = ['no entiendo', 'no entendí', 'no me queda claro', 'sigo sin entender', 'todavía no entiendo', "i don't understand", 'confused']
       const esBajaComprension = indicadoresBajaComprension.some(i => pregunta.toLowerCase().includes(i))
       if (esBajaComprension) {
-        // Verificar si ya hubo intentos fallidos recientes
         const { count } = await supabase.from('interacciones')
           .select('*', { count: 'exact', head: true })
           .eq('usuario_id', user.id)
-          .gte('creado_en', new Date(Date.now() - 1800000).toISOString()) // última media hora
+          .gte('creado_en', new Date(Date.now() - 1800000).toISOString())
         if ((count || 0) >= 2) {
-          fetch(`${baseUrl}/api/alertas`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              alumno_id: user.id,
-              colegio_id: perfil.colegio_id,
+          // Verificar no duplicar alerta reciente
+          const { data: alertaExistente } = await supabase.from('alertas')
+            .select('id').eq('alumno_id', user.id).eq('tipo', 'baja_comprension')
+            .eq('resuelta', false).gte('creado_en', new Date(Date.now() - 3600000).toISOString()).single()
+          if (!alertaExistente) {
+            // Buscar guía asignado
+            const { data: asig } = await supabase.from('guia_asignaciones')
+              .select('guia_id, guia:guia_id(email, nombre_completo)')
+              .eq('colegio_id', perfil.colegio_id)
+              .eq('activo', true)
+              .or(`alumno_id.eq.${user.id},grado.eq.${gradoEfectivo}`)
+              .limit(1).single()
+            const guiaId = asig?.guia_id || null
+            await supabase.from('alertas').insert({
+              alumno_id: user.id, colegio_id: perfil.colegio_id, guia_id: guiaId,
               tipo: 'baja_comprension',
               descripcion: 'El alumno expresó no entender después de varios intentos.',
               contexto: pregunta.substring(0, 200)
             })
-          })
+            // Email al guía
+            if (asig?.guia) {
+              const guia = asig.guia as {email:string; nombre_completo:string}
+              const { Resend } = await import('resend')
+              const resend = new Resend(process.env.RESEND_API_KEY)
+              await resend.emails.send({
+                from: 'Owlaris <noreply@owlaris.app>',
+                to: guia.email,
+                subject: `Alerta: Baja comprensión — ${perfil.nombre_completo}`,
+                html: `<p>Hola ${guia.nombre_completo},</p><p>El alumno <strong>${perfil.nombre_completo}</strong> (${gradoEfectivo}) ha expresado no entender después de varios intentos.</p><p>Contexto: "${pregunta.substring(0,200)}"</p><a href="https://owlaris.app/guia">Ver en Owlaris →</a>`
+              })
+            }
+          }
         }
       }
 
