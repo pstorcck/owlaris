@@ -29,7 +29,7 @@ export default function BurbujaGuia({ stats, colegio }: Props) {
             <button onClick={() => setAbierto(false)} style={{background:'none',border:'none',color:'rgba(255,255,255,.7)',fontSize:'18px',cursor:'pointer',lineHeight:1}}>×</button>
           </div>
           <div style={{flex:1,overflow:'auto'}}>
-            <AsistenteDocente stats={stats} colegio={colegio}/>
+            <AsistenteDocente stats={stats as Parameters<typeof AsistenteDocente>[0]['stats']} colegio={colegio}/>
           </div>
         </div>
       )}
