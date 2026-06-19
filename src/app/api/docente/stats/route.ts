@@ -19,12 +19,32 @@ export async function GET() {
     const hace30dias = new Date(hoy.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString()
     const inicioHoy = new Date(hoy.toISOString().split('T')[0] + 'T00:00:00').toISOString()
 
+    // Verificar asignaciones de guía
+    const { data: asignaciones } = await supabase
+      .from('guia_asignaciones').select('tipo, grado, alumno_id, colegio_id')
+      .eq('guia_id', user.id).eq('activo', true)
+
+    let alumnosIdsAsignados: string[] | null = null
+    if (asignaciones && asignaciones.length > 0) {
+      const ids = new Set<string>()
+      for (const a of asignaciones) {
+        if (a.tipo === 'alumno' && a.alumno_id) {
+          ids.add(a.alumno_id)
+        } else if (a.tipo === 'grado' && a.grado && a.colegio_id) {
+          const { data: ag } = await supabase.from('usuarios').select('id')
+            .eq('colegio_id', a.colegio_id).eq('grado', a.grado).eq('rol', 'alumno').eq('activo', true)
+          for (const al of ag || []) ids.add(al.id)
+        }
+      }
+      if (ids.size > 0) alumnosIdsAsignados = Array.from(ids)
+    }
+
     const { data: alumnos } = await supabase
       .from('usuarios')
       .select('id, nombre_completo, email, grado, activo, ultimo_acceso, colegio:colegios(nombre)')
       .eq('colegio_id', colegioId).eq('rol', 'alumno').order('nombre_completo')
-    // Si es guía con asignaciones, filtrar solo sus alumnos
-    const alumnosFiltrados = alumnosIdsAsignados 
+
+    const alumnosFiltrados = alumnosIdsAsignados
       ? (alumnos || []).filter(a => alumnosIdsAsignados!.includes(a.id))
       : (alumnos || [])
 
