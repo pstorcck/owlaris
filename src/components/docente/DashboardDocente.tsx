@@ -202,6 +202,7 @@ export default function DashboardDocente({ perfil }: Props) {
 
           <div style={{marginTop:'auto',borderTop:'1px solid rgba(109,40,217,.06)',paddingTop:'16px',display:'flex',flexDirection:'column',gap:'4px'}}>
             <button className="nav-item" onClick={()=>setChatAbierto(true)}>💬 Hablar con Owlaris</button>
+            <a href="/guia" className="nav-item" style={{display:'block',textDecoration:'none',color:'inherit'}}>🎓 Panel del Guía</a>
             <button className="nav-item" onClick={cerrarSesion}>↩ Cerrar sesión</button>
           </div>
         </aside>
