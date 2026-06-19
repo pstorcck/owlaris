@@ -18,7 +18,13 @@ export default async function Home() {
   switch (perfil.rol) {
     case 'alumno':     redirect('/chat')
     case 'padre':      redirect('/padres')
-    case 'maestro':    redirect('/docente')
+    case 'maestro': {
+      // Si tiene asignaciones de guía, ir al panel del guía
+      const { data: asig } = await supabase.from('guia_asignaciones').select('id').eq('guia_id', user.id).eq('activo', true).limit(1)
+      if (asig && asig.length > 0) redirect('/guia')
+      else redirect('/docente')
+      break
+    }
     case 'admin':
     case 'superadmin': redirect('/admin')
     default:           redirect('/login')
