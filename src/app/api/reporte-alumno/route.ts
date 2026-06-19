@@ -20,7 +20,8 @@ export async function GET(req: NextRequest) {
       .order('creado_en', { ascending: false })
       .limit(50)
 
-    const temas = [...new Set((interacciones||[]).map(i => i.tema_detectado).filter(Boolean))]
+    const temasSet = new Set((interacciones||[]).map((i:any) => i.tema_detectado).filter(Boolean))
+    const temas = Array.from(temasSet)
     const totalSesiones = interacciones?.length || 0
     const ultimaActividad = interacciones?.[0]?.creado_en || null
 
