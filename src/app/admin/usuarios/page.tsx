@@ -46,7 +46,7 @@ export default function UsuariosPage() {
   const [guias, setGuias]           = useState<Usuario[]>([])
   const [asignaciones, setAsignaciones] = useState<Asignacion[]>([])
   const [modalGuia, setModalGuia]   = useState(false)
-  const [formGuia, setFormGuia]     = useState({ guia_id: '', tipo: 'grado', grado: '', alumno_id: '' })
+  const [formGuia, setFormGuia]     = useState({ guia_id: '', tipo: 'grado', grado: '', alumno_id: '', colegio_id: '' })
   const [procesandoGuia, setProcesandoGuia] = useState(false)
   const [form, setForm]             = useState({ nombre_completo: '', email: '', rol: 'alumno', grado: '', colegio_id: '' })
   const fileRef = useRef<HTMLInputElement>(null)
@@ -97,14 +97,16 @@ export default function UsuariosPage() {
     setProcesandoGuia(true)
     const supabase = createClient()
     const { error } = await supabase.from('guia_asignaciones').insert({
-      guia_id: formGuia.guia_id, colegio_id: colegioId, tipo: formGuia.tipo,
+      guia_id: formGuia.guia_id,
+      colegio_id: formGuia.tipo === 'grado' ? (formGuia.colegio_id || colegioId) : colegioId,
+      tipo: formGuia.tipo,
       grado: formGuia.tipo === 'grado' ? formGuia.grado : null,
       alumno_id: formGuia.tipo === 'alumno' ? formGuia.alumno_id : null,
     })
     setProcesandoGuia(false)
     if (error) { setMensaje('❌ Error: ' + error.message); return }
     setModalGuia(false)
-    setFormGuia({ guia_id: '', tipo: 'grado', grado: '', alumno_id: '' })
+    setFormGuia({ guia_id: '', tipo: 'grado', grado: '', alumno_id: '', colegio_id: '' })
     cargarAsignaciones(); setMensaje('✅ Guía asignado correctamente')
   }
 
@@ -226,6 +228,10 @@ export default function UsuariosPage() {
         <div style={{ padding: '16px 20px', borderTop: '1px solid rgba(255,255,255,.1)' }}>
           <a href="/admin/configuracion" style={S.navItem()}>⚙️ Configuración</a>
           <p style={{ color: 'rgba(255,255,255,.4)', fontSize: '11px', margin: '8px 0 0' }}>© 2026 Owlaris</p>
+          <button onClick={async () => { const { createClient } = await import('@/lib/supabase/client'); await createClient().auth.signOut(); window.location.href = '/login' }}
+            style={{ marginTop: '12px', width: '100%', background: 'rgba(255,255,255,.1)', border: '1px solid rgba(255,255,255,.15)', borderRadius: '8px', padding: '8px', color: 'rgba(255,255,255,.7)', fontSize: '12px', cursor: 'pointer', fontFamily: 'system-ui' }}>
+            Cerrar sesión
+          </button>
         </div>
       </aside>
 
@@ -407,7 +413,7 @@ export default function UsuariosPage() {
                 <option value="admin">Admin</option>
               </select>
             </div>
-            {form.rol === 'alumno' && (
+            {(form.rol === 'alumno') && (
               <div>
                 <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: '#64748B', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '.5px' }}>Grado</label>
                 <select value={form.grado} onChange={e => setForm(p => ({ ...p, grado: e.target.value }))}
@@ -491,14 +497,23 @@ export default function UsuariosPage() {
               </select>
             </div>
             {formGuia.tipo === 'grado' && (
-              <div>
-                <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: '#64748B', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '.5px' }}>Grado</label>
-                <select value={formGuia.grado} onChange={e => setFormGuia(p => ({ ...p, grado: e.target.value }))}
-                  style={{ width: '100%', padding: '9px 12px', border: '1px solid #E2E8F0', borderRadius: '8px', fontSize: '13px' }}>
-                  <option value="">Seleccionar grado...</option>
-                  {GRADOS.map(g => <option key={g} value={g}>{g}</option>)}
-                </select>
-              </div>
+              <>
+                <div>
+                  <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: '#64748B', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '.5px' }}>Colegio</label>
+                  <select value={formGuia.colegio_id || colegioId} onChange={e => setFormGuia(p => ({ ...p, colegio_id: e.target.value }))}
+                    style={{ width: '100%', padding: '9px 12px', border: '1px solid #E2E8F0', borderRadius: '8px', fontSize: '13px' }}>
+                    {colegios.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: '#64748B', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '.5px' }}>Grado</label>
+                  <select value={formGuia.grado} onChange={e => setFormGuia(p => ({ ...p, grado: e.target.value }))}
+                    style={{ width: '100%', padding: '9px 12px', border: '1px solid #E2E8F0', borderRadius: '8px', fontSize: '13px' }}>
+                    <option value="">Seleccionar grado...</option>
+                    {GRADOS.map(g => <option key={g} value={g}>{g}</option>)}
+                  </select>
+                </div>
+              </>
             )}
             {formGuia.tipo === 'alumno' && (
               <div>
