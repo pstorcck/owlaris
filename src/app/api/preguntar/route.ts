@@ -929,17 +929,15 @@ INSTRUCCIÓN CRÍTICA DE EVALUACIÓN: ${validacionCalc}` : ''
               from: 'Owlaris <noreply@owlaris.app>',
               to: guia.email,
               subject: `Alerta: Baja comprensión — ${perfil.nombre_completo}`,
-              html: \`<div style="font-family:system-ui;max-width:500px;margin:0 auto">
-                <div style="background:#2C3E6B;padding:20px;border-radius:12px 12px 0 0">
-                  <h2 style="color:white;margin:0">Alerta Pedagógica — Owlaris</h2>
-                </div>
-                <div style="background:white;padding:20px;border:1px solid #E2E8F0;border-radius:0 0 12px 12px">
-                  <p>Hola <strong>\${guia.nombre_completo}</strong>,</p>
-                  <p>El alumno <strong>\${perfil.nombre_completo}</strong> (\${perfil.grado}) tuvo <strong>3 respuestas incorrectas consecutivas</strong> en Owlaris.</p>
-                  <p style="color:#64748B;font-size:13px">Última pregunta: "\${pregunta.substring(0,150)}"</p>
-                  <a href="https://owlaris.app/guia" style="display:inline-block;background:#2C3E6B;color:white;padding:10px 20px;border-radius:8px;text-decoration:none;margin-top:12px">Ver en Owlaris →</a>
-                </div>
-              </div>\`
+              html: '<div style="font-family:system-ui;max-width:500px;margin:0 auto">' +
+                '<div style="background:#2C3E6B;padding:20px;border-radius:12px 12px 0 0">' +
+                '<h2 style="color:white;margin:0">Alerta Pedagógica — Owlaris</h2></div>' +
+                '<div style="background:white;padding:20px;border:1px solid #E2E8F0;border-radius:0 0 12px 12px">' +
+                '<p>Hola <strong>' + guia.nombre_completo + '</strong>,</p>' +
+                '<p>El alumno <strong>' + perfil.nombre_completo + '</strong> (' + (perfil.grado||'') + ') tuvo <strong>3 respuestas incorrectas consecutivas</strong> en Owlaris.</p>' +
+                '<p style="color:#64748B;font-size:13px">Última pregunta: "' + pregunta.substring(0,150) + '"</p>' +
+                '<a href="https://owlaris.app/guia" style="display:inline-block;background:#2C3E6B;color:white;padding:10px 20px;border-radius:8px;text-decoration:none;margin-top:12px">Ver en Owlaris →</a>' +
+                '</div></div>'
             })
           } catch(e) { console.error('Email error:', e) }
         }
