@@ -356,8 +356,8 @@ export default async function GuiaPage() {
                         <p style={{fontSize:'10px',color:'#94A3B8',margin:0}}>último acceso</p>
                       </div>
                     </div>
-                    <a href="/docente" style={{display:'block',textAlign:'center',background:'#2C3E6B',color:'white',borderRadius:'8px',padding:'8px',fontSize:'12px',fontWeight:600,textDecoration:'none'}}>
-                      Ver reporte completo →
+                    <a href={`/api/reporte-alumno?id=${al.id}`} target="_blank" style={{display:'block',textAlign:'center',background:'#2C3E6B',color:'white',borderRadius:'8px',padding:'8px',fontSize:'12px',fontWeight:600,textDecoration:'none'}}>
+                      Reporte académico →
                     </a>
                   </div>
                 )
@@ -425,14 +425,7 @@ export default async function GuiaPage() {
         </div>
       </main>
 
-      <BurbujaGuia stats={{
-        resumen: { totalAlumnos: alumnosList.length, activosHoy: alumnosActivosHoy, activosSemana: actividadSemana?.length || 0, totalInteracciones: Object.values(interaccionesPorAlumno).reduce((a,b)=>a+b,0) },
-        alumnos: alumnosList.map(al => ({
-          id: al.id, nombre_completo: al.nombre_completo, grado: al.grado,
-          ultimo_acceso: al.ultimo_acceso, sesiones: interaccionesPorAlumno[al.id] || 0
-        })),
-        topTemas: [], topMaterias: [], actividadSemana: actividadSemana || []
-      }} colegio={colegioNombre}/>
+      <BurbujaGuia colegio={colegioNombre}/>
     </div>
   )
 }
