@@ -23,6 +23,10 @@ export async function GET() {
       .from('usuarios')
       .select('id, nombre_completo, email, grado, activo, ultimo_acceso, colegio:colegios(nombre)')
       .eq('colegio_id', colegioId).eq('rol', 'alumno').order('nombre_completo')
+    // Si es guía con asignaciones, filtrar solo sus alumnos
+    const alumnosFiltrados = alumnosIdsAsignados 
+      ? (alumnos || []).filter(a => alumnosIdsAsignados!.includes(a.id))
+      : (alumnos || [])
 
     const { data: interacciones } = await supabase
       .from('interacciones')
@@ -79,7 +83,7 @@ export async function GET() {
       if (i.sospecha_copia) statsPorAlumno[i.usuario_id].sospechas++
     })
 
-    const alumnosConStats = (alumnos||[]).map((a)=>({
+    const alumnosConStats = alumnosFiltrados.map((a)=>({
       id: a.id,
       nombre_completo: (a as unknown as {nombre_completo:string}).nombre_completo,
       email: (a as unknown as {email:string}).email,
