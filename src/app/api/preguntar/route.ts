@@ -933,6 +933,8 @@ INSTRUCCIÓN CRÍTICA DE EVALUACIÓN: ${validacionCalc}` : ''
         modelo_usado: 'gpt-4o-mini',
         sospecha_copia: false,
       })
+      // Actualizar ultimo_acceso
+      supabase.from('usuarios').update({ ultimo_acceso: new Date().toISOString() }).eq('id', user.id).then(() => {})
       return NextResponse.json({ respuesta, nuevo_estado: 'activo', tokens: completion.usage?.total_tokens || 0 })
     }
     const esPadre = body.rol_usuario === 'padre'

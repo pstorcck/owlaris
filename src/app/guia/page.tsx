@@ -249,6 +249,74 @@ export default async function GuiaPage() {
           </div>
         </div>
 
+        {/* Gráfica de estado de alumnos */}
+        {alumnosList.length > 0 && (() => {
+          const activosHoy = alumnosList.filter(a => a.ultimo_acceso && Math.floor((Date.now()-new Date(a.ultimo_acceso).getTime())/86400000) === 0).length
+          const estaSemana = alumnosList.filter(a => a.ultimo_acceso && Math.floor((Date.now()-new Date(a.ultimo_acceso).getTime())/86400000) <= 7 && Math.floor((Date.now()-new Date(a.ultimo_acceso).getTime())/86400000) > 0).length
+          const esteMes = alumnosList.filter(a => a.ultimo_acceso && Math.floor((Date.now()-new Date(a.ultimo_acceso).getTime())/86400000) <= 30 && Math.floor((Date.now()-new Date(a.ultimo_acceso).getTime())/86400000) > 7).length
+          const inactivos = alumnosList.length - activosHoy - estaSemana - esteMes
+          const conAlertas = (alertas||[]).length
+          const total = alumnosList.length
+          const datos = [
+            { label: 'Activo hoy', valor: activosHoy, color: '#059669' },
+            { label: 'Esta semana', valor: estaSemana, color: '#2563EB' },
+            { label: 'Este mes', valor: esteMes, color: '#D97706' },
+            { label: 'Inactivo', valor: inactivos, color: '#E2E8F0' },
+          ]
+          let angulo = -90
+          const radio = 70
+          const cx = 100; const cy = 100
+          const segmentos = datos.map(d => {
+            const pct = total > 0 ? d.valor / total : 0
+            const ang = pct * 360
+            const inicioRad = angulo * Math.PI / 180
+            const finRad = (angulo + ang) * Math.PI / 180
+            const x1 = cx + radio * Math.cos(inicioRad)
+            const y1 = cy + radio * Math.sin(inicioRad)
+            const x2 = cx + radio * Math.cos(finRad)
+            const y2 = cy + radio * Math.sin(finRad)
+            const largeArc = ang > 180 ? 1 : 0
+            const path = pct === 0 ? '' : pct === 1 
+              ? `M ${cx} ${cy-radio} A ${radio} ${radio} 0 1 1 ${cx-0.01} ${cy-radio} Z`
+              : `M ${cx} ${cy} L ${x1} ${y1} A ${radio} ${radio} 0 ${largeArc} 1 ${x2} ${y2} Z`
+            angulo += ang
+            return { ...d, path, pct }
+          })
+          return (
+            <div style={{background:'white',borderRadius:'16px',border:'1px solid rgba(15,28,46,.06)',boxShadow:'0 2px 12px rgba(15,28,46,.05)',padding:'24px',marginBottom:'24px'}}>
+              <h2 style={{fontSize:'15px',fontWeight:700,color:'#0F1C2E',margin:'0 0 20px'}}>Estado de mis alumnos</h2>
+              <div style={{display:'flex',alignItems:'center',gap:'32px'}}>
+                <svg width="200" height="200" viewBox="0 0 200 200">
+                  {segmentos.map((s,i) => s.path ? <path key={i} d={s.path} fill={s.color}/> : null)}
+                  <circle cx={cx} cy={cy} r="40" fill="white"/>
+                  <text x={cx} y={cy-6} textAnchor="middle" fontSize="18" fontWeight="700" fill="#0F1C2E">{total}</text>
+                  <text x={cx} y={cy+12} textAnchor="middle" fontSize="10" fill="#94A3B8">alumnos</text>
+                </svg>
+                <div style={{flex:1}}>
+                  {datos.map((d,i) => (
+                    <div key={i} style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'8px 0',borderBottom:i<datos.length-1?'1px solid #F8FAFC':'none'}}>
+                      <div style={{display:'flex',alignItems:'center',gap:'8px'}}>
+                        <div style={{width:'10px',height:'10px',borderRadius:'50%',background:d.color,flexShrink:0}}/>
+                        <span style={{fontSize:'13px',color:'#475569'}}>{d.label}</span>
+                      </div>
+                      <div style={{display:'flex',alignItems:'center',gap:'8px'}}>
+                        <span style={{fontSize:'13px',fontWeight:600,color:'#0F1C2E'}}>{d.valor}</span>
+                        <span style={{fontSize:'11px',color:'#94A3B8'}}>({total > 0 ? Math.round(d.valor/total*100) : 0}%)</span>
+                      </div>
+                    </div>
+                  ))}
+                  {conAlertas > 0 && (
+                    <div style={{marginTop:'12px',background:'#FEF2F2',borderRadius:'8px',padding:'8px 12px',display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+                      <span style={{fontSize:'12px',color:'#DC2626',fontWeight:500}}>Con alertas activas</span>
+                      <span style={{fontSize:'13px',fontWeight:700,color:'#DC2626'}}>{conAlertas}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )
+        })()}
+
         {/* Reportes académicos */}
         {alumnosList.some(al => (interaccionesPorAlumno[al.id]||0) > 0) && (
           <div style={{background:'white',borderRadius:'16px',border:'1px solid rgba(15,28,46,.06)',boxShadow:'0 2px 12px rgba(15,28,46,.05)',overflow:'hidden',marginBottom:'24px'}}>
@@ -289,7 +357,7 @@ export default async function GuiaPage() {
                       </div>
                     </div>
                     <a href="/docente" style={{display:'block',textAlign:'center',background:'#2C3E6B',color:'white',borderRadius:'8px',padding:'8px',fontSize:'12px',fontWeight:600,textDecoration:'none'}}>
-                      Ver reporte en dashboard
+                      Ver reporte completo →
                     </a>
                   </div>
                 )
