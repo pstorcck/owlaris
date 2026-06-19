@@ -1078,6 +1078,9 @@ ${contextoContenido}`
       }
     } catch { /* silencioso */ }
 
+    // Actualizar ultimo_acceso del alumno
+    supabase.from('usuarios').update({ ultimo_acceso: new Date().toISOString() }).eq('id', user.id).then(() => {})
+
     return NextResponse.json({ respuesta, tokens: tokensUsados, documento_fuente: documentoFuente })
 
   } catch (err) {
