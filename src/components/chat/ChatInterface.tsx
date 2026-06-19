@@ -206,6 +206,23 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
       if (data.materia_detectada) setMateriaAlumno(data.materia_detectada)
       if (data.activar_conversacion) { setModoConversacion(true); setIdiomaIngles(true) }
       if (data.nivel_dificultad) setNivelDificultad(data.nivel_dificultad)
+      // Detectar si la respuesta indica incorrecto
+      const esIncorrecto = data.respuesta && (
+        data.respuesta.toLowerCase().includes('incorrecto') ||
+        data.respuesta.toLowerCase().includes('incorrect') ||
+        data.respuesta.toLowerCase().includes('no es correcto') ||
+        data.respuesta.toLowerCase().includes('no es la respuesta')
+      )
+      const esCorrectoResp = data.respuesta && (
+        data.respuesta.toLowerCase().includes('¡correcto') ||
+        data.respuesta.toLowerCase().includes('correcto') ||
+        data.respuesta.toLowerCase().includes('correct') ||
+        data.respuesta.toLowerCase().includes('muy bien') ||
+        data.respuesta.toLowerCase().includes('excelente')
+      )
+      if (esCorrectoResp) setFallosConsec(0)
+      if (fallosConsec >= 3) setFallosConsec(0) // Reset después de enviar alerta
+      else if (esIncorrecto) setFallosConsec(prev => prev + 1)
       if (data.materias_disponibles) {
         materiasDisponiblesRef.current = data.materias_disponibles
         materiasBaseRef.current = data.materias_disponibles  // guardar base en español

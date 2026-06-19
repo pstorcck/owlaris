@@ -901,6 +901,51 @@ INSTRUCCIÓN CRÍTICA DE EVALUACIÓN: ${validacionOM}` : validacionCalc ? `
 INSTRUCCIÓN CRÍTICA DE EVALUACIÓN: ${validacionCalc}` : ''
     const esModoConversacion = body.modo_conversacion || false
 
+    // Alerta por 3 fallos consecutivos detectados en el frontend
+    if (alerta_comprension) {
+      const { data: alertaExist } = await supabase.from('alertas')
+        .select('id').eq('alumno_id', user.id).eq('tipo', 'baja_comprension')
+        .eq('resuelta', false).gte('creado_en', new Date(Date.now() - 3600000).toISOString()).maybeSingle()
+      if (!alertaExist) {
+        const { data: asig } = await supabase.from('guia_asignaciones')
+          .select('guia_id, guia:guia_id(email, nombre_completo)')
+          .eq('colegio_id', perfil.colegio_id).eq('activo', true)
+          .or(`alumno_id.eq.${user.id},grado.eq.${perfil.grado || ''}`)
+          .limit(1).maybeSingle()
+        const guiaId = asig?.guia_id || null
+        await supabase.from('alertas').insert({
+          alumno_id: user.id, colegio_id: perfil.colegio_id, guia_id: guiaId,
+          tipo: 'baja_comprension',
+          descripcion: `${perfil.nombre_completo} tuvo 3 respuestas incorrectas consecutivas.`,
+          contexto: `Materia en práctica. Última pregunta: ${pregunta.substring(0, 150)}`
+        })
+        console.log('ALERTA GENERADA: 3 fallos consecutivos para', perfil.nombre_completo)
+        if (asig?.guia) {
+          try {
+            const guia = asig.guia as unknown as {email:string; nombre_completo:string}
+            const { Resend } = await import('resend')
+            const resend = new Resend(process.env.RESEND_API_KEY)
+            await resend.emails.send({
+              from: 'Owlaris <noreply@owlaris.app>',
+              to: guia.email,
+              subject: `Alerta: Baja comprensión — ${perfil.nombre_completo}`,
+              html: \`<div style="font-family:system-ui;max-width:500px;margin:0 auto">
+                <div style="background:#2C3E6B;padding:20px;border-radius:12px 12px 0 0">
+                  <h2 style="color:white;margin:0">Alerta Pedagógica — Owlaris</h2>
+                </div>
+                <div style="background:white;padding:20px;border:1px solid #E2E8F0;border-radius:0 0 12px 12px">
+                  <p>Hola <strong>\${guia.nombre_completo}</strong>,</p>
+                  <p>El alumno <strong>\${perfil.nombre_completo}</strong> (\${perfil.grado}) tuvo <strong>3 respuestas incorrectas consecutivas</strong> en Owlaris.</p>
+                  <p style="color:#64748B;font-size:13px">Última pregunta: "\${pregunta.substring(0,150)}"</p>
+                  <a href="https://owlaris.app/guia" style="display:inline-block;background:#2C3E6B;color:white;padding:10px 20px;border-radius:8px;text-decoration:none;margin-top:12px">Ver en Owlaris →</a>
+                </div>
+              </div>\`
+            })
+          } catch(e) { console.error('Email error:', e) }
+        }
+      }
+    }
+
     // Modo conversación inglés — respuesta directa sin SharePoint
     if (esModoConversacion) {
       const OpenAI = (await import('openai')).default
@@ -1039,10 +1084,12 @@ ${contextoContenido}`
       const indicadoresBajaComprension = ['no entiendo', 'no entendí', 'no me queda claro', 'sigo sin entender', 'todavía no entiendo', "i don't understand", 'confused']
       const esBajaComprension = indicadoresBajaComprension.some(i => pregunta.toLowerCase().includes(i))
       if (esBajaComprension) {
+        console.log('ALERTA BAJA COMPRENSION DETECTADA:', pregunta)
         const { count } = await supabase.from('interacciones')
           .select('*', { count: 'exact', head: true })
           .eq('usuario_id', user.id)
           .gte('creado_en', new Date(Date.now() - 1800000).toISOString())
+        console.log('COUNT INTERACCIONES ULTIMA HORA:', count)
         if ((count || 0) >= 2) {
           // Verificar no duplicar alerta reciente
           const { data: alertaExistente } = await supabase.from('alertas')
