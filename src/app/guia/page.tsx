@@ -356,7 +356,7 @@ export default async function GuiaPage() {
                         <p style={{fontSize:'10px',color:'#94A3B8',margin:0}}>último acceso</p>
                       </div>
                     </div>
-                    <a href={`/api/reporte-alumno?id=${al.id}`} target="_blank" style={{display:'block',textAlign:'center',background:'#2C3E6B',color:'white',borderRadius:'8px',padding:'8px',fontSize:'12px',fontWeight:600,textDecoration:'none'}}>
+                    <a href={`/reporte-alumno?id=${al.id}`} style={{display:'block',textAlign:'center',background:'#2C3E6B',color:'white',borderRadius:'8px',padding:'8px',fontSize:'12px',fontWeight:600,textDecoration:'none'}}>
                       Reporte académico →
                     </a>
                   </div>
