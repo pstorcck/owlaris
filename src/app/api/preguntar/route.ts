@@ -1065,7 +1065,7 @@ ${contextoContenido}`
             })
             // Email al guía
             if (asig?.guia) {
-              const guia = asig.guia as {email:string; nombre_completo:string}
+              const guia = asig.guia as unknown as {email:string; nombre_completo:string}
               const { Resend } = await import('resend')
               const resend = new Resend(process.env.RESEND_API_KEY)
               await resend.emails.send({
