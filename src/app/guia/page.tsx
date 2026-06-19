@@ -80,9 +80,9 @@ export default async function GuiaPage() {
   }).length
 
   const tipoLabel: Record<string,string> = {
-    baja_comprension: '⚠️ Baja comprensión',
-    bloqueo_recurrente: '🔄 Bloqueo recurrente',
-    riesgo_copia: '🚨 Riesgo de copia',
+    baja_comprension: 'Baja comprensión',
+    bloqueo_recurrente: 'Bloqueo recurrente',
+    riesgo_copia: 'Riesgo de copia',
   }
   const tipoColor: Record<string,string> = {
     baja_comprension: '#D97706',
@@ -114,15 +114,9 @@ export default async function GuiaPage() {
 
         <nav style={{padding:'16px 12px',flex:1}}>
           <p style={{color:'rgba(255,255,255,.3)',fontSize:'10px',fontWeight:600,letterSpacing:'1px',textTransform:'uppercase',padding:'8px 12px 6px',margin:0}}>Navegación</p>
-          {[
-            { href: '/guia', label: 'Panel principal', icon: '🏠', active: true },
-            { href: '/chat', label: 'Ir al chat', icon: '🦉' },
-          ].map(item => (
-            <a key={item.href} href={item.href} style={{display:'flex',alignItems:'center',gap:'10px',padding:'10px 12px',borderRadius:'10px',color:item.active?'white':'rgba(255,255,255,.55)',background:item.active?'rgba(255,255,255,.12)':'transparent',textDecoration:'none',fontSize:'13px',fontWeight:item.active?600:400,marginBottom:'2px',transition:'all .15s'}}>
-              <span style={{fontSize:'15px'}}>{item.icon}</span>
-              {item.label}
-            </a>
-          ))}
+          <a href="/guia" style={{display:'flex',alignItems:'center',gap:'10px',padding:'10px 12px',borderRadius:'10px',color:'white',background:'rgba(255,255,255,.12)',textDecoration:'none',fontSize:'13px',fontWeight:600,marginBottom:'2px'}}>
+            Panel principal
+          </a>
         </nav>
 
         <div style={{padding:'20px 24px',borderTop:'1px solid rgba(255,255,255,.08)'}}>
@@ -163,10 +157,10 @@ export default async function GuiaPage() {
         {/* Métricas */}
         <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:'16px',marginBottom:'32px'}}>
           {[
-            { label: 'Alumnos asignados', value: alumnosList.length, icon: '👥', color: '#2C3E6B', bg: '#EEF2FF' },
-            { label: 'Activos hoy', value: alumnosActivosHoy, icon: '✅', color: '#059669', bg: '#ECFDF5' },
-            { label: 'Sesiones esta semana', value: actividadSemana?.length || 0, icon: '📚', color: '#0D9488', bg: '#F0FDFA' },
-            { label: 'Alertas activas', value: (alertas||[]).length, icon: '🔔', color: (alertas||[]).length > 0 ? '#DC2626' : '#059669', bg: (alertas||[]).length > 0 ? '#FEF2F2' : '#ECFDF5' },
+            { label: 'Alumnos asignados', value: alumnosList.length, icon: '', color: '#2C3E6B', bg: '#EEF2FF' },
+            { label: 'Activos hoy', value: alumnosActivosHoy, icon: '', color: '#059669', bg: '#ECFDF5' },
+            { label: 'Sesiones esta semana', value: actividadSemana?.length || 0, icon: '', color: '#0D9488', bg: '#F0FDFA' },
+            { label: 'Alertas activas', value: (alertas||[]).length, icon: '', color: (alertas||[]).length > 0 ? '#DC2626' : '#059669', bg: (alertas||[]).length > 0 ? '#FEF2F2' : '#ECFDF5' },
           ].map((m, i) => (
             <div key={i} style={{background:'white',borderRadius:'16px',padding:'20px 24px',border:'1px solid rgba(15,28,46,.06)',boxShadow:'0 2px 12px rgba(15,28,46,.05)'}}>
               <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'12px'}}>
@@ -254,6 +248,55 @@ export default async function GuiaPage() {
           </div>
         </div>
 
+        {/* Reportes académicos */}
+        {alumnosList.some(al => (interaccionesPorAlumno[al.id]||0) > 0) && (
+          <div style={{background:'white',borderRadius:'16px',border:'1px solid rgba(15,28,46,.06)',boxShadow:'0 2px 12px rgba(15,28,46,.05)',overflow:'hidden',marginBottom:'24px'}}>
+            <div style={{padding:'20px 24px',borderBottom:'1px solid #F1F5F9'}}>
+              <h2 style={{fontSize:'15px',fontWeight:700,color:'#0F1C2E',margin:0}}>Reportes académicos</h2>
+              <p style={{color:'#94A3B8',fontSize:'12px',margin:'4px 0 0'}}>Alumnos con actividad en Owlaris</p>
+            </div>
+            <div style={{padding:'16px',display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(260px,1fr))',gap:'12px'}}>
+              {alumnosList.filter(al => (interaccionesPorAlumno[al.id]||0) > 0).map(al => {
+                const diasSinAcceso = al.ultimo_acceso ? Math.floor((Date.now() - new Date(al.ultimo_acceso).getTime()) / 86400000) : 999
+                const alertasAlumno = (alertas||[]).filter((a:any) => a.alumno_id === al.id)
+                return (
+                  <div key={al.id} style={{border:'1px solid #E2E8F0',borderRadius:'12px',padding:'16px',background:'#FAFBFC'}}>
+                    <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'10px'}}>
+                      <div style={{display:'flex',alignItems:'center',gap:'8px'}}>
+                        <div style={{width:'30px',height:'30px',background:'#EEF2FF',borderRadius:'50%',display:'flex',alignItems:'center',justifyContent:'center',fontWeight:700,fontSize:'11px',color:'#2C3E6B'}}>
+                          {al.nombre_completo.charAt(0)}
+                        </div>
+                        <div>
+                          <p style={{fontWeight:600,color:'#0F1C2E',margin:0,fontSize:'13px'}}>{al.nombre_completo.split(' ')[0]} {al.nombre_completo.split(' ')[1]}</p>
+                          <p style={{color:'#94A3B8',fontSize:'11px',margin:0}}>{al.grado}</p>
+                        </div>
+                      </div>
+                      {alertasAlumno.length > 0 && (
+                        <span style={{background:'#FEE2E2',color:'#DC2626',borderRadius:'6px',padding:'2px 8px',fontSize:'10px',fontWeight:700}}>
+                          {alertasAlumno.length} alerta{alertasAlumno.length>1?'s':''}
+                        </span>
+                      )}
+                    </div>
+                    <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'8px',marginBottom:'12px'}}>
+                      <div style={{background:'white',borderRadius:'8px',padding:'8px 10px',border:'1px solid #E2E8F0',textAlign:'center'}}>
+                        <p style={{fontSize:'18px',fontWeight:700,color:'#2C3E6B',margin:0}}>{interaccionesPorAlumno[al.id]||0}</p>
+                        <p style={{fontSize:'10px',color:'#94A3B8',margin:0}}>sesiones</p>
+                      </div>
+                      <div style={{background:'white',borderRadius:'8px',padding:'8px 10px',border:'1px solid #E2E8F0',textAlign:'center'}}>
+                        <p style={{fontSize:'18px',fontWeight:700,color:diasSinAcceso<=3?'#059669':'#D97706',margin:0}}>{diasSinAcceso === 0 ? 'Hoy' : diasSinAcceso === 999 ? '—' : `${diasSinAcceso}d`}</p>
+                        <p style={{fontSize:'10px',color:'#94A3B8',margin:0}}>último acceso</p>
+                      </div>
+                    </div>
+                    <a href={`/admin/reporte?alumno=${al.id}`} style={{display:'block',textAlign:'center',background:'#2C3E6B',color:'white',borderRadius:'8px',padding:'8px',fontSize:'12px',fontWeight:600,textDecoration:'none'}}>
+                      Ver reporte completo
+                    </a>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )}
+
         {/* Lista de alumnos */}
         <div style={{background:'white',borderRadius:'16px',border:'1px solid rgba(15,28,46,.06)',boxShadow:'0 2px 12px rgba(15,28,46,.05)',overflow:'hidden'}}>
           <div style={{padding:'20px 24px',borderBottom:'1px solid #F1F5F9',display:'flex',alignItems:'center',justifyContent:'space-between'}}>
@@ -311,6 +354,13 @@ export default async function GuiaPage() {
           )}
         </div>
       </main>
+      {/* Burbuja flotante Guía Pedagógico */}
+      <div style={{position:'fixed',bottom:'28px',right:'28px',zIndex:100}}>
+        <a href="/docente" style={{display:'flex',alignItems:'center',gap:'10px',background:'linear-gradient(135deg,#2C3E6B,#1E3A5F)',color:'white',borderRadius:'20px',padding:'12px 20px',textDecoration:'none',boxShadow:'0 8px 32px rgba(44,62,107,.4)',fontSize:'13px',fontWeight:600,transition:'all .2s'}}>
+          <img src="/buho.png" alt="Owlaris" style={{width:'24px',height:'24px',objectFit:'contain'}}/>
+          Guía Pedagógico
+        </a>
+      </div>
     </div>
   )
 }
