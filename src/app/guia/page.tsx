@@ -323,7 +323,8 @@ export default async function GuiaPage() {
                 {alumnosList.map(al => {
                   const diasSinAcceso = al.ultimo_acceso ? Math.floor((Date.now() - new Date(al.ultimo_acceso).getTime()) / 86400000) : 999
                   const estado = diasSinAcceso === 0 ? { label: 'Activo hoy', color: '#059669', bg: '#ECFDF5' } :
-                    diasSinAcceso <= 3 ? { label: 'Reciente', color: '#D97706', bg: '#FFFBEB' } :
+                    diasSinAcceso <= 7 ? { label: 'Esta semana', color: '#2563EB', bg: '#EFF6FF' } :
+                    diasSinAcceso <= 30 ? { label: 'Este mes', color: '#D97706', bg: '#FFFBEB' } :
                     { label: 'Inactivo', color: '#94A3B8', bg: '#F8FAFC' }
                   return (
                     <tr key={al.id} style={{borderBottom:'1px solid #F8FAFC'}}>
