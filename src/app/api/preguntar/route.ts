@@ -625,7 +625,7 @@ export async function POST(req: NextRequest) {
     if (!user) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
 
     const body = await req.json()
-    const { pregunta, historial } = body
+    const { pregunta, historial, alerta_comprension = false } = body
     const materia_id      = body.materia_id || body.materia_detectada || ''
     const userId: string  = body.user_id || ''
     const idiomaIngles: boolean = body.idioma_ingles || false
