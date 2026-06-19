@@ -5,7 +5,7 @@ import AsistenteDocente from '@/components/docente/AsistenteDocente'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 
-interface Props { perfil: { nombre_completo: string; colegio: { nombre: string } } }
+interface Props { perfil: { nombre_completo: string; colegio: { nombre: string } }; esGuia?: boolean }
 interface Alumno {
   id: string; nombre_completo: string; email: string; grado: string | null
   activo: boolean; sesiones: number; ultimaSesion: string | null
@@ -37,7 +37,7 @@ function getSedes(alumnos: Alumno[]): string[] {
   return ['Todas', ...Array.from(sedes).sort()]
 }
 
-export default function DashboardDocente({ perfil }: Props) {
+export default function DashboardDocente({ perfil, esGuia }: Props) {
   const [stats, setStats]         = useState<Stats | null>(null)
   const [cargando, setCargando]   = useState(true)
   const [buscar, setBuscar]       = useState('')
@@ -194,7 +194,7 @@ export default function DashboardDocente({ perfil }: Props) {
         <aside className="sidebar">
           <div className="logo">
             <img src="/buho.png" alt="Owlaris"/>
-            <div><div className="logo-text">Owlaris</div><div className="logo-sub">Docente</div></div>
+            <div><div className="logo-text">Owlaris</div><div className="logo-sub">{esGuia ? 'Guía' : 'Docente'}</div></div>
           </div>
           <button className={`nav-item ${tab==='general'?'active':''}`} onClick={()=>setTab('general')}>📊 General</button>
           <button className={`nav-item ${tab==='alumnos'?'active':''}`} onClick={()=>setTab('alumnos')}>👥 Mis alumnos</button>
@@ -202,7 +202,7 @@ export default function DashboardDocente({ perfil }: Props) {
 
           <div style={{marginTop:'auto',borderTop:'1px solid rgba(109,40,217,.06)',paddingTop:'16px',display:'flex',flexDirection:'column',gap:'4px'}}>
             <button className="nav-item" onClick={()=>setChatAbierto(true)}>💬 Hablar con Owlaris</button>
-            <a href="/guia" className="nav-item" style={{display:'block',textDecoration:'none',color:'inherit'}}>🎓 Panel del Guía</a>
+            {!esGuia && <a href="/guia" className="nav-item" style={{display:'block',textDecoration:'none',color:'inherit'}}>🎓 Panel del Guía</a>}
             <button className="nav-item" onClick={cerrarSesion}>↩ Cerrar sesión</button>
           </div>
         </aside>
@@ -210,7 +210,7 @@ export default function DashboardDocente({ perfil }: Props) {
         <main className="main">
           <div className="header">
             <div>
-              <h1>Dashboard</h1>
+              <h1>{esGuia ? 'Panel del Guía' : 'Dashboard'}</h1>
               <p>{perfil.nombre_completo.split(' ')[0]} · {new Date().toLocaleDateString('es-GT',{weekday:'long',day:'numeric',month:'long'})}</p>
             </div>
             <div style={{display:'flex',alignItems:'center',gap:'12px'}}>
