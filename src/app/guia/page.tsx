@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import BurbujaGuia from '@/components/guia/BurbujaGuia'
 import { redirect } from 'next/navigation'
 
 export default async function GuiaPage() {
@@ -287,8 +288,8 @@ export default async function GuiaPage() {
                         <p style={{fontSize:'10px',color:'#94A3B8',margin:0}}>último acceso</p>
                       </div>
                     </div>
-                    <a href={`/admin/reporte?alumno=${al.id}`} style={{display:'block',textAlign:'center',background:'#2C3E6B',color:'white',borderRadius:'8px',padding:'8px',fontSize:'12px',fontWeight:600,textDecoration:'none'}}>
-                      Ver reporte completo
+                    <a href="/docente" style={{display:'block',textAlign:'center',background:'#2C3E6B',color:'white',borderRadius:'8px',padding:'8px',fontSize:'12px',fontWeight:600,textDecoration:'none'}}>
+                      Ver reporte en dashboard
                     </a>
                   </div>
                 )
@@ -354,13 +355,15 @@ export default async function GuiaPage() {
           )}
         </div>
       </main>
-      {/* Burbuja flotante Guía Pedagógico */}
-      <div style={{position:'fixed',bottom:'28px',right:'28px',zIndex:100}}>
-        <a href="/docente" style={{display:'flex',alignItems:'center',gap:'10px',background:'linear-gradient(135deg,#2C3E6B,#1E3A5F)',color:'white',borderRadius:'20px',padding:'12px 20px',textDecoration:'none',boxShadow:'0 8px 32px rgba(44,62,107,.4)',fontSize:'13px',fontWeight:600,transition:'all .2s'}}>
-          <img src="/buho.png" alt="Owlaris" style={{width:'24px',height:'24px',objectFit:'contain'}}/>
-          Guía Pedagógico
-        </a>
-      </div>
+
+      <BurbujaGuia stats={{
+        resumen: { totalAlumnos: alumnosList.length, activosHoy: alumnosActivosHoy, activosSemana: actividadSemana?.length || 0, totalInteracciones: Object.values(interaccionesPorAlumno).reduce((a,b)=>a+b,0) },
+        alumnos: alumnosList.map(al => ({
+          id: al.id, nombre_completo: al.nombre_completo, grado: al.grado,
+          ultimo_acceso: al.ultimo_acceso, sesiones: interaccionesPorAlumno[al.id] || 0
+        })),
+        topTemas: [], topMaterias: [], actividadSemana: actividadSemana || []
+      }} colegio={colegioNombre}/>
     </div>
   )
 }
