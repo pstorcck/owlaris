@@ -63,6 +63,7 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
   const [generandoPDF, setGenerandoPDF]       = useState(false)
   const [nivelDificultad, setNivelDificultad] = useState(1)
   const [aciertosConsec, setAciertosConsec]   = useState(0)
+  const [fallosConsec, setFallosConsec]           = useState(0)
   const [materiaSugerida, setMateriaSugerida] = useState('')
   const TRAD_MATERIAS: Record<string,string> = {
     'Matemática':'Mathematics','Física':'Physics','Química':'Chemistry',
