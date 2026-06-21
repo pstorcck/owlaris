@@ -65,6 +65,7 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
   const [aciertosConsec, setAciertosConsec]   = useState(0)
   const [fallosConsec, setFallosConsec]           = useState(0)
   const fallosRef = useRef(0)
+  const alertaPendienteRef = useRef(false)
   const [materiaSugerida, setMateriaSugerida] = useState('')
   const TRAD_MATERIAS: Record<string,string> = {
     'Matemática':'Mathematics','Física':'Physics','Química':'Chemistry',
@@ -180,7 +181,7 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           pregunta: tp,
-          alerta_comprension: fallosRef.current >= 3,
+          alerta_comprension: alertaPendienteRef.current,
           estado: estadoChat,
           nombre_alumno: nombreAlumno,
           grado_override: gradoAlumno || gradoGuardado,
@@ -224,10 +225,18 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
         data.respuesta.toLowerCase().includes('es la respuesta correcta') ||
         /correcto[^s]/i.test(data.respuesta)
       )
+      // Resetear alerta pendiente después de enviarla
+      alertaPendienteRef.current = false
       if (esIncorrecto) {
         fallosRef.current += 1
         setFallosConsec(fallosRef.current)
         console.log('FALLOS CONSECUTIVOS:', fallosRef.current)
+        if (fallosRef.current >= 3) {
+          alertaPendienteRef.current = true
+          fallosRef.current = 0
+          setFallosConsec(0)
+          console.log('ALERTA PENDIENTE - se enviará en siguiente request')
+        }
       } else if (esCorrectoResp) {
         fallosRef.current = 0
         setFallosConsec(0)
