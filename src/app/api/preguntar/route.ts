@@ -168,6 +168,46 @@ function extraerYResolverEcuacion(textoTutor: string, respuestaAlumno: string): 
       return `CALCULADORA_INCORRECTO: La respuesta correcta es ${correcto}.`
     }
 
+    // Sumas directas: a + b = ? o a + b
+    const sumaRegex = /(\d+)\s*\+\s*(\d+)/
+    const sumaMatch = textoTutor.match(sumaRegex)
+    if (sumaMatch) {
+      const correcto = parseFloat(sumaMatch[1]) + parseFloat(sumaMatch[2])
+      const esCorrecta = Math.abs(numAlumno - correcto) < 0.001
+      if (esCorrecta) return `CALCULADORA_CORRECTO: ${numAlumno} ES correcto.`
+      return `CALCULADORA_INCORRECTO: La respuesta correcta es ${correcto}.`
+    }
+
+    // Restas directas: a - b = ?
+    const restaRegex = /(\d+)\s*-\s*(\d+)/
+    const restaMatch = textoTutor.match(restaRegex)
+    if (restaMatch) {
+      const correcto = parseFloat(restaMatch[1]) - parseFloat(restaMatch[2])
+      const esCorrecta = Math.abs(numAlumno - correcto) < 0.001
+      if (esCorrecta) return `CALCULADORA_CORRECTO: ${numAlumno} ES correcto.`
+      return `CALCULADORA_INCORRECTO: La respuesta correcta es ${correcto}.`
+    }
+
+    // Multiplicaciones: a x b o a * b
+    const multRegex = /(\d+)\s*[x\*×]\s*(\d+)/i
+    const multMatch = textoTutor.match(multRegex)
+    if (multMatch) {
+      const correcto = parseFloat(multMatch[1]) * parseFloat(multMatch[2])
+      const esCorrecta = Math.abs(numAlumno - correcto) < 0.001
+      if (esCorrecta) return `CALCULADORA_CORRECTO: ${numAlumno} ES correcto.`
+      return `CALCULADORA_INCORRECTO: La respuesta correcta es ${correcto}.`
+    }
+
+    // Divisiones: a ÷ b o a / b
+    const divRegex = /(\d+)\s*[÷\/]\s*(\d+)/
+    const divMatch = textoTutor.match(divRegex)
+    if (divMatch && parseFloat(divMatch[2]) !== 0) {
+      const correcto = parseFloat(divMatch[1]) / parseFloat(divMatch[2])
+      const esCorrecta = Math.abs(numAlumno - correcto) < 0.001
+      if (esCorrecta) return `CALCULADORA_CORRECTO: ${numAlumno} ES correcto.`
+      return `CALCULADORA_INCORRECTO: La respuesta correcta es ${correcto}.`
+    }
+
     return null
   } catch { return null }
 }
