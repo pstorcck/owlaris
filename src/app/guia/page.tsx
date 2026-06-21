@@ -204,6 +204,7 @@ export default async function GuiaPage() {
                         {(alerta.alumno as any)?.nombre_completo}
                       </p>
                       <p style={{color:'#64748B',fontSize:'12px',margin:'0 0 3px'}}>{alerta.descripcion}</p>
+                      {alerta.contexto && <p style={{color:'#94A3B8',fontSize:'11px',margin:0,fontStyle:'italic'}}>Tema: {alerta.contexto}</p>}
                       <p style={{color:'#94A3B8',fontSize:'11px',margin:0}}>{new Date(alerta.creado_en).toLocaleString('es-GT')}</p>
                     </div>
                     <form action={async () => {
