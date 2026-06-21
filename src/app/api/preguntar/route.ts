@@ -957,8 +957,8 @@ INSTRUCCIÓN CRÍTICA DE EVALUACIÓN: ${validacionCalc}` : ''
         await supabase.from('alertas').insert({
           alumno_id: user.id, colegio_id: perfil.colegio_id, guia_id: guiaId,
           tipo: 'baja_comprension',
-          descripcion: `${perfil.nombre_completo} tuvo 3 respuestas incorrectas consecutivas.`,
-          contexto: `Materia en práctica. Última pregunta: ${pregunta.substring(0, 150)}`
+              descripcion: `${perfil.nombre_completo} tuvo 3 respuestas incorrectas consecutivas${alerta_materia ? ' en ' + alerta_materia : ''}.`,
+              contexto: (alerta_tema || pregunta.substring(0, 150))
         })
         console.log('ALERTA GENERADA: 3 fallos consecutivos para', perfil.nombre_completo)
         if (asig?.guia) {
