@@ -183,7 +183,7 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
           pregunta: tp,
           alerta_comprension: alertaPendienteRef.current,
           alerta_materia: materiaAlumno || '',
-          alerta_tema: tp.substring(0, 100),
+          alerta_tema: data.documento_fuente || materiaAlumno || '',
           estado: estadoChat,
           nombre_alumno: nombreAlumno,
           grado_override: gradoAlumno || gradoGuardado,
