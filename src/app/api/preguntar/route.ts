@@ -665,7 +665,7 @@ export async function POST(req: NextRequest) {
     if (!user) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
 
     const body = await req.json()
-    const { pregunta, historial } = body
+    const { pregunta, historial, alerta_comprension = false, alerta_materia = '', alerta_tema = '' } = body
     const materia_id      = body.materia_id || body.materia_detectada || ''
     const userId: string  = body.user_id || ''
     const idiomaIngles: boolean = body.idioma_ingles || false
@@ -941,10 +941,301 @@ INSTRUCCIÓN CRÍTICA DE EVALUACIÓN: ${validacionOM}` : validacionCalc ? `
 INSTRUCCIÓN CRÍTICA DE EVALUACIÓN: ${validacionCalc}` : ''
     const esModoConversacion = body.modo_conversacion || false
 
+    // Alerta por 3 fallos consecutivos detectados en el frontend
+    console.log('FLAG ALERTA:', alerta_comprension, 'FALLOS desde frontend')
+    if (alerta_comprension) {
+      const { data: alertaExist } = await supabase.from('alertas')
+        .select('id').eq('alumno_id', user.id).eq('tipo', 'baja_comprension')
+        .eq('resuelta', false).gte('creado_en', new Date(Date.now() - 3600000).toISOString()).maybeSingle()
+      if (!alertaExist) {
+        const { data: asig } = await supabase.from('guia_asignaciones')
+          .select('guia_id, guia:guia_id(email, nombre_completo)')
+          .eq('colegio_id', perfil.colegio_id).eq('activo', true)
+          .or(`alumno_id.eq.${user.id},grado.eq.${perfil.grado || ''}`)
+          .limit(1).maybeSingle()
+        const guiaId = asig?.guia_id || null
+        await supabase.from('alertas').insert({
+          alumno_id: user.id, colegio_id: perfil.colegio_id, guia_id: guiaId,
+          tipo: 'baja_comprension',
+              descripcion: `${perfil.nombre_completo} tuvo 3 respuestas incorrectas consecutivas${alerta_materia ? ' en ' + alerta_materia : ''}.`,
+              contexto: alerta_materia + (alerta_tema ? ' — ' + alerta_tema : ''),
+        })
+        console.log('ALERTA GENERADA: 3 fallos consecutivos para', perfil.nombre_completo)
+        if (asig?.guia) {
+          try {
+            const guia = asig.guia as unknown as {email:string; nombre_completo:string}
+            const { Resend } = await import('resend')
+            const resend = new Resend(process.env.RESEND_API_KEY)
+            await resend.emails.send({
+              from: 'Owlaris <noreply@owlaris.app>',
+              to: guia.email,
+              subject: `Alerta: Baja comprensión — ${perfil.nombre_completo}`,
+              html: '<div style="font-family:system-ui;max-width:500px;margin:0 auto">' +
+                '<div style="background:#2C3E6B;padding:20px;border-radius:12px 12px 0 0">' +
+                '<h2 style="color:white;margin:0">Alerta Pedagógica — Owlaris</h2></div>' +
+                '<div style="background:white;padding:20px;border:1px solid #E2E8F0;border-radius:0 0 12px 12px">' +
+                '<p>Hola <strong>' + guia.nombre_completo + '</strong>,</p>' +
+                '<p>El alumno <strong>' + perfil.nombre_completo + '</strong> (' + (perfil.grado||'') + ') tuvo <strong>3 respuestas incorrectas consecutivas</strong> en Owlaris.</p>' +
+                '<p style="color:#64748B;font-size:13px">Última pregunta: "' + pregunta.substring(0,150) + '"</p>' +
+                '<a href="https://owlaris.app/guia" style="display:inline-block;background:#2C3E6B;color:white;padding:10px 20px;border-radius:8px;text-decoration:none;margin-top:12px">Ver en Owlaris →</a>' +
+                '</div></div>'
+            })
+          } catch(e) { console.error('Email error:', e) }
+        }
+      }
+    }
 
+    // Modo conversación inglés — respuesta directa sin SharePoint
+    if (esModoConversacion) {
+      const OpenAI = (await import('openai')).default
+      const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+      const historialConv = (historial || []).slice(-4).map((m: {rol:string;contenido:string}) => ({
+        role: m.rol === 'usuario' ? 'user' as const : 'assistant' as const,
+        content: m.contenido
+      }))
+      const completion = await openai.chat.completions.create({
+        model: 'gpt-4o-mini',
+        max_tokens: 60,
+        temperature: 0.8,
+        messages: [
+          { role: 'system', content: 'You are Owlaris, a friendly English conversation coach for Guatemalan students of all ages. Your mission is to help them improve their English naturally through conversation. RULES: 1) ALWAYS respond in English only — never use Spanish under any circumstance. 2) Keep responses SHORT: 1-2 sentences max. 3) Gently correct grammar and pronunciation by modeling the correct form naturally in your reply — never say the student is wrong directly. 4) Adapt vocabulary to the student level: simple for beginners, richer for advanced. 5) Ask ONE follow-up question to keep conversation flowing. 6) Be warm, patient and encouraging — mistakes are normal. 7) Any topic is welcome: daily life, school, family, food, hobbies, travel, culture. 8) Follow any special instructions the student gives you naturally as part of the conversation.' },
+          ...historialConv,
+          { role: 'user', content: pregunta }
+        ]
+      })
+      const respuesta = completion.choices[0].message.content || ''
+      // Guardar interacción
+      await supabase.from('interacciones').insert({
+        usuario_id: user.id,
+        colegio_id: perfil.colegio_id,
+        grado: perfil.grado || '',
+        tema_detectado: 'Conversación en Inglés',
+        pregunta: pregunta.substring(0, 500),
+        respuesta: respuesta.substring(0, 1000),
+        tokens_usados: completion.usage?.total_tokens || 0,
+        costo_usd: (completion.usage?.total_tokens || 0) * 0.00000015,
+        modelo_usado: 'gpt-4o-mini',
+        sospecha_copia: false,
+      })
+      // Actualizar ultimo_acceso
+      supabase.from('usuarios').update({ ultimo_acceso: new Date().toISOString() }).eq('id', user.id).then(() => {})
+      return NextResponse.json({ respuesta, nuevo_estado: 'activo', tokens: completion.usage?.total_tokens || 0 })
+    }
+    const esPadre = body.rol_usuario === 'padre'
+    let promptPadre = ''
+    if (esPadre) {
+      const docsPadres = await leerDocumentosPadres()
+      promptPadre = `\n\nROL ESPECIAL - ASISTENTE PARA PADRES: Estás hablando con un padre o madre de familia, NO con un alumno. Tu rol es ser un consejero educativo familiar. Usa los siguientes documentos como base de conocimiento para responder:\n${docsPadres}\n\nAyuda con: estrategias para apoyar el aprendizaje en casa, hábitos de estudio, comunicación con los hijos sobre el colegio, manejo del estrés académico, tips de motivación. Sé cálido, empático y práctico. Responde en español, tono de consejero de confianza.`
+    }
+    const contextoExtra = promptPadre || ''
+    const contextoIdioma = idiomaIngles
+      ? esModoConversacion
+        ? '\n\nCONVERSATION MODE - CRITICAL RULES:\n1. ALWAYS respond in ENGLISH ONLY. Never use Spanish. Even if the student writes in Spanish, respond in English.\n2. Keep responses VERY SHORT: 1-2 sentences maximum.\n3. Gently correct grammar by modeling the correct form in your response.\n4. Ask ONE simple follow-up question.\n5. Be warm and encouraging.\n6. Topics: daily life, school, hobbies, food, travel.'
+        : '\n\nLANGUAGE INSTRUCTION: You MUST respond entirely in English. All explanations, questions, feedback and conversation must be in English only.'
+      : ''
+
+    // Contexto según tipo de pregunta
+    let contextoContenido = ''
+
+    if (esBienvenida) {
+      contextoContenido = `El alumno acaba de saludar. Responde con bienvenida personalizada y pregunta de diagnóstico. NO muestres lista de temas todavía.`
+    } else if (tipoPregunta === 'crisis') {
+      contextoContenido = `ALERTA: El alumno toca un tema de crisis personal. NO busques documentos académicos. Responde con empatía breve y recomienda hablar con un adulto responsable, orientador o profesional. No profundices.`
+    } else if (tipoPregunta === 'formativa') {
+      contextoContenido = `El alumno toca un tema formativo (familia, valores, convivencia). Usa los documentos de configuración para orientarlo. Recomienda videos de Eduardo Montano si aplica.`
+    } else if (contenidoCurricular) {
+      contextoContenido = `CONTENIDO ACADEMICO (fuente principal):\n---\n${contenidoCurricular.substring(0, 3000)}\n---`
+    } else {
+      contextoContenido = `No se encontró un documento específico en SharePoint para esta consulta en ${gradoEfectivo}. Responde con tu conocimiento general del tema. Si detectas que la pregunta pertenece a una materia específica (Matemática, Física, Química, Biología, Historia, Español), menciona al alumno que puede estudiar esa materia directamente seleccionándola del menú.`
+    }
+
+    const systemPrompt = `${promptBase}${contextoIdioma}
+
+CONTEXTO DEL ALUMNO:
+- Nombre: ${perfil.nombre_completo.split(' ')[0]}
+- Colegio: ${perfil.colegio?.nombre}
+- Grado: ${gradoEfectivo}
+- Materia seleccionada: ${materia_id || materia?.nombre || 'Sin materia seleccionada — el alumno está eligiendo'}
+
+${docsConfig ? `DOCUMENTOS DE CONFIGURACION OFICIAL:\n${docsConfig}\n` : ''}
+
+${contextoContenido}`
+
+    const mensajesOpenAI: { role: 'user' | 'assistant' | 'system'; content: string }[] = [
+      { role: 'system', content: systemPrompt },
+    ]
+
+    if (historial?.length > 0) {
+      historial.forEach((msg: { rol: string; contenido: string }) => {
+        mensajesOpenAI.push({ role: msg.rol === 'usuario' ? 'user' : 'assistant', content: msg.contenido })
+      })
+    }
+    mensajesOpenAI.push({ role: 'user', content: pregunta })
+
+    const completion = await openai.chat.completions.create({
+      model: 'gpt-4o-mini', messages: mensajesOpenAI, max_tokens: esModoConversacion ? 80 : 700, temperature: 0.7,
+    })
+
+    let respuesta = completion.choices[0].message.content || 'No pude generar una respuesta.'
+    
+    // Si es tema formativo, agregar link de video de Eduardo al final
+    if (tipoPregunta === 'formativa') {
+      respuesta += '\n\nTe comparto este recurso de Eduardo Montano que puede ayudarte: https://www.youtube.com/c/EduardoMontano'
+    }
+    const tokensUsados = completion.usage?.total_tokens || 0
+    const costoUSD     = tokensUsados * 0.00000015
+
+    await supabase.from('interacciones').insert({
+      usuario_id: user.id, colegio_id: perfil.colegio_id, materia_id: materia_id || null,
+      grado: gradoEfectivo, tema_detectado: pregunta.substring(0, 100),
+      pregunta, respuesta, tokens_usados: tokensUsados, costo_usd: costoUSD,
+      modelo_usado: 'gpt-4o-mini', documento_fuente: documentoFuente,
+      sospecha_copia: detectarCopia(pregunta),
+    })
+
+    if (tipoPregunta === 'academica' && !contenidoCurricular && materia) {
+      await registrarPendiente(supabase, perfil, materia, pregunta)
+    }
+
+    // Detectar alertas pedagógicas
+    try {
+      const baseUrl = process.env.NEXT_PUBLIC_URL || 'https://owlaris.app'
+      
+      // Alerta riesgo de copia
+      if (detectarCopia(pregunta)) {
+        const { data: alertaCopia } = await supabase.from('alertas')
+          .select('id').eq('alumno_id', user.id).eq('tipo', 'riesgo_copia')
+          .eq('resuelta', false).gte('creado_en', new Date(Date.now() - 3600000).toISOString()).single()
+        if (!alertaCopia) {
+          const { data: asigCopia } = await supabase.from('guia_asignaciones')
+            .select('guia_id').eq('colegio_id', perfil.colegio_id).eq('activo', true)
+            .or(`alumno_id.eq.${user.id},grado.eq.${gradoEfectivo}`).limit(1).single()
+          await supabase.from('alertas').insert({
+            alumno_id: user.id, colegio_id: perfil.colegio_id, guia_id: asigCopia?.guia_id || null,
+            tipo: 'riesgo_copia',
+            descripcion: 'El alumno solicitó respuesta directa o entrega sospechosa.',
+            contexto: pregunta.substring(0, 200)
+          })
+        }
+      }
+
+      // Alerta baja comprensión — detectar retroalimentación negativa
+      const indicadoresBajaComprension = ['no entiendo', 'no entendí', 'no me queda claro', 'sigo sin entender', 'todavía no entiendo', "i don't understand", 'confused']
+      const esBajaComprension = indicadoresBajaComprension.some(i => pregunta.toLowerCase().includes(i))
+      if (esBajaComprension) {
+        console.log('ALERTA BAJA COMPRENSION DETECTADA:', pregunta)
+        const { count } = await supabase.from('interacciones')
+          .select('*', { count: 'exact', head: true })
+          .eq('usuario_id', user.id)
+          .gte('creado_en', new Date(Date.now() - 1800000).toISOString())
+        console.log('COUNT INTERACCIONES ULTIMA HORA:', count)
+        if ((count || 0) >= 2) {
+          // Verificar no duplicar alerta reciente
+          const { data: alertaExistente } = await supabase.from('alertas')
+            .select('id').eq('alumno_id', user.id).eq('tipo', 'baja_comprension')
+            .eq('resuelta', false).gte('creado_en', new Date(Date.now() - 3600000).toISOString()).single()
+          if (!alertaExistente) {
+            // Buscar guía asignado
+            const { data: asig } = await supabase.from('guia_asignaciones')
+              .select('guia_id, guia:guia_id(email, nombre_completo)')
+              .eq('colegio_id', perfil.colegio_id)
+              .eq('activo', true)
+              .or(`alumno_id.eq.${user.id},grado.eq.${gradoEfectivo}`)
+              .limit(1).single()
+            const guiaId = asig?.guia_id || null
+            await supabase.from('alertas').insert({
+              alumno_id: user.id, colegio_id: perfil.colegio_id, guia_id: guiaId,
+              tipo: 'baja_comprension',
+              descripcion: 'El alumno expresó no entender después de varios intentos.',
+              contexto: pregunta.substring(0, 200)
+            })
+            // Email al guía
+            if (asig?.guia) {
+              const guia = asig.guia as unknown as {email:string; nombre_completo:string}
+              const { Resend } = await import('resend')
+              const resend = new Resend(process.env.RESEND_API_KEY)
+              await resend.emails.send({
+                from: 'Owlaris <noreply@owlaris.app>',
+                to: guia.email,
+                subject: `Alerta: Baja comprensión — ${perfil.nombre_completo}`,
+                html: `<p>Hola ${guia.nombre_completo},</p><p>El alumno <strong>${perfil.nombre_completo}</strong> (${gradoEfectivo}) ha expresado no entender después de varios intentos.</p><p>Contexto: "${pregunta.substring(0,200)}"</p><a href="https://owlaris.app/guia">Ver en Owlaris →</a>`
+              })
+            }
+          }
+        }
+      }
+
+      // Alerta bloqueo recurrente — mismo tema varias veces
+      if (materia && gradoEfectivo) {
+        const { count: countTema } = await supabase.from('interacciones')
+          .select('*', { count: 'exact', head: true })
+          .eq('usuario_id', user.id)
+          .eq('grado', gradoEfectivo)
+          .ilike('tema_detectado', `%${pregunta.substring(0,30)}%`)
+          .gte('creado_en', new Date(Date.now() - 3600000).toISOString())
+        if ((countTema || 0) >= 3) {
+          fetch(`${baseUrl}/api/alertas`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              alumno_id: user.id,
+              colegio_id: perfil.colegio_id,
+              tipo: 'bloqueo_recurrente',
+              descripcion: `El alumno ha preguntado sobre el mismo tema más de 3 veces en la última hora.`,
+              contexto: `Materia: ${materia?.nombre || ''} | Tema: ${pregunta.substring(0, 100)}`
+            })
+          })
+        }
+      }
+    } catch { /* silencioso */ }
 
     // Actualizar ultimo_acceso del alumno
     supabase.from('usuarios').update({ ultimo_acceso: new Date().toISOString() }).eq('id', user.id).then(() => {})
+
+    // ALERTA 1: Baja comprensión — detectar del lado del servidor
+    if (typeof respuesta === 'string') {
+      const esIncorrecta = respuesta.toLowerCase().includes('incorrecto') ||
+        respuesta.toLowerCase().includes('no es correcto') ||
+        respuesta.toLowerCase().includes('vamos a revisar juntos')
+      if (esIncorrecta) {
+        const hace1h = new Date(Date.now() - 3600000).toISOString()
+        const { data: recientes } = await supabase.from('interacciones')
+          .select('respuesta').eq('usuario_id', user.id).gte('creado_en', hace1h)
+        const fallos = (recientes || []).filter((i: any) =>
+          i.respuesta?.toLowerCase().includes('incorrecto') ||
+          i.respuesta?.toLowerCase().includes('vamos a revisar')
+        ).length
+        if (fallos >= 2) {
+          const { data: yaExiste } = await supabase.from('alertas')
+            .select('id').eq('alumno_id', user.id).eq('tipo', 'baja_comprension')
+            .eq('resuelta', false).gte('creado_en', hace1h).maybeSingle()
+          if (!yaExiste) {
+            const { data: asig } = await supabase.from('guia_asignaciones')
+              .select('guia_id, guia:guia_id(email, nombre_completo)')
+              .eq('colegio_id', perfil.colegio_id).eq('activo', true)
+              .or(`alumno_id.eq.${user.id},grado.eq.${gradoEfectivo || ''}`)
+              .limit(1).maybeSingle()
+            await supabase.from('alertas').insert({
+              alumno_id: user.id, colegio_id: perfil.colegio_id,
+              guia_id: asig?.guia_id || null, tipo: 'baja_comprension',
+              descripcion: perfil.nombre_completo + ' tuvo ' + (fallos+1) + ' respuestas incorrectas' + (materia_id ? ' en ' + materia_id : '') + '.',
+              contexto: documentoFuente || pregunta.substring(0, 150)
+            })
+            if (asig?.guia) {
+              try {
+                const guia = asig.guia as unknown as {email:string; nombre_completo:string}
+                const { Resend } = await import('resend')
+                await new Resend(process.env.RESEND_API_KEY).emails.send({
+                  from: 'Owlaris <noreply@owlaris.app>', to: guia.email,
+                  subject: 'Alerta: Baja comprension - ' + perfil.nombre_completo,
+                  html: '<p>Hola ' + guia.nombre_completo + ',</p><p><strong>' + perfil.nombre_completo + '</strong> tuvo ' + (fallos+1) + ' respuestas incorrectas en Owlaris.</p><a href="https://owlaris.app/guia">Ver en Owlaris</a>'
+                })
+              } catch(e) { console.error('Email alerta:', e) }
+            }
+          }
+        }
+      }
+    }
 
     return NextResponse.json({ respuesta, tokens: tokensUsados, documento_fuente: documentoFuente })
 
