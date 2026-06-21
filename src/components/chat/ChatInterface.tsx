@@ -216,20 +216,22 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
         data.respuesta.toLowerCase().includes('no es correcto') ||
         data.respuesta.toLowerCase().includes('no es la respuesta')
       )
-      const esCorrectoResp = data.respuesta && (
+      const esCorrectoResp = data.respuesta && !esIncorrecto && (
         data.respuesta.toLowerCase().includes('¡correcto') ||
-        data.respuesta.toLowerCase().includes('correcto') ||
-        data.respuesta.toLowerCase().includes('correct') ||
+        data.respuesta.toLowerCase().includes('¡bien') ||
         data.respuesta.toLowerCase().includes('muy bien') ||
-        data.respuesta.toLowerCase().includes('excelente')
+        data.respuesta.toLowerCase().includes('excelente') ||
+        data.respuesta.toLowerCase().includes('es la respuesta correcta') ||
+        /correcto[^s]/i.test(data.respuesta)
       )
-      if (esCorrectoResp) { setFallosConsec(0); fallosRef.current = 0 }
-      else if (esIncorrecto) { 
-        setFallosConsec(prev => prev + 1)
+      if (esIncorrecto) {
         fallosRef.current += 1
+        setFallosConsec(fallosRef.current)
         console.log('FALLOS CONSECUTIVOS:', fallosRef.current)
+      } else if (esCorrectoResp) {
+        fallosRef.current = 0
+        setFallosConsec(0)
       }
-      if (fallosRef.current >= 3) { fallosRef.current = 0; setFallosConsec(0) }
       if (data.materias_disponibles) {
         materiasDisponiblesRef.current = data.materias_disponibles
         materiasBaseRef.current = data.materias_disponibles  // guardar base en español
