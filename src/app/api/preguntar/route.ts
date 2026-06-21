@@ -971,8 +971,7 @@ INSTRUCCIÓN CRÍTICA DE EVALUACIÓN: ${validacionCalc}` : ''
     // ALERTAS PEDAGÓGICAS — detección del lado del servidor
     const hace1hora = new Date(Date.now() - 3600000).toISOString()
     
-    try {
-      // ALERTA 1: Baja comprensión — respuestas incorrectas en la respuesta
+    // ALERTA 1: Baja comprensión — respuestas incorrectas en la respuesta
       const esRespuestaIncorrecta = respuesta.toLowerCase().includes('incorrecto') ||
         respuesta.toLowerCase().includes('incorrect') ||
         respuesta.toLowerCase().includes('no es correcto') ||
@@ -1060,7 +1059,6 @@ INSTRUCCIÓN CRÍTICA DE EVALUACIÓN: ${validacionCalc}` : ''
       }
 
       // ALERTA 3: Riesgo de copia — ya existe, no tocar
-    } catch(alertaErr) { console.error('Error en alertas:', alertaErr) }
 
     return NextResponse.json({ respuesta, tokens: tokensUsados, documento_fuente: documentoFuente })
 
