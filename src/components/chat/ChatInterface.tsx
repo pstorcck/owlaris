@@ -64,6 +64,7 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
   const [nivelDificultad, setNivelDificultad] = useState(1)
   const [aciertosConsec, setAciertosConsec]   = useState(0)
   const [fallosConsec, setFallosConsec]           = useState(0)
+  const fallosRef = useRef(0)
   const [materiaSugerida, setMateriaSugerida] = useState('')
   const TRAD_MATERIAS: Record<string,string> = {
     'Matemática':'Mathematics','Física':'Physics','Química':'Chemistry',
@@ -179,7 +180,7 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           pregunta: tp,
-          alerta_comprension: fallosConsec >= 3,
+          alerta_comprension: fallosRef.current >= 3,
           estado: estadoChat,
           nombre_alumno: nombreAlumno,
           grado_override: gradoAlumno || gradoGuardado,
@@ -222,9 +223,13 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
         data.respuesta.toLowerCase().includes('muy bien') ||
         data.respuesta.toLowerCase().includes('excelente')
       )
-      if (esCorrectoResp) setFallosConsec(0)
-      if (fallosConsec >= 3) setFallosConsec(0) // Reset después de enviar alerta
-      else if (esIncorrecto) setFallosConsec(prev => prev + 1)
+      if (esCorrectoResp) { setFallosConsec(0); fallosRef.current = 0 }
+      else if (esIncorrecto) { 
+        setFallosConsec(prev => prev + 1)
+        fallosRef.current += 1
+        console.log('FALLOS CONSECUTIVOS:', fallosRef.current)
+      }
+      if (fallosRef.current >= 3) { fallosRef.current = 0; setFallosConsec(0) }
       if (data.materias_disponibles) {
         materiasDisponiblesRef.current = data.materias_disponibles
         materiasBaseRef.current = data.materias_disponibles  // guardar base en español

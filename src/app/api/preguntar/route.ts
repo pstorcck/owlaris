@@ -902,6 +902,7 @@ INSTRUCCIÓN CRÍTICA DE EVALUACIÓN: ${validacionCalc}` : ''
     const esModoConversacion = body.modo_conversacion || false
 
     // Alerta por 3 fallos consecutivos detectados en el frontend
+    console.log('FLAG ALERTA:', alerta_comprension, 'FALLOS desde frontend')
     if (alerta_comprension) {
       const { data: alertaExist } = await supabase.from('alertas')
         .select('id').eq('alumno_id', user.id).eq('tipo', 'baja_comprension')
