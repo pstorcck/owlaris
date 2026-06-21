@@ -176,7 +176,7 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
     setCargando(true)
 
     try {
-      const res = await fetch('/api/preguntar', {
+      const res: Response = await fetch('/api/preguntar', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -521,7 +521,7 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
                       setSugerencias([])
                       setEstadoChat('esperando_materia')
                       supabase.from('usuarios').update({ grado }).eq('id', usuario.id)
-                      const res = await fetch('/api/preguntar', {
+                      const res: Response = await fetch('/api/preguntar', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
