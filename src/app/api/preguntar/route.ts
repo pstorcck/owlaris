@@ -941,29 +941,7 @@ INSTRUCCIÓN CRÍTICA DE EVALUACIÓN: ${validacionOM}` : validacionCalc ? `
 INSTRUCCIÓN CRÍTICA DE EVALUACIÓN: ${validacionCalc}` : ''
     const esModoConversacion = body.modo_conversacion || false
 
-    // Alerta bloqueo recurrente — mismo tema varias veces
-      if (materia && gradoEfectivo) {
-        const { count: countTema } = await supabase.from('interacciones')
-          .select('*', { count: 'exact', head: true })
-          .eq('usuario_id', user.id)
-          .eq('grado', gradoEfectivo)
-          .ilike('tema_detectado', `%${pregunta.substring(0,30)}%`)
-          .gte('creado_en', new Date(Date.now() - 3600000).toISOString())
-        if ((countTema || 0) >= 3) {
-          fetch(`${baseUrl}/api/alertas`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              alumno_id: user.id,
-              colegio_id: perfil.colegio_id,
-              tipo: 'bloqueo_recurrente',
-              descripcion: `El alumno ha preguntado sobre el mismo tema más de 3 veces en la última hora.`,
-              contexto: `Materia: ${materia?.nombre || ''} | Tema: ${pregunta.substring(0, 100)}`
-            })
-          })
-        }
-      }
-    } catch { /* silencioso */ }
+
 
     // Actualizar ultimo_acceso del alumno
     supabase.from('usuarios').update({ ultimo_acceso: new Date().toISOString() }).eq('id', user.id).then(() => {})
