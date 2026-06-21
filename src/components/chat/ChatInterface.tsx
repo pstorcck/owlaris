@@ -182,6 +182,8 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
         body: JSON.stringify({
           pregunta: tp,
           alerta_comprension: alertaPendienteRef.current,
+          alerta_materia: materiaAlumno || '',
+          alerta_tema: tp.substring(0, 100),
           estado: estadoChat,
           nombre_alumno: nombreAlumno,
           grado_override: gradoAlumno || gradoGuardado,
