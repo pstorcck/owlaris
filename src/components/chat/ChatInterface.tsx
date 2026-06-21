@@ -63,9 +63,7 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
   const [generandoPDF, setGenerandoPDF]       = useState(false)
   const [nivelDificultad, setNivelDificultad] = useState(1)
   const [aciertosConsec, setAciertosConsec]   = useState(0)
-  const [fallosConsec, setFallosConsec]           = useState(0)
-  const fallosRef = useRef(0)
-  const alertaPendienteRef = useRef(false)
+
   const [materiaSugerida, setMateriaSugerida] = useState('')
   const TRAD_MATERIAS: Record<string,string> = {
     'Matemática':'Mathematics','Física':'Physics','Química':'Chemistry',
@@ -181,9 +179,7 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           pregunta: tp,
-          alerta_comprension: alertaPendienteRef.current,
-          alerta_materia: materiaAlumno || '',
-          alerta_tema: (mensajes.filter(m => m.documento_fuente).pop()?.documento_fuente) || materiaAlumno || '',
+
           estado: estadoChat,
           nombre_alumno: nombreAlumno,
           grado_override: gradoAlumno || gradoGuardado,
@@ -212,37 +208,8 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
       if (data.materia_detectada) setMateriaAlumno(data.materia_detectada)
       if (data.activar_conversacion) { setModoConversacion(true); setIdiomaIngles(true) }
       if (data.nivel_dificultad) setNivelDificultad(data.nivel_dificultad)
-      // Detectar si la respuesta indica incorrecto
-      const esIncorrecto = data.respuesta && (
-        data.respuesta.toLowerCase().includes('incorrecto') ||
-        data.respuesta.toLowerCase().includes('incorrect') ||
-        data.respuesta.toLowerCase().includes('no es correcto') ||
-        data.respuesta.toLowerCase().includes('no es la respuesta')
-      )
-      const esCorrectoResp = data.respuesta && !esIncorrecto && (
-        data.respuesta.toLowerCase().includes('¡correcto') ||
-        data.respuesta.toLowerCase().includes('¡bien') ||
-        data.respuesta.toLowerCase().includes('muy bien') ||
-        data.respuesta.toLowerCase().includes('excelente') ||
-        data.respuesta.toLowerCase().includes('es la respuesta correcta') ||
-        /correcto[^s]/i.test(data.respuesta)
-      )
-      // Resetear alerta pendiente después de enviarla
-      alertaPendienteRef.current = false
-      if (esIncorrecto) {
-        fallosRef.current += 1
-        setFallosConsec(fallosRef.current)
-        console.log('FALLOS CONSECUTIVOS:', fallosRef.current)
-        if (fallosRef.current >= 3) {
-          alertaPendienteRef.current = true
-          fallosRef.current = 0
-          setFallosConsec(0)
-          console.log('ALERTA PENDIENTE - se enviará en siguiente request')
-        }
-      } else if (esCorrectoResp) {
-        fallosRef.current = 0
-        setFallosConsec(0)
-      }
+
+
       if (data.materias_disponibles) {
         materiasDisponiblesRef.current = data.materias_disponibles
         materiasBaseRef.current = data.materias_disponibles  // guardar base en español
