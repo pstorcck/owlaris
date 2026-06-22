@@ -164,9 +164,6 @@ Si detectas riesgo de error, responde con cautela o pide más contexto.`;
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 
-port { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
-
 const PROMPT_BASE = `Eres Owlaris, tutor académico de IA para colegios en Guatemala. Tu función es enseñar, guiar y acompañar el aprendizaje. Eres paciente, claro, cercano, motivador y respetuoso. Tratas al estudiante de tú. No usas emoticones ni LaTeX.
 
 ═══════════════════════════════════════
