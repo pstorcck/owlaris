@@ -962,11 +962,20 @@ export async function POST(req: NextRequest) {
     if (!validacionOM && historial?.length > 0) {
       const ultimoTutor = [...(historial || [])].reverse().find(m => m.rol === 'asistente')
       if (ultimoTutor) {
-        // Primero intentar con mathjs (más rápido)
-        validacionCalc = extraerYResolverEcuacion(ultimoTutor.contenido, pregunta)
-        // Si mathjs no pudo, intentar con Wolfram Alpha
-        if (!validacionCalc) {
-          validacionCalc = await verificarConWolfram(ultimoTutor.contenido, pregunta)
+        const textoTutor = ultimoTutor.contenido
+        // NO usar calculadora si el problema tiene múltiples pasos o es narrativo
+        const esProblemaComplejo = (
+          textoTutor.includes('1.') && textoTutor.includes('2.') || // pasos numerados
+          textoTutor.split('?').length > 3 || // múltiples preguntas
+          textoTutor.length > 500 // problema largo
+        )
+        if (!esProblemaComplejo) {
+          // Primero intentar con mathjs (más rápido)
+          validacionCalc = extraerYResolverEcuacion(textoTutor, pregunta)
+          // Si mathjs no pudo, intentar con Wolfram Alpha
+          if (!validacionCalc) {
+            validacionCalc = await verificarConWolfram(textoTutor, pregunta)
+          }
         }
       }
     }
