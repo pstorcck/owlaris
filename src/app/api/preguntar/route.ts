@@ -1167,6 +1167,67 @@ ${contextoContenido}`
 
     let respuesta = completion.choices[0].message.content || 'No pude generar una respuesta.'
 
+    // EVALUACIÓN ESTRUCTURADA — verificar si el modelo evaluó correctamente
+    // Solo cuando el alumno está respondiendo una pregunta (historial existe y respuesta es corta)
+    const esRespuestaCorta = pregunta.trim().length < 100
+    const hayHistorial = historial && historial.length > 0
+    const ultimoTutorMsg = hayHistorial ? [...historial].reverse().find((m: any) => m.rol === 'asistente') : null
+    
+    if (esRespuestaCorta && ultimoTutorMsg && tipoPregunta === 'academica') {
+      try {
+        const evalCompletion = await openai.chat.completions.create({
+          model: 'gpt-4o-mini',
+          max_tokens: 100,
+          temperature: 0,
+          response_format: { type: 'json_object' },
+          messages: [
+            {
+              role: 'system',
+              content: `Eres un evaluador académico. Determina si la respuesta del alumno es correcta.
+Responde SOLO con este JSON:
+{"correcto": true o false, "respuesta_correcta": "valor correcto", "es_evaluable": true o false}
+
+REGLAS:
+- es_evaluable: false si el alumno está explicando, preguntando o pidiendo ayuda (no dando una respuesta)
+- Para matemáticas y ciencias: calcula exactamente
+- Para opción múltiple A/B/C/D: extrae el valor de la letra y evalúa ese valor
+- Para conceptos: evalúa si la idea central es correcta
+- correcto: true solo si la respuesta es inequívocamente correcta`
+            },
+            {
+              role: 'user',
+              content: `Pregunta del tutor: "${ultimoTutorMsg.contenido.slice(-600)}"
+Respuesta del alumno: "${pregunta}"
+¿Es correcta?`
+            }
+          ]
+        })
+
+        const evalRaw = evalCompletion.choices[0].message.content || '{}'
+        const evalJSON = JSON.parse(evalRaw)
+
+        if (evalJSON.es_evaluable === true) {
+          const modeloDijoCorrect = respuesta.toLowerCase().includes('correcto') && 
+            !respuesta.toLowerCase().includes('incorrecto')
+          const modeloDijoIncorrect = respuesta.toLowerCase().includes('incorrecto')
+
+          if (evalJSON.correcto === true && modeloDijoIncorrect) {
+            // Modelo dijo incorrecto pero el evaluador dice correcto
+            const numMatch = pregunta.match(/-?\d+([.,]\d+)?/)
+            const valor = numMatch ? numMatch[0] : pregunta.trim()
+            respuesta = `Correcto. ${valor} es la respuesta correcta. ¿Puedes explicarme cómo llegaste a ese resultado?`
+            console.log('EVAL CORRIGIÓ: era CORRECTO')
+          } else if (evalJSON.correcto === false && modeloDijoCorrect) {
+            // Modelo dijo correcto pero el evaluador dice incorrecto
+            respuesta = `Incorrecto. La respuesta correcta es ${evalJSON.respuesta_correcta}. Intenta de nuevo paso a paso.`
+            console.log('EVAL CORRIGIÓ: era INCORRECTO. Correcto era:', evalJSON.respuesta_correcta)
+          }
+        }
+      } catch(evalErr) {
+        console.error('Eval estructurado error:', evalErr)
+      }
+    }
+
     // JUEZ INDEPENDIENTE — verificar si el alumno respondió algo y el modelo evaluó
     // Solo actúa cuando hay historial (el alumno está respondiendo, no preguntando)
     const ultimaPreguntaTutor = [...(historial || [])].reverse().find((m: any) => m.rol === 'asistente')
