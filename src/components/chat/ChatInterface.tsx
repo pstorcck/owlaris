@@ -822,7 +822,7 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
               </p>
             </div>
 
-            <style>{`
+            <style suppressHydrationWarning>{`
               @keyframes ringPulse { 0%,100%{transform:scale(1);opacity:.4} 50%{transform:scale(1.06);opacity:1} }
               @keyframes dotBlink { 0%,100%{opacity:1} 50%{opacity:.3} }
               @keyframes micPulse { 0%,100%{box-shadow:0 0 0 8px rgba(220,38,38,.2),0 8px 32px rgba(220,38,38,.4)} 50%{box-shadow:0 0 0 16px rgba(220,38,38,.1),0 8px 32px rgba(220,38,38,.5)} }
