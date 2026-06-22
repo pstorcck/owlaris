@@ -438,12 +438,12 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
   return (
     <>
       <style>{`
-        .owlaris-root { min-height:100vh; display:flex; flex-direction:column; background:#F8F7FF; background-image:radial-gradient(ellipse at 15% 0%,rgba(109,40,217,.06) 0%,transparent 55%),radial-gradient(ellipse at 85% 100%,rgba(14,165,233,.05) 0%,transparent 50%); font-family:'Plus Jakarta Sans',sans-serif; }
+        .owlaris-root { min-height:100vh; display:flex; flex-direction:column; background:#F8F7FF; background-image:radial-gradient(ellipse at 15% 0%,rgba(109,40,217,.06) 0%,transparent 55%),radial-gradient(ellipse at 85% 100%,rgba(14,165,233,.05) 0%,transparent 50%); font-family:"Plus Jakarta Sans",sans-serif; }
         .o-header { background:rgba(255,255,255,.88); backdrop-filter:blur(24px); border-bottom:1px solid rgba(109,40,217,.08); box-shadow:0 1px 24px rgba(109,40,217,.06); position:sticky; top:0; z-index:50; padding:14px 24px; }
         .bbl-tutor { background:white; border:1px solid rgba(109,40,217,.1); border-radius:4px 20px 20px 20px; box-shadow:0 2px 20px rgba(109,40,217,.08); position:relative; }
-        .bbl-tutor::before { content:''; position:absolute; top:0; left:0; width:3px; height:100%; background:linear-gradient(180deg,#7C3AED,#0EA5E9); }
+        .bbl-tutor::before { content:""; position:absolute; top:0; left:0; width:3px; height:100%; background:linear-gradient(180deg,#7C3AED,#0EA5E9); }
         .bbl-user { background:linear-gradient(135deg,#6D28D9,#5B21B6); border-radius:20px 4px 20px 20px; box-shadow:0 4px 20px rgba(109,40,217,.3); }
-        .o-chip { background:white; border:1px solid rgba(109,40,217,.12); border-radius:20px; padding:8px 14px; font-size:12px; font-weight:500; color:#6D28D9; cursor:pointer; transition:all .2s; display:flex; align-items:center; gap:5px; white-space:nowrap; font-family:'Plus Jakarta Sans',sans-serif; box-shadow:0 1px 8px rgba(109,40,217,.06); }
+        .o-chip { background:white; border:1px solid rgba(109,40,217,.12); border-radius:20px; padding:8px 14px; font-size:12px; font-weight:500; color:#6D28D9; cursor:pointer; transition:all .2s; display:flex; align-items:center; gap:5px; white-space:nowrap; font-family:"Plus Jakarta Sans",sans-serif; box-shadow:0 1px 8px rgba(109,40,217,.06); }
         .o-chip:hover { background:#F3F0FF; border-color:rgba(109,40,217,.3); transform:translateY(-2px); box-shadow:0 4px 16px rgba(109,40,217,.15); }
         .o-input-wrap { background:white; border:1.5px solid rgba(109,40,217,.15); border-radius:18px; transition:all .2s; box-shadow:0 2px 20px rgba(109,40,217,.06); }
         .o-input-wrap:focus-within { border-color:#7C3AED; box-shadow:0 0 0 4px rgba(109,40,217,.08),0 2px 20px rgba(109,40,217,.1); }
