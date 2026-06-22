@@ -1037,7 +1037,6 @@ export async function POST(req: NextRequest) {
 
     // Siempre leer docs de configuración (tienen videos y política pedagógica)
     const docsConfig = await leerConfig()
-    const idiomaIngles = body.idioma_ingles || false
     const promptBase = (cfg.prompt_personalizado || PROMPT_BASE) + 
       (idiomaIngles ? '\n\nIDIOMA: El alumno está en modo inglés. Responde SIEMPRE en inglés. Todas tus respuestas, preguntas, correcciones y explicaciones deben ser en inglés. Usa el mismo material curricular disponible pero comunícate en inglés.' : '')
     const contextoValidacion = validacionOM ? `
