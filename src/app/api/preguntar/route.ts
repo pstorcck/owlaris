@@ -1289,11 +1289,21 @@ Evalúa si la respuesta del alumno es correcta.`
             .select('id').eq('alumno_id', user.id).eq('tipo', 'baja_comprension')
             .eq('resuelta', false).gte('creado_en', hace1h).maybeSingle()
           if (!yaExiste) {
-            const { data: asig } = await supabase.from('guia_asignaciones')
+            // Buscar guía por alumno individual primero, luego por grado
+            let asig = null
+            const { data: asigAlumno } = await supabase.from('guia_asignaciones')
               .select('guia_id, guia:guia_id(email, nombre_completo)')
               .eq('colegio_id', perfil.colegio_id).eq('activo', true)
-              .or(`alumno_id.eq.${user.id},grado.eq.${gradoEfectivo || ''}`)
-              .limit(1).maybeSingle()
+              .eq('tipo', 'alumno').eq('alumno_id', user.id).limit(1).maybeSingle()
+            if (asigAlumno) {
+              asig = asigAlumno
+            } else {
+              const { data: asigGrado } = await supabase.from('guia_asignaciones')
+                .select('guia_id, guia:guia_id(email, nombre_completo)')
+                .eq('colegio_id', perfil.colegio_id).eq('activo', true)
+                .eq('tipo', 'grado').eq('grado', gradoEfectivo || perfil.grado || '').limit(1).maybeSingle()
+              asig = asigGrado
+            }
             await supabase.from('alertas').insert({
               alumno_id: user.id, colegio_id: perfil.colegio_id,
               guia_id: asig?.guia_id || null, tipo: 'baja_comprension',
