@@ -1202,7 +1202,7 @@ Alumno: "${pregunta}"` }
           // Paso 2: Verificar con Wolfram si hay operación
           if (evalJSON.operacion && process.env.WOLFRAM_APP_ID) {
             try {
-              const wUrl = \`https://api.wolframalpha.com/v1/result?appid=\${process.env.WOLFRAM_APP_ID}&i=\${encodeURIComponent(evalJSON.operacion)}\`
+              const wUrl = `https://api.wolframalpha.com/v1/result?appid=${process.env.WOLFRAM_APP_ID}&i=${encodeURIComponent(evalJSON.operacion)}`
               const wRes = await fetch(wUrl, { signal: AbortSignal.timeout(3000) })
               if (wRes.ok) {
                 const wTxt = await wRes.text()
@@ -1226,10 +1226,10 @@ Alumno: "${pregunta}"` }
             )
             if (modeloDijoMal) {
               if (esCorrectoReal) {
-                respuesta = \`Correcto. \${numAlumno} es la respuesta correcta. ¿Puedes explicarme cómo llegaste a ese resultado?\`
+                respuesta = `Correcto. ${numAlumno} es la respuesta correcta. ¿Puedes explicarme cómo llegaste a ese resultado?`
                 console.log('CORREGIDO → CORRECTO')
               } else {
-                respuesta = \`Incorrecto. La respuesta correcta es \${valorCorrecto}. Intenta de nuevo paso a paso.\`
+                respuesta = `Incorrecto. La respuesta correcta es ${valorCorrecto}. Intenta de nuevo paso a paso.`
                 console.log('CORREGIDO → INCORRECTO. Correcto:', valorCorrecto)
               }
             }
