@@ -1091,7 +1091,66 @@ ${contextoContenido}`
     })
 
     let respuesta = completion.choices[0].message.content || 'No pude generar una respuesta.'
-    
+
+    // JUEZ INDEPENDIENTE — verificar si el alumno respondió algo y el modelo evaluó
+    // Solo actúa cuando hay historial (el alumno está respondiendo, no preguntando)
+    const ultimaPreguntaTutor = [...(historial || [])].reverse().find((m: any) => m.rol === 'asistente')
+    const esRespuestaAlumno = ultimaPreguntaTutor && 
+      pregunta.trim().length < 150 && // respuestas cortas
+      tipoPregunta === 'academica'
+
+    if (esRespuestaAlumno) {
+      try {
+        const juezMessages = [
+          {
+            role: 'system' as const,
+            content: `Eres un juez académico experto. Tu ÚNICA función es determinar si la respuesta del alumno es correcta o incorrecta.
+Responde SOLO con JSON válido, sin texto adicional:
+{"correcto": true/false, "respuesta_correcta": "la respuesta correcta aquí", "explicacion_breve": "en máximo 10 palabras por qué"}
+
+REGLAS:
+- Para matemáticas: calcula exactamente. No hay ambigüedad.
+- Para otras materias: evalúa si la respuesta es correcta según el contexto de la pregunta del tutor.
+- Si la pregunta del tutor NO pide una respuesta específica (es explicación, no evaluación), responde {"correcto": null}
+- Sé estricto. Si el alumno da 41 cuando la respuesta es 40, es INCORRECTO.`
+          },
+          {
+            role: 'user' as const,
+            content: `Pregunta del tutor: "${ultimaPreguntaTutor.contenido.substring(0, 500)}"
+Respuesta del alumno: "${pregunta}"
+Evalúa si la respuesta del alumno es correcta.`
+          }
+        ]
+
+        const juezCompletion = await openai.chat.completions.create({
+          model: 'gpt-4o-mini',
+          messages: juezMessages,
+          max_tokens: 150,
+          temperature: 0,
+        })
+
+        const juezRaw = juezCompletion.choices[0].message.content || '{}'
+        const juezJSON = JSON.parse(juezRaw.replace(/```json|```/g, '').trim())
+
+        if (juezJSON.correcto === true && respuesta.toLowerCase().includes('incorrecto')) {
+          // El modelo dijo incorrecto pero el juez dice correcto
+          const numMatch = pregunta.replace(/[=]/g, ' ').match(/-?\d+([.,]\d+)?/)
+          const valor = numMatch ? numMatch[0] : pregunta.trim()
+          respuesta = `¡Correcto! ${valor} es la respuesta correcta. Bien hecho. ¿Puedes explicarme cómo llegaste a ese resultado?`
+          console.log('JUEZ CORRIGIÓ: modelo dijo incorrecto pero es CORRECTO')
+        } else if (juezJSON.correcto === false && (
+          respuesta.toLowerCase().includes('correcto') && 
+          !respuesta.toLowerCase().includes('incorrecto')
+        )) {
+          // El modelo dijo correcto pero el juez dice incorrecto
+          respuesta = `Incorrecto. La respuesta correcta es ${juezJSON.respuesta_correcta}. ${juezJSON.explicacion_breve}. ¿Puedes intentarlo de nuevo?`
+          console.log('JUEZ CORRIGIÓ: modelo dijo correcto pero es INCORRECTO. Correcto era:', juezJSON.respuesta_correcta)
+        }
+      } catch(juezErr) {
+        console.error('Juez error (no crítico):', juezErr)
+      }
+    }
+
     // Si es tema formativo, agregar link de video de Eduardo al final
     if (tipoPregunta === 'formativa') {
       respuesta += '\n\nTe comparto este recurso de Eduardo Montano que puede ayudarte: https://www.youtube.com/c/EduardoMontano'
