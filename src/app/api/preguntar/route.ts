@@ -1193,10 +1193,20 @@ ${contextoContenido}`
     supabase.from('usuarios').update({ ultimo_acceso: new Date().toISOString() }).eq('id', user.id).then(() => {})
 
     // ALERTA 1: Baja comprensión — detectar del lado del servidor
+    console.log('ALERTA CHECK: respuesta tipo=', typeof respuesta, 'preview=', typeof respuesta === 'string' ? respuesta.substring(0,50) : 'N/A')
     if (typeof respuesta === 'string') {
       const esIncorrecta = respuesta.toLowerCase().includes('incorrecto') ||
         respuesta.toLowerCase().includes('no es correcto') ||
-        respuesta.toLowerCase().includes('vamos a revisar juntos')
+        respuesta.toLowerCase().includes('vamos a revisar juntos') ||
+        respuesta.toLowerCase().includes('esa respuesta no es') ||
+        respuesta.toLowerCase().includes('esa respuesta tampoco') ||
+        respuesta.toLowerCase().includes('parece que la respuesta') ||
+        respuesta.toLowerCase().includes('vamos a revisarlo') ||
+        respuesta.toLowerCase().includes('vamos a analizarlo') ||
+        respuesta.toLowerCase().includes('vamos a desglosarlo') ||
+        respuesta.toLowerCase().includes('that is not correct') ||
+        respuesta.toLowerCase().includes('thats not correct')
+      console.log('ES INCORRECTA:', esIncorrecta, '| include test:', respuesta.toLowerCase().substring(0,30))
       if (esIncorrecta) {
         const hace1h = new Date(Date.now() - 3600000).toISOString()
         const { data: recientes } = await supabase.from('interacciones')
