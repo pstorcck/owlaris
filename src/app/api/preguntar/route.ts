@@ -1211,6 +1211,31 @@ Evalúa.`
         const evalJSON = JSON.parse(evalCompletion.choices[0].message.content || '{}')
 
         if (evalJSON.evaluable === true) {
+          // Verificar con Wolfram si el evaluador extrajo una operación
+          if (evalJSON.operacion && process.env.WOLFRAM_APP_ID) {
+            try {
+              const wolframQuery = encodeURIComponent(evalJSON.operacion)
+              const wRes = await fetch(`https://api.wolframalpha.com/v1/result?appid=${process.env.WOLFRAM_APP_ID}&i=${wolframQuery}`, 
+                { signal: AbortSignal.timeout(3000) })
+              if (wRes.ok) {
+                const wTexto = await wRes.text()
+                const wNum = parseFloat(wTexto.match(/-?\d+([.,]\d+)?/)?.[0] || '')
+                if (!isNaN(wNum)) {
+                  // Wolfram confirmó — usar su resultado como fuente de verdad
+                  const numAlumnoW = parseFloat(pregunta.replace(/[=,]/g, ' ').match(/-?\d+([.,]\d+)?/)?.[0] || '')
+                  if (!isNaN(numAlumnoW)) {
+                    const esCorrectoW = Math.abs(numAlumnoW - wNum) < 0.01
+                    if (esCorrectoW !== evalJSON.correcto) {
+                      console.log('WOLFRAM CORRIGE AL EVALUADOR:', evalJSON.correcto, '->', esCorrectoW)
+                      evalJSON.correcto = esCorrectoW
+                      evalJSON.valor_correcto = String(wNum)
+                    }
+                  }
+                }
+              }
+            } catch { /* Wolfram falló, usar evaluador */ }
+          }
+          } // fin verificación Wolfram
           // Extraer número de la respuesta del alumno para comparar
           const numAlumnoStr = pregunta.replace(/[=,]/g, ' ').match(/-?\d+([.,]\d+)?/)?.[0] || pregunta.trim()
           const numAlumno = parseFloat(numAlumnoStr)
@@ -1473,6 +1498,30 @@ Evalúa.`
         const evalJSON = JSON.parse(evalCompletion.choices[0].message.content || '{}')
 
         if (evalJSON.evaluable === true) {
+          // Verificar con Wolfram si el evaluador extrajo una operación
+          if (evalJSON.operacion && process.env.WOLFRAM_APP_ID) {
+            try {
+              const wolframQuery = encodeURIComponent(evalJSON.operacion)
+              const wRes = await fetch(`https://api.wolframalpha.com/v1/result?appid=${process.env.WOLFRAM_APP_ID}&i=${wolframQuery}`, 
+                { signal: AbortSignal.timeout(3000) })
+              if (wRes.ok) {
+                const wTexto = await wRes.text()
+                const wNum = parseFloat(wTexto.match(/-?\d+([.,]\d+)?/)?.[0] || '')
+                if (!isNaN(wNum)) {
+                  // Wolfram confirmó — usar su resultado como fuente de verdad
+                  const numAlumnoW = parseFloat(pregunta.replace(/[=,]/g, ' ').match(/-?\d+([.,]\d+)?/)?.[0] || '')
+                  if (!isNaN(numAlumnoW)) {
+                    const esCorrectoW = Math.abs(numAlumnoW - wNum) < 0.01
+                    if (esCorrectoW !== evalJSON.correcto) {
+                      console.log('WOLFRAM CORRIGE AL EVALUADOR:', evalJSON.correcto, '->', esCorrectoW)
+                      evalJSON.correcto = esCorrectoW
+                      evalJSON.valor_correcto = String(wNum)
+                    }
+                  }
+                }
+              }
+            } catch { /* Wolfram falló, usar evaluador */ }
+          }
           // Extraer número de la respuesta del alumno para comparar
           const numAlumnoStr = pregunta.replace(/[=,]/g, ' ').match(/-?\d+([.,]\d+)?/)?.[0] || pregunta.trim()
           const numAlumno = parseFloat(numAlumnoStr)
