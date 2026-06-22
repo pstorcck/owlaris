@@ -956,7 +956,6 @@ INSTRUCCIÓN CRÍTICA DE EVALUACIÓN: ${validacionCalc}` : ''
     const esModoConversacion = body.modo_conversacion || false
 
     // Alerta por 3 fallos consecutivos detectados en el frontend
-    console.log('FLAG ALERTA:', alerta_comprension, 'FALLOS desde frontend')
     if (alerta_comprension) {
       const { data: alertaExist } = await supabase.from('alertas')
         .select('id').eq('alumno_id', user.id).eq('tipo', 'baja_comprension')
@@ -1137,14 +1136,12 @@ Evalúa si la respuesta del alumno es correcta.`
           const numMatch = pregunta.replace(/[=]/g, ' ').match(/-?\d+([.,]\d+)?/)
           const valor = numMatch ? numMatch[0] : pregunta.trim()
           respuesta = `¡Correcto! ${valor} es la respuesta correcta. Bien hecho. ¿Puedes explicarme cómo llegaste a ese resultado?`
-          console.log('JUEZ CORRIGIÓ: modelo dijo incorrecto pero es CORRECTO')
         } else if (juezJSON.correcto === false && (
           respuesta.toLowerCase().includes('correcto') && 
           !respuesta.toLowerCase().includes('incorrecto')
         )) {
           // El modelo dijo correcto pero el juez dice incorrecto
           respuesta = `Incorrecto. La respuesta correcta es ${juezJSON.respuesta_correcta}. ${juezJSON.explicacion_breve}. ¿Puedes intentarlo de nuevo?`
-          console.log('JUEZ CORRIGIÓ: modelo dijo correcto pero es INCORRECTO. Correcto era:', juezJSON.respuesta_correcta)
         }
       } catch(juezErr) {
         console.error('Juez error (no crítico):', juezErr)
@@ -1165,7 +1162,6 @@ Evalúa si la respuesta del alumno es correcta.`
       modelo_usado: 'gpt-4o-mini', documento_fuente: documentoFuente,
       sospecha_copia: detectarCopia(pregunta),
     })
-    console.log('INSERT interaccion:', insertErr ? 'ERROR: ' + insertErr.message : 'OK - user=' + user.id)
 
     if (tipoPregunta === 'academica' && !contenidoCurricular && materia) {
       await registrarPendiente(supabase, perfil, materia, pregunta)
@@ -1267,7 +1263,6 @@ Evalúa si la respuesta del alumno es correcta.`
     supabase.from('usuarios').update({ ultimo_acceso: new Date().toISOString() }).eq('id', user.id).then(() => {})
 
     // ALERTA 1: Baja comprensión — detectar del lado del servidor
-    console.log('ALERTA CHECK: respuesta tipo=', typeof respuesta, 'preview=', typeof respuesta === 'string' ? respuesta.substring(0,50) : 'N/A')
     if (typeof respuesta === 'string') {
       const esIncorrecta = respuesta.toLowerCase().includes('incorrecto') ||
         respuesta.toLowerCase().includes('no es correcto') ||
@@ -1280,7 +1275,6 @@ Evalúa si la respuesta del alumno es correcta.`
         respuesta.toLowerCase().includes('vamos a desglosarlo') ||
         respuesta.toLowerCase().includes('that is not correct') ||
         respuesta.toLowerCase().includes('thats not correct')
-      console.log('ES INCORRECTA:', esIncorrecta, '| include test:', respuesta.toLowerCase().substring(0,30))
       if (esIncorrecta) {
         const hace1h = new Date(Date.now() - 3600000).toISOString()
         const { data: recientes } = await supabase.from('interacciones')
@@ -1289,8 +1283,7 @@ Evalúa si la respuesta del alumno es correcta.`
           i.respuesta?.toLowerCase().includes('incorrecto') ||
           i.respuesta?.toLowerCase().includes('vamos a revisar')
         ).length
-        console.log('FALLOS EN BD:', fallos)
-      if (fallos >= 2) {
+        if (fallos >= 2) {
           const { data: yaExiste } = await supabase.from('alertas')
             .select('id').eq('alumno_id', user.id).eq('tipo', 'baja_comprension')
             .eq('resuelta', false).gte('creado_en', hace1h).maybeSingle()
