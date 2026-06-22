@@ -1139,7 +1139,7 @@ REGLAS (sigue en orden):
 4. NO EVALUABLE - Responde null si:
    - El alumno explica un proceso (no da respuesta)
    - El alumno hace una pregunta
-   - La pregunta del tutor es explicativa, no evaluativa`import { NextRequest, NextResponse } from 'next/server'
+   - La pregunta del tutor es explicativa, no evaluativa`
 import { createClient } from '@/lib/supabase/server'
 
 const PROMPT_BASE = `Eres Owlaris, Tu tutor AI. Eres un profesor paciente cuyo objetivo es ayudar a los estudiantes a entender, practicar y aprender por sí mismos. Hablas de forma clara, cercana, motivadora y respetuosa. Tratas al usuario de tú. No usas emoticones.
