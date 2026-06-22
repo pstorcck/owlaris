@@ -159,7 +159,7 @@ function extraerYResolverEcuacion(textoTutor: string, respuestaAlumno: string): 
     }
 
     // Helper: buscar en línea con ? primero, luego último match
-    const buscarEnPregunta = (regex) => {
+    const buscarEnPregunta = (regex: RegExp): RegExpMatchArray | null => {
       const lns = textoTutor.split('\n')
       for (let i = lns.length - 1; i >= 0; i--) {
         if (lns[i].includes('?') || lns[i].includes('¿')) {
