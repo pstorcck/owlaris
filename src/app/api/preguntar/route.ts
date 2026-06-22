@@ -1429,4 +1429,82 @@ Evalúa.`
     console.error('Error /api/preguntar:', err)
     return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 })
   }
-}
+}    // EVALUACIÓN ESTRUCTURADA — verificar corrección con JSON forzado
+    const esRespuestaEvaluable = (
+      pregunta.trim().length < 100 &&
+      historial && historial.length > 0 &&
+      tipoPregunta === 'academica' &&
+      !/ y | and /.test(pregunta) // no evaluar respuestas múltiples
+    )
+    const ultimoTutorMsg2 = esRespuestaEvaluable 
+      ? [...(historial || [])].reverse().find((m: any) => m.rol === 'asistente')
+      : null
+
+    if (ultimoTutorMsg2) {
+      try {
+        const evalCompletion = await openai.chat.completions.create({
+          model: 'gpt-4o-mini',
+          max_tokens: 80,
+          temperature: 0,
+          response_format: { type: 'json_object' },
+          messages: [
+            {
+              role: 'system',
+              content: `Evalúa si la respuesta del alumno es correcta. Responde SOLO con JSON:
+{"correcto": true/false, "valor_correcto": "número o texto exacto", "evaluable": true/false}
+
+REGLAS CRÍTICAS:
+1. evaluable: false si el alumno explica, pregunta o pide ayuda — no da respuesta directa
+2. Para matemáticas: calcula TÚ MISMO la operación y compara con la respuesta del alumno
+3. Para opción múltiple: extrae el valor de la letra y evalúa ese valor, no la letra
+4. NUNCA pongas en valor_correcto algo diferente a la respuesta correcta real
+5. Si el alumno dice "6" y la respuesta es 6, correcto DEBE ser true
+6. Verifica dos veces antes de responder`
+            },
+            {
+              role: 'user',
+              content: `Pregunta del tutor: "${ultimoTutorMsg2.contenido.slice(-500)}"
+Respuesta del alumno: "${pregunta}"
+Evalúa.`
+            }
+          ]
+        })
+
+        const evalJSON = JSON.parse(evalCompletion.choices[0].message.content || '{}')
+
+        if (evalJSON.evaluable === true) {
+          // Extraer número de la respuesta del alumno para comparar
+          const numAlumnoStr = pregunta.replace(/[=,]/g, ' ').match(/-?\d+([.,]\d+)?/)?.[0] || pregunta.trim()
+          const numAlumno = parseFloat(numAlumnoStr)
+          const numCorrecto = parseFloat(String(evalJSON.valor_correcto || ''))
+
+          // Detectar contradicción: evaluador dice incorrecto pero valor_correcto es igual al alumno
+          const hayContradiccion = evalJSON.correcto === false && 
+            !isNaN(numAlumno) && !isNaN(numCorrecto) &&
+            Math.abs(numAlumno - numCorrecto) < 0.01
+
+          if (hayContradiccion) {
+            // El evaluador se contradice — confiar en el modelo principal
+            console.log('EVAL: contradicción detectada, ignorando')
+          } else {
+            const modeloDijoCorrect = respuesta.toLowerCase().includes('correcto') && 
+              !respuesta.toLowerCase().includes('incorrecto')
+            const modeloDijoIncorrect = respuesta.toLowerCase().includes('incorrecto')
+
+            if (evalJSON.correcto === true && modeloDijoIncorrect) {
+              // Modelo dijo incorrecto pero es correcto
+              respuesta = `Correcto. ${numAlumnoStr} es la respuesta correcta. ¿Puedes explicarme cómo llegaste a ese resultado?`
+              console.log('EVAL CORRIGIÓ → CORRECTO')
+            } else if (evalJSON.correcto === false && modeloDijoCorrect) {
+              // Modelo dijo correcto pero es incorrecto
+              respuesta = `Incorrecto. La respuesta correcta es ${evalJSON.valor_correcto}. Intenta de nuevo paso a paso.`
+              console.log('EVAL CORRIGIÓ → INCORRECTO. Correcto:', evalJSON.valor_correcto)
+            }
+          }
+        }
+      } catch(e) {
+        // Si el evaluador falla, el chat continúa normal
+        console.error('Evaluador error (no crítico):', e)
+      }
+    }
+
