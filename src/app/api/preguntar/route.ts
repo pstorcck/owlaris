@@ -232,18 +232,22 @@ async function verificarConWolfram(preguntaTutor: string, respuestaAlumno: strin
     
     for (let i = lineas.length - 1; i >= 0; i--) {
       const l = lineas[i].trim()
-      // Prioridad 1: Ecuaciones con = incluyendo paréntesis
-      if (/[\d(][\d\s+\-*/^×÷().]*=\s*\d+/.test(l)) {
-        preguntaMath = l.replace(/¿|\?/g, '').trim()
+    // Extraer ecuación del texto del tutor
+    const lineas = preguntaTutor.split('\n')
+    let preguntaMath = ''
+
+    for (let i = lineas.length - 1; i >= 0; i--) {
+      const l = lineas[i].trim()
+      // Prioridad 1: Extraer ecuación matemática completa (incluyendo paréntesis y variables)
+      const eqMatch = l.match(/[\d(][\d\sx+y+\-*/^×÷().]*=[\d\sx+y+\-*/^×÷().]+[\d)xy]/)
+      if (eqMatch) {
+        preguntaMath = eqMatch[0].trim()
         break
       }
-      // Prioridad 2: Expresiones con operadores
-      if (/\d+\s*[+\-*\/^×÷]\s*\d+/.test(l)) {
-        const match = l.match(/[\d()][\d\s+\-*\/^×÷().]+[\d)]/)
-        if (match && match[0].trim().length > 3) {
-          preguntaMath = match[0].trim()
-          break
-        }
+      // Prioridad 2: Expresión con operadores sin =
+      const exprMatch = l.match(/[\d(][\d\s+\-*\/^×÷().]+[\d)]/)
+      if (exprMatch && exprMatch[0].trim().length > 3 && /[+\-*/^]/.test(exprMatch[0])) {
+        preguntaMath = exprMatch[0].trim()
       }
       // Prioridad 3: Línea con pregunta
       if ((l.includes('?') || l.includes('¿')) && l.length > 5 && !preguntaMath) {
