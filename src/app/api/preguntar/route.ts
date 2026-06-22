@@ -232,17 +232,21 @@ async function verificarConWolfram(preguntaTutor: string, respuestaAlumno: strin
     
     for (let i = lineas.length - 1; i >= 0; i--) {
       const l = lineas[i].trim()
-      // Buscar líneas con operaciones matemáticas completas (al menos 2 números y un operador)
+      // Prioridad 1: Ecuaciones con = incluyendo paréntesis
+      if (/[\d(][\d\s+\-*/^×÷().]*=\s*\d+/.test(l)) {
+        preguntaMath = l.replace(/¿|\?/g, '').trim()
+        break
+      }
+      // Prioridad 2: Expresiones con operadores
       if (/\d+\s*[+\-*\/^×÷]\s*\d+/.test(l)) {
-        // Extraer solo la expresión matemática, no todo el texto
-        const match = l.match(/[\d()\s+\-*\/^×÷.]+[\d)]/)
+        const match = l.match(/[\d()][\d\s+\-*\/^×÷().]+[\d)]/)
         if (match && match[0].trim().length > 3) {
           preguntaMath = match[0].trim()
           break
         }
       }
-      // También buscar líneas que terminen con ?
-      if (l.endsWith('?') && l.length > 5 && !preguntaMath) {
+      // Prioridad 3: Línea con pregunta
+      if ((l.includes('?') || l.includes('¿')) && l.length > 5 && !preguntaMath) {
         preguntaMath = l.replace(/¿|\?/g, '').trim()
       }
     }
