@@ -701,9 +701,10 @@ export async function POST(req: NextRequest) {
     // Buscar materia por ID o por nombre
     const { data: materiaPorId } = await supabase.from('materias').select('*').eq('id', materia_id).single()
     const { data: materiaPorNombre } = !materiaPorId && materia_id
-      ? await supabase.from('materias').select('*').eq('nombre', materia_id).eq('colegio_id', perfil.colegio_id).single()
+      ? await supabase.from('materias').select('*').ilike('nombre', materia_id).eq('colegio_id', perfil.colegio_id).single()
       : { data: null }
     const materia = materiaPorId || materiaPorNombre
+    const materia_uuid = materia?.id || null  // UUID real para inserts
     const gradoEfectivo = grado_override || perfil.grado
     const colegioSlug   = perfil.colegio?.sharepoint_folder || perfil.colegio?.slug
 
@@ -910,7 +911,7 @@ export async function POST(req: NextRequest) {
       const ecuacion = ultimoTutor?.contenido?.match(/[\d]+\s*[+\-*\/x×÷]\s*[\d]+/)?.[0] || ''
       const respuesta = `Incorrecto. Vamos a revisarlo juntos.${ecuacion ? ' La operación es: ' + ecuacion + '.' : ''} ¿Puedes intentarlo de nuevo paso a paso?`
       await supabase.from('interacciones').insert({
-        usuario_id: user.id, colegio_id: perfil.colegio_id, materia_id: materia_id || null,
+        usuario_id: user.id, colegio_id: perfil.colegio_id, materia_id: materia_uuid,
         grado: gradoEfectivo, tema_detectado: pregunta.substring(0, 100),
         pregunta, respuesta, tokens_usados: 0, costo_usd: 0,
         modelo_usado: 'calculadora', documento_fuente: null, sospecha_copia: false,
@@ -924,7 +925,7 @@ export async function POST(req: NextRequest) {
       const valor = numMatch ? numMatch[0] : pregunta.trim()
       const respuesta = `¡Correcto! ${valor} es la respuesta correcta. Bien hecho. ¿Puedes explicarme cómo llegaste a ese resultado?`
       await supabase.from('interacciones').insert({
-        usuario_id: user.id, colegio_id: perfil.colegio_id, materia_id: materia_id || null,
+        usuario_id: user.id, colegio_id: perfil.colegio_id, materia_id: materia_uuid,
         grado: gradoEfectivo, tema_detectado: pregunta.substring(0, 100),
         pregunta, respuesta, tokens_usados: 0, costo_usd: 0,
         modelo_usado: 'calculadora', documento_fuente: null, sospecha_copia: false,
@@ -1156,7 +1157,7 @@ Evalúa si la respuesta del alumno es correcta.`
     const costoUSD     = tokensUsados * 0.00000015
 
     const { error: insertErr } = await supabase.from('interacciones').insert({
-      usuario_id: user.id, colegio_id: perfil.colegio_id, materia_id: materia_id || null,
+      usuario_id: user.id, colegio_id: perfil.colegio_id, materia_id: materia_uuid,
       grado: gradoEfectivo, tema_detectado: pregunta.substring(0, 100),
       pregunta, respuesta, tokens_usados: tokensUsados, costo_usd: costoUSD,
       modelo_usado: 'gpt-4o-mini', documento_fuente: documentoFuente,
