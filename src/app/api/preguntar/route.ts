@@ -1095,8 +1095,14 @@ ${contextoContenido}`
     // JUEZ INDEPENDIENTE — verificar si el alumno respondió algo y el modelo evaluó
     // Solo actúa cuando hay historial (el alumno está respondiendo, no preguntando)
     const ultimaPreguntaTutor = [...(historial || [])].reverse().find((m: any) => m.rol === 'asistente')
+    // El juez solo evalúa respuestas numéricas o de letra, no explicaciones
+    const esRespuestaNumerica = /^[a-dA-D]$/.test(pregunta.trim()) || 
+      /^-?\d+([.,]\d+)?$/.test(pregunta.trim().replace(/[=xX]/g,'').trim()) ||
+      /^[a-dA-D][).]/.test(pregunta.trim()) ||
+      /^(es|son|da|el resultado es|la respuesta es)?\s*-?\d/.test(pregunta.trim().toLowerCase())
     const esRespuestaAlumno = ultimaPreguntaTutor && 
-      pregunta.trim().length < 150 && // respuestas cortas
+      esRespuestaNumerica &&
+      pregunta.trim().length < 50 &&
       tipoPregunta === 'academica'
 
     if (esRespuestaAlumno) {
