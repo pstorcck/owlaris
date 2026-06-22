@@ -170,7 +170,7 @@ function extraerYResolverEcuacion(textoTutor: string, respuestaAlumno: string): 
 
     // Sumas directas: a + b = ? o a + b
     const sumaRegex = /(\d+)\s*\+\s*(\d+)/
-    const sumaMatch = textoTutor.match(sumaRegex)
+    const sumaMatch = buscarEnPregunta(sumaRegex)
     if (sumaMatch) {
       const correcto = parseFloat(sumaMatch[1]) + parseFloat(sumaMatch[2])
       const esCorrecta = Math.abs(numAlumno - correcto) < 0.001
@@ -180,7 +180,7 @@ function extraerYResolverEcuacion(textoTutor: string, respuestaAlumno: string): 
 
     // Restas directas: a - b = ?
     const restaRegex = /(\d+)\s*-\s*(\d+)/
-    const restaMatch = textoTutor.match(restaRegex)
+    const restaMatch = buscarEnPregunta(restaRegex)
     if (restaMatch) {
       const correcto = parseFloat(restaMatch[1]) - parseFloat(restaMatch[2])
       const esCorrecta = Math.abs(numAlumno - correcto) < 0.001
@@ -190,7 +190,7 @@ function extraerYResolverEcuacion(textoTutor: string, respuestaAlumno: string): 
 
     // Multiplicaciones: a x b o a * b
     const multRegex = /(\d+)\s*[x\*×]\s*(\d+)/i
-    const multMatch = textoTutor.match(multRegex)
+    const multMatch = buscarEnPregunta(multRegex)
     if (multMatch) {
       const correcto = parseFloat(multMatch[1]) * parseFloat(multMatch[2])
       const esCorrecta = Math.abs(numAlumno - correcto) < 0.001
