@@ -1107,6 +1107,27 @@ ${contextoContenido}`
 
     if (esRespuestaAlumno) {
       try {
+        // Extraer solo la pregunta principal del mensaje del tutor
+        const extraerPreguntaPrincipal = (texto: string): string => {
+          const lineas = texto.split('\n')
+          const tieneOpciones = lineas.some(l => /^[A-D][).]/.test(l.trim()))
+          if (tieneOpciones) {
+            let inicio = 0
+            for (let i = 0; i < lineas.length; i++) {
+              if ((lineas[i].includes('¿') || lineas[i].trim().endsWith('?')) && !/^[A-D]/.test(lineas[i].trim())) {
+                inicio = i; break
+              }
+            }
+            return lineas.slice(inicio).join('\n').trim()
+          }
+          let ultimaIdx = -1
+          for (let i = 0; i < lineas.length; i++) {
+            if (lineas[i].includes('¿') || lineas[i].trim().endsWith('?')) ultimaIdx = i
+          }
+          return ultimaIdx >= 0 ? lineas.slice(ultimaIdx).join('\n').trim() : lineas.slice(-2).join('\n').trim()
+        }
+        const preguntaPrincipal = extraerPreguntaPrincipal(ultimaPreguntaTutor.contenido)
+
         const juezMessages = [
           {
             role: 'system' as const,
