@@ -224,16 +224,26 @@ async function verificarConWolfram(preguntaTutor: string, respuestaAlumno: strin
     const numAlumno = parseFloat(numMatch[0].replace(',', '.'))
     if (isNaN(numAlumno)) return null
 
-    // Extraer la pregunta matemática del tutor (última línea con ?)
+    // Extraer la pregunta matemática del tutor
+    // Estrategia: buscar desde el final la última línea que contenga
+    // una expresión matemática completa (no solo un número)
     const lineas = preguntaTutor.split('\n')
     let preguntaMath = ''
     
-    // Buscar expresiones matemáticas o preguntas
     for (let i = lineas.length - 1; i >= 0; i--) {
       const l = lineas[i].trim()
-      if (l.includes('?') || /[\d+\-*/^=]/.test(l)) {
-        preguntaMath = l
-        break
+      // Buscar líneas con operaciones matemáticas completas (al menos 2 números y un operador)
+      if (/\d+\s*[+\-*\/^×÷]\s*\d+/.test(l)) {
+        // Extraer solo la expresión matemática, no todo el texto
+        const match = l.match(/[\d()\s+\-*\/^×÷.]+[\d)]/)
+        if (match && match[0].trim().length > 3) {
+          preguntaMath = match[0].trim()
+          break
+        }
+      }
+      // También buscar líneas que terminen con ?
+      if (l.endsWith('?') && l.length > 5 && !preguntaMath) {
+        preguntaMath = l.replace(/¿|\?/g, '').trim()
       }
     }
     if (!preguntaMath) return null
