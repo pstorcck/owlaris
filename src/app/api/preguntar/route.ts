@@ -1276,7 +1276,7 @@ Evalúa si la respuesta del alumno es correcta.`
         respuesta.toLowerCase().includes('vamos a desglosarlo') ||
         respuesta.toLowerCase().includes('that is not correct') ||
         respuesta.toLowerCase().includes('thats not correct')
-      if (esIncorrecta) {
+      if (esIncorrecta === true) {
         const hace1h = new Date(Date.now() - 3600000).toISOString()
         const { data: recientes } = await supabase.from('interacciones')
           .select('respuesta').eq('usuario_id', user.id).gte('creado_en', hace1h)
@@ -1307,7 +1307,7 @@ Evalúa si la respuesta del alumno es correcta.`
             await supabase.from('alertas').insert({
               alumno_id: user.id, colegio_id: perfil.colegio_id,
               guia_id: asig?.guia_id || null, tipo: 'baja_comprension',
-              descripcion: perfil.nombre_completo + ' tuvo ' + (fallos+1) + ' respuestas incorrectas' + (materia_id ? ' en ' + materia_id : '') + '.',
+              descripcion: perfil.nombre_completo + ' tuvo ' + (fallos+1) + ' respuestas incorrectas' + (materia?.nombre ? ' en ' + materia.nombre : '') + '.',
               contexto: documentoFuente || pregunta.substring(0, 150)
             })
             if (asig?.guia) {
