@@ -1173,7 +1173,8 @@ ${contextoContenido}`
     const hayHistorial = historial && historial.length > 0
     const ultimoTutorMsg = hayHistorial ? [...historial].reverse().find((m: any) => m.rol === 'asistente') : null
     
-    if (esRespuestaCorta && ultimoTutorMsg && tipoPregunta === 'academica') {
+    const tieneMultiplesRespuestas = / y | and |,/.test(pregunta) && pregunta.split(/\d+/).length > 3
+    if (esRespuestaCorta && ultimoTutorMsg && tipoPregunta === 'academica' && !tieneMultiplesRespuestas) {
       try {
         const evalCompletion = await openai.chat.completions.create({
           model: 'gpt-4o-mini',
@@ -1224,7 +1225,8 @@ Respuesta del alumno: "${pregunta}"
           }
         }
       } catch(evalErr) {
-        console.error('Eval estructurado error:', evalErr)
+        // Si el evaluador falla, continuar sin corrección
+        console.error('Eval estructurado error (no crítico):', evalErr)
       }
     }
 
