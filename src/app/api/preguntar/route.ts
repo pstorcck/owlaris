@@ -1158,13 +1158,14 @@ Evalúa si la respuesta del alumno es correcta.`
     const tokensUsados = completion.usage?.total_tokens || 0
     const costoUSD     = tokensUsados * 0.00000015
 
-    await supabase.from('interacciones').insert({
+    const { error: insertErr } = await supabase.from('interacciones').insert({
       usuario_id: user.id, colegio_id: perfil.colegio_id, materia_id: materia_id || null,
       grado: gradoEfectivo, tema_detectado: pregunta.substring(0, 100),
       pregunta, respuesta, tokens_usados: tokensUsados, costo_usd: costoUSD,
       modelo_usado: 'gpt-4o-mini', documento_fuente: documentoFuente,
       sospecha_copia: detectarCopia(pregunta),
     })
+    console.log('INSERT interaccion:', insertErr ? 'ERROR: ' + insertErr.message : 'OK - user=' + user.id)
 
     if (tipoPregunta === 'academica' && !contenidoCurricular && materia) {
       await registrarPendiente(supabase, perfil, materia, pregunta)
@@ -1288,7 +1289,8 @@ Evalúa si la respuesta del alumno es correcta.`
           i.respuesta?.toLowerCase().includes('incorrecto') ||
           i.respuesta?.toLowerCase().includes('vamos a revisar')
         ).length
-        if (fallos >= 2) {
+        console.log('FALLOS EN BD:', fallos)
+      if (fallos >= 2) {
           const { data: yaExiste } = await supabase.from('alertas')
             .select('id').eq('alumno_id', user.id).eq('tipo', 'baja_comprension')
             .eq('resuelta', false).gte('creado_en', hace1h).maybeSingle()
