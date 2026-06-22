@@ -974,11 +974,21 @@ export async function POST(req: NextRequest) {
           textoTutor.length > 500 // problema largo
         )
         if (!esProblemaComplejo) {
-          // Primero intentar con mathjs (más rápido)
-          validacionCalc = extraerYResolverEcuacion(textoTutor, pregunta)
-          // Si mathjs no pudo, intentar con Wolfram Alpha
-          if (!validacionCalc) {
+          // Detectar ecuaciones con variables en ambos lados (ax + b = cx + d)
+          const tieneVarAmbosLados = /[a-z]\s*[+\-]/.test(textoTutor) && 
+            textoTutor.split('=').length > 1 &&
+            /[a-z]/.test(textoTutor.split('=')[1] || '')
+          
+          if (tieneVarAmbosLados) {
+            // Ir directo a Wolfram para ecuaciones con variables en ambos lados
             validacionCalc = await verificarConWolfram(textoTutor, pregunta)
+          } else {
+            // Primero intentar con mathjs (más rápido)
+            validacionCalc = extraerYResolverEcuacion(textoTutor, pregunta)
+            // Si mathjs no pudo, intentar con Wolfram Alpha
+            if (!validacionCalc) {
+              validacionCalc = await verificarConWolfram(textoTutor, pregunta)
+            }
           }
         }
       }
