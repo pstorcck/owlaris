@@ -1167,8 +1167,8 @@ ${contextoContenido}`
 
     let respuesta = completion.choices[0].message.content || 'No pude generar una respuesta.'
 
-    // EVALUADOR WOLFRAM+OPENAI — verificación exacta
-    try {
+    // EVALUADOR DESACTIVADO — calculadora cubre 100% matemáticas
+    if (false) { try {
       const esEvaluable = (
         pregunta.trim().length < 80 &&
         (historial || []).length > 0 &&
@@ -1238,7 +1238,7 @@ Alumno: "${pregunta}"` }
       }
     } catch(evalErr) {
       console.error('Evaluador (no crítico):', evalErr)
-    }
+    } } // fin desactivado
 
     // JUEZ INDEPENDIENTE — verificar si el alumno respondió algo y el modelo evaluó
     // Solo actúa cuando hay historial (el alumno está respondiendo, no preguntando)
