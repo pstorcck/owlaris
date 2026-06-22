@@ -158,9 +158,24 @@ function extraerYResolverEcuacion(textoTutor: string, respuestaAlumno: string): 
       } catch { continue }
     }
 
+    // Helper: buscar en línea con ? primero, luego último match
+    const buscarEnPregunta = (regex) => {
+      const lns = textoTutor.split('\n')
+      for (let i = lns.length - 1; i >= 0; i--) {
+        if (lns[i].includes('?') || lns[i].includes('¿')) {
+          const m = lns[i].match(regex)
+          if (m) return m
+        }
+      }
+      for (let i = lns.length - 1; i >= 0; i--) {
+        const m = lns[i].match(regex)
+        if (m) return m
+      }
+      return null
+    }
     // Buscar porcentajes: N% de M
     const pctRegex = /(\d+)%\s+de\s+(\d+)/i
-    const pMatch = textoTutor.match(pctRegex)
+    const pMatch = buscarEnPregunta(pctRegex)
     if (pMatch) {
       const correcto = (parseFloat(pMatch[1]) / 100) * parseFloat(pMatch[2])
       const esCorrecta = Math.abs(numAlumno - correcto) < 0.001
