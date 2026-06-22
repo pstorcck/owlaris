@@ -1105,7 +1105,7 @@ ${contextoContenido}`
       pregunta.trim().length < 50 &&
       tipoPregunta === 'academica'
 
-    if (esRespuestaAlumno) {
+    if (false && esRespuestaAlumno) { // JUEZ DESACTIVADO - causa errores
       try {
         // Extraer solo la pregunta principal del mensaje del tutor
         const extraerPreguntaPrincipal = (texto: string): string => {
