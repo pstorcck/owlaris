@@ -254,21 +254,57 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
   async function reproducirTTS(texto: string) {
     if (!modoConversacion) return
     try {
+      // Detener audio anterior
+      if (audioRef.current) {
+        audioRef.current.pause()
+        audioRef.current = null
+      }
+
       const res = await fetch('/api/tts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ texto }),
       })
       if (!res.ok) { setReproduciendo(false); return }
+
       const blob = await res.blob()
-      const url = URL.createObjectURL(blob)
-      const audio = new Audio(url)
+      
+      // Detectar Safari iOS
+      const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent)
+      
+      let audio: HTMLAudioElement
+      
+      if (isSafari) {
+        // Safari: usar FileReader para convertir a base64
+        const base64 = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader()
+          reader.onload = () => resolve(reader.result as string)
+          reader.onerror = reject
+          reader.readAsDataURL(blob)
+        })
+        audio = new Audio(base64)
+      } else {
+        const url = URL.createObjectURL(blob)
+        audio = new Audio(url)
+        audio.onended = () => { setReproduciendo(false); URL.revokeObjectURL(url) }
+        audio.onerror = () => { setReproduciendo(false); URL.revokeObjectURL(url) }
+      }
+      
       audioRef.current = audio
       audio.onplay = () => setReproduciendo(true)
-      audio.onended = () => { setReproduciendo(false); URL.revokeObjectURL(url) }
-      audio.onerror = () => { setReproduciendo(false); URL.revokeObjectURL(url) }
+      if (isSafari) {
+        audio.onended = () => setReproduciendo(false)
+        audio.onerror = () => setReproduciendo(false)
+      }
+      
       setReproduciendo(true)
-      await audio.play()
+      const playPromise = audio.play()
+      if (playPromise !== undefined) {
+        playPromise.catch(() => {
+          // Safari puede rechazar si no hay gesto del usuario reciente
+          setReproduciendo(false)
+        })
+      }
     } catch { setReproduciendo(false) }
   }
 
@@ -437,7 +473,7 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
 
   return (
     <>
-      <style>{`
+      <style suppressHydrationWarning>{`
         .owlaris-root { min-height:100vh; display:flex; flex-direction:column; background:#F8F7FF; background-image:radial-gradient(ellipse at 15% 0%,rgba(109,40,217,.06) 0%,transparent 55%),radial-gradient(ellipse at 85% 100%,rgba(14,165,233,.05) 0%,transparent 50%); font-family:"Plus Jakarta Sans",sans-serif; }
         .o-header { background:rgba(255,255,255,.88); backdrop-filter:blur(24px); border-bottom:1px solid rgba(109,40,217,.08); box-shadow:0 1px 24px rgba(109,40,217,.06); position:sticky; top:0; z-index:50; padding:14px 24px; }
         .bbl-tutor { background:white; border:1px solid rgba(109,40,217,.1); border-radius:4px 20px 20px 20px; box-shadow:0 2px 20px rgba(109,40,217,.08); position:relative; }
