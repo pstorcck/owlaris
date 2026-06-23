@@ -21,12 +21,16 @@ create table if not exists usuarios (
   colegio_id       uuid references colegios(id),
   nombre_completo  text not null,
   email            text not null,
-  rol              text not null check (rol in ('alumno','maestro','admin','superadmin')),
+  rol              text not null check (rol in ('alumno','maestro','padre','admin','superadmin')),
   grado            text,
   activo           boolean default true,
   ultimo_acceso    timestamptz,
   creado_en        timestamptz default now()
 );
+
+alter table usuarios drop constraint if exists usuarios_rol_check;
+alter table usuarios add constraint usuarios_rol_check
+  check (rol in ('alumno','maestro','padre','admin','superadmin'));
 
 -- 3. MATERIAS
 create table if not exists materias (
@@ -91,6 +95,49 @@ create table if not exists permisos (
   puede_exportar        boolean default false
 );
 
+-- 8. CONFIGURACIÓN POR COLEGIO
+create table if not exists configuracion (
+  id              uuid primary key default gen_random_uuid(),
+  colegio_id      uuid references colegios(id) on delete cascade,
+  clave           text not null,
+  valor           text not null,
+  actualizado_en  timestamptz default now(),
+  unique(colegio_id, clave)
+);
+
+-- 9. ASIGNACIONES DE GUÍAS
+create table if not exists guia_asignaciones (
+  id          uuid primary key default gen_random_uuid(),
+  guia_id     uuid references usuarios(id) on delete cascade,
+  colegio_id  uuid references colegios(id) on delete cascade,
+  tipo        text not null check (tipo in ('grado','alumno')),
+  grado       text,
+  alumno_id   uuid references usuarios(id) on delete cascade,
+  activo      boolean default true,
+  creado_en   timestamptz default now()
+);
+
+-- 10. ALERTAS PEDAGÓGICAS
+create table if not exists alertas (
+  id            uuid primary key default gen_random_uuid(),
+  colegio_id    uuid references colegios(id) on delete cascade,
+  alumno_id     uuid references usuarios(id) on delete cascade,
+  guia_id       uuid references usuarios(id),
+  tipo          text not null,
+  descripcion   text,
+  contexto      text,
+  resuelta      boolean default false,
+  resuelta_en   timestamptz,
+  creado_en     timestamptz default now()
+);
+
+alter table interacciones add column if not exists operacion_canonica text;
+alter table interacciones add column if not exists op_estado text;
+alter table interacciones add column if not exists op_evaluada_en timestamptz;
+alter table interacciones add column if not exists op_respuesta_alumno text;
+alter table interacciones add column if not exists estado_evaluacion text;
+alter table interacciones add column if not exists guard_activado boolean default false;
+
 -- ================================================
 -- ÍNDICES para rendimiento
 -- ================================================
@@ -99,6 +146,11 @@ create index if not exists idx_interacciones_colegio    on interacciones(colegio
 create index if not exists idx_interacciones_fecha      on interacciones(creado_en);
 create index if not exists idx_pendientes_colegio       on pendientes(colegio_id);
 create index if not exists idx_metricas_colegio_fecha   on metricas_diarias(colegio_id, fecha);
+create index if not exists idx_configuracion_colegio    on configuracion(colegio_id);
+create index if not exists idx_guia_asignaciones_guia   on guia_asignaciones(guia_id);
+create index if not exists idx_guia_asignaciones_alumno on guia_asignaciones(alumno_id);
+create index if not exists idx_alertas_colegio          on alertas(colegio_id);
+create index if not exists idx_alertas_alumno           on alertas(alumno_id);
 
 -- ================================================
 -- TRIGGER: actualizar ultimo_acceso automáticamente
@@ -124,6 +176,9 @@ alter table materias      enable row level security;
 alter table interacciones enable row level security;
 alter table pendientes    enable row level security;
 alter table metricas_diarias enable row level security;
+alter table configuracion enable row level security;
+alter table guia_asignaciones enable row level security;
+alter table alertas enable row level security;
 
 -- Políticas: cada usuario solo ve datos de su colegio
 create policy "usuarios_ver_propio" on usuarios
@@ -140,6 +195,47 @@ create policy "materias_ver_activas" on materias
 
 create policy "colegios_ver_activos" on colegios
   for select using (activo = true);
+
+create policy "configuracion_ver_colegio" on configuracion
+  for select using (
+    exists (
+      select 1 from usuarios u
+      where u.id = auth.uid()
+        and (u.rol = 'superadmin' or u.colegio_id = configuracion.colegio_id)
+    )
+  );
+
+create policy "guia_asignaciones_ver_colegio" on guia_asignaciones
+  for select using (
+    exists (
+      select 1 from usuarios u
+      where u.id = auth.uid()
+        and (u.rol = 'superadmin' or u.colegio_id = guia_asignaciones.colegio_id)
+    )
+  );
+
+create policy "alertas_ver_staff_colegio" on alertas
+  for select using (
+    exists (
+      select 1 from usuarios u
+      where u.id = auth.uid()
+        and u.rol in ('maestro','admin','superadmin')
+        and (u.rol = 'superadmin' or u.colegio_id = alertas.colegio_id)
+    )
+  );
+
+create policy "alertas_insertar_alumno" on alertas
+  for insert with check (alumno_id = auth.uid());
+
+create policy "alertas_actualizar_staff_colegio" on alertas
+  for update using (
+    exists (
+      select 1 from usuarios u
+      where u.id = auth.uid()
+        and u.rol in ('maestro','admin','superadmin')
+        and (u.rol = 'superadmin' or u.colegio_id = alertas.colegio_id)
+    )
+  );
 
 -- ================================================
 -- DATOS INICIALES DE PRUEBA

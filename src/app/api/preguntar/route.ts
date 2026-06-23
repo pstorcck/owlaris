@@ -1,5 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import {
+  extractAndCleanOperation,
+  handleMathEvaluation,
+  inferCanonicalOperationFromText,
+  isSafeCanonicalOperation,
+  looksLikeMathPracticePrompt,
+  normalizeStudentAnswer,
+  solveOperation,
+  type MathEvaluation,
+} from '@/lib/mathSafety'
 
 const PROMPT_BASE = `Eres Owlaris, Tu tutor AI. Eres un profesor paciente cuyo objetivo es ayudar a los estudiantes a entender, practicar y aprender por sí mismos. Hablas de forma clara, cercana, motivadora y respetuosa. Tratas al usuario de tú. No usas emoticones.
 
@@ -87,185 +97,6 @@ Si el tema toca salud mental, crisis, violencia, abuso o autolesión, responde c
 // ============================================================
 // PROTOCOLO ANTI-ERRORES — 10 FUNCIONES
 // ============================================================
-
-// 1. extractAndCleanOperation — extrae OP y limpia el texto visible
-function extractAndCleanOperation(rawText: string): { visibleText: string; operation: string | null } {
-  if (!rawText || typeof rawText !== 'string') return { visibleText: '', operation: null }
-  const opRegex = /\[?\s*OP\s*:\s*([^\]\n]+)\]?/gi
-  const matches = Array.from(rawText.matchAll(opRegex))
-  const lastMatch = matches.length > 0 ? matches[matches.length - 1] : null
-  const operation = lastMatch?.[1]?.trim() || null
-  const visibleText = rawText
-    .replace(/(?:^|\n)\s*\[?\s*OP\s*:\s*[^\]\n]+\]?\s*(?=\n|$)/gi, '\n')
-    .replace(/\s*\[?\s*OP\s*:\s*[^\]\n]+\]?\s*/gi, ' ')
-    .replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n')
-    .replace(/[ \t]{2,}/g, ' ').trim()
-  return { visibleText, operation }
-}
-function extractCanonicalOperation(texto: string): string | null {
-  return extractAndCleanOperation(texto).operation
-}
-function isSafeCanonicalOperation(op: string | null): boolean {
-  if (!op || op.trim().length === 0 || op.length > 200) return false
-  return /^[0-9xX+\-*/().=\s%^]+$/.test(op.replace(/sqrt|log|sin|cos|tan/gi, ''))
-}
-
-// 2. validateOperation
-function validateOperation(op: string): { ok: boolean; reason?: string } {
-  if (!op) return { ok: false, reason: 'sin_operacion' }
-  // Verificar que no contenga texto narrativo (solo símbolos y funciones matemáticas conocidas)
-  const opLimpia = op.replace(/sqrt|log|sin|cos|tan|pi|abs|floor|ceil/gi, '0')
-  if (/[a-zA-Z]{2,}/.test(opLimpia)) return { ok: false, reason: 'contiene_texto' }
-  if (op.length > 300) return { ok: false, reason: 'demasiado_larga' }
-  return { ok: true }
-}
-
-// 3. normalizeStudentAnswer
-function normalizeStudentAnswer(respuesta: string): number | null {
-  const s = String(respuesta).trim().toLowerCase()
-  // Fracciones: 1/2 → 0.5
-  const fracMatch = s.match(/^(-?\d+)\s*\/\s*(\d+)$/)
-  if (fracMatch) return parseFloat(fracMatch[1]) / parseFloat(fracMatch[2])
-  // Número con coma o punto
-  const numStr = s.replace(/[=xX\s]/g, '').replace(',', '.')
-  const n = parseFloat(numStr)
-  return isNaN(n) ? null : n
-}
-
-// 4. solveOperation
-function solveOperation(op: string): number | null {
-  try {
-    const math = require('mathjs') as { evaluate: (expr: string) => number }
-    const clean = op.replace(/×/g, '*').replace(/÷/g, '/').trim()
-    // Ecuaciones con variable → null (Wolfram lo maneja)
-    const opSinFunciones = clean.replace(/sqrt|log|sin|cos|tan|pi|abs/gi, '0')
-    if (clean.includes('=') && /[a-zA-Z]/.test(opSinFunciones)) return null
-    const result = math.evaluate(clean)
-    return typeof result === 'number' && isFinite(result) ? result : null
-  } catch { return null }
-}
-
-// 5. compareAnswers
-function compareAnswers(studentN: number | null, correctN: number | null): string {
-  if (studentN === null || correctN === null) return 'no_evaluable'
-  if (Math.abs(studentN - correctN) < 0.001) return 'correcto'
-  if (Math.abs(studentN - correctN) < 0.01) return 'equivalente' // fracciones/decimales
-  return 'incorrecto'
-}
-
-// 6. buildEvaluationState
-function buildEvaluationState(comparison: string, hasVerifiedOp: boolean): string {
-  if (!hasVerifiedOp) return 'no_evaluable'
-  return comparison
-}
-
-// 7. contradictionGuard — BLOQUEA errores antes de llegar al alumno
-function contradictionGuard(
-  feedback: string, 
-  estado: string, 
-  studentN: number | null, 
-  correctN: number | null
-): { feedback: string; guardActivado: boolean } {
-  // REGLA 1: Si son iguales, NUNCA puede decir incorrecto
-  if (studentN !== null && correctN !== null && Math.abs(studentN - correctN) < 0.001) {
-    if (feedback.toLowerCase().includes('incorrecto') || feedback.toLowerCase().includes('incorrect')) {
-      const feedbackCorregido = `Correcto. ${studentN} es la respuesta correcta. ¿Puedes explicarme cómo llegaste a ese resultado?`
-      return { feedback: feedbackCorregido, guardActivado: true }
-    }
-  }
-  // REGLA 2: no_evaluable no puede tener veredicto definitivo
-  if (estado === 'no_evaluable') {
-    if ((feedback.toLowerCase().includes('correcto') && !feedback.toLowerCase().includes('¿')) || 
-        feedback.toLowerCase().includes('incorrecto')) {
-      return { 
-        feedback: 'Para revisarlo bien, primero escribamos la operación. ¿Qué operación representa el problema?',
-        guardActivado: true 
-      }
-    }
-  }
-  return { feedback, guardActivado: false }
-}
-
-// 8. generatePedagogicalFeedback
-function generatePedagogicalFeedback(
-  estado: string, 
-  studentAnswer: string, 
-  correctAnswer: number | null, 
-  operation: string | null,
-  idiomaIngles: boolean
-): string {
-  const s = idiomaIngles
-  switch(estado) {
-    case 'correcto':
-    case 'equivalente':
-      return s
-        ? `Correct. ${studentAnswer} is the right answer. Can you explain how you solved it?`
-        : `¡Correcto! ${studentAnswer} es la respuesta correcta. ¿Puedes explicarme cómo llegaste a ese resultado?`
-    case 'incorrecto':
-      return s
-        ? `Incorrect. The right answer is ${correctAnswer}. Try again step by step.`
-        : `Incorrecto. La respuesta correcta es ${correctAnswer}. Intenta de nuevo paso a paso.`
-    case 'no_evaluable':
-      return s
-        ? `To check properly, let's first write the operation. What operation does this problem represent?`
-        : `Para revisarlo bien, primero escribamos la operación. ¿Qué operación representa el problema?`
-    default:
-      return s
-        ? `I couldn't verify that right now. Let's review the process step by step.`
-        : `No pude verificarlo en este momento. Revisemos el procedimiento paso a paso.`
-  }
-}
-
-// 9. logEvaluation
-function logEvaluation(data: Record<string, unknown>) {
-  if (process.env.NODE_ENV !== 'production') console.log('EVAL:', JSON.stringify(data))
-}
-
-// 10. handleMathEvaluation — flujo completo del protocolo
-async function handleMathEvaluation(
-  tutorQuestion: string,
-  studentAnswer: string,
-  idiomaIngles: boolean,
-  wolframAppId?: string
-): Promise<{ estado: string; feedback: string; correctAnswer: number | null; op: string | null; guardActivado: boolean } | null> {
-  
-  // Extraer operación canónica
-  const op = extractCanonicalOperation(tutorQuestion)
-  if (!op) return null // No hay [OP:], no evaluar
-  
-  const validation = validateOperation(op)
-  if (!validation.ok) return null
-  
-  // Resolver operación
-  let correctAnswer = solveOperation(op)
-  
-  // Si mathjs no pudo (ecuación con variable), intentar Wolfram
-  if (correctAnswer === null && wolframAppId) {
-    try {
-      const query = encodeURIComponent(op)
-      const url = `https://api.wolframalpha.com/v1/result?appid=${wolframAppId}&i=${query}`
-      const res = await fetch(url, { signal: AbortSignal.timeout(4000) })
-      if (res.ok) {
-        const texto = await res.text()
-        if (!texto.includes('did not understand')) {
-          const num = parseFloat(texto.match(/-?\d+([.,]\d+)?/)?.[0] || '')
-          if (!isNaN(num)) correctAnswer = num
-        }
-      }
-    } catch { /* Wolfram falló, continuar sin él */ }
-  }
-  
-  const studentN = normalizeStudentAnswer(studentAnswer)
-  const comparison = compareAnswers(studentN, correctAnswer)
-  const estado = buildEvaluationState(comparison, correctAnswer !== null)
-  
-  const feedbackBase = generatePedagogicalFeedback(estado, studentAnswer, correctAnswer, op, idiomaIngles)
-  const { feedback, guardActivado } = contradictionGuard(feedbackBase, estado, studentN, correctAnswer)
-  
-  logEvaluation({ op, correctAnswer, studentAnswer, studentN, estado, guardActivado })
-  
-  return { estado, feedback, correctAnswer, op, guardActivado }
-}
 
 // ============================================================
 // RESTO DEL CÓDIGO (sin cambios funcionales)
@@ -394,6 +225,14 @@ function esSaludo(pregunta: string): boolean {
 function detectarCopia(pregunta: string): boolean {
   return ['hazme la tarea','dame las respuestas','dame la respuesta','solo dime qué va','resuelve todo']
     .some(p => pregunta.toLowerCase().includes(p))
+}
+
+function ultimoMensajeAsistente(historial: { rol: string; contenido: string }[] | undefined): string {
+  if (!Array.isArray(historial)) return ''
+  for (let i = historial.length - 1; i >= 0; i--) {
+    if (historial[i]?.rol !== 'usuario') return historial[i]?.contenido || ''
+  }
+  return ''
 }
 
 async function getToken(): Promise<string | null> {
@@ -623,6 +462,7 @@ export async function POST(req: NextRequest) {
     const materia_uuid = materia?.id || null
     const gradoEfectivo = grado_override || perfil.grado
     const colegioSlug = perfil.colegio?.sharepoint_folder || perfil.colegio?.slug
+    const materiaNumerica = esMateriaNumerica(materia?.nombre || materia_id || '')
 
     // ── ONBOARDING ──────────────────────────────────────────────────
     const estado: string = body.estado || 'activo'
@@ -710,10 +550,10 @@ export async function POST(req: NextRequest) {
     // ── FIN ONBOARDING ───────────────────────────────────────────────
 
     // ── PROTOCOLO ANTI-ERRORES — evaluación por backend ─────────────
-    let evaluacionProtocolo: { estado: string; feedback: string; correctAnswer: number | null; op: string | null; guardActivado: boolean } | null = null
+    let evaluacionProtocolo: MathEvaluation | null = null
     const pendingMathId: string | null = body.pending_math_interaction_id || null
 
-    if (pendingMathId && esMateriaNumerica(materia_id || '')) {
+    if (pendingMathId && materiaNumerica) {
       try {
         const { data: preguntaPendiente } = await supabase
           .from('interacciones')
@@ -741,25 +581,41 @@ export async function POST(req: NextRequest) {
       } catch (e) { console.error('Error recuperando OP pendiente:', e) }
     }
 
+    if (!evaluacionProtocolo && materiaNumerica && normalizeStudentAnswer(pregunta) !== null) {
+      const ultimaPregunta = ultimoMensajeAsistente(historial)
+      const opInferida = inferCanonicalOperationFromText(ultimaPregunta)
+      if (opInferida && isSafeCanonicalOperation(opInferida)) {
+        evaluacionProtocolo = await handleMathEvaluation(
+          ultimaPregunta + '\n[OP: ' + opInferida + ']',
+          pregunta,
+          idiomaIngles,
+          process.env.WOLFRAM_APP_ID
+        )
+      }
+    }
+
     // Si el protocolo evaluó y tiene resultado definitivo, responder directo
     if (evaluacionProtocolo && evaluacionProtocolo.estado !== 'no_evaluable') {
       const respuesta = evaluacionProtocolo.feedback
-      await supabase.from('interacciones').insert({
+      const { data: evaluacionInsertada } = await supabase.from('interacciones').insert({
         usuario_id: user.id, colegio_id: perfil.colegio_id, materia_id: materia_uuid,
         grado: gradoEfectivo, tema_detectado: pregunta.substring(0, 100),
         pregunta, respuesta, tokens_usados: 0, costo_usd: 0,
         modelo_usado: 'calculadora', documento_fuente: null, sospecha_copia: false,
         operacion_canonica: evaluacionProtocolo?.op || null,
+        op_estado: evaluacionProtocolo?.estado === 'incorrecto' ? 'pendiente' : 'evaluada',
+        op_evaluada_en: evaluacionProtocolo?.estado === 'incorrecto' ? null : new Date().toISOString(),
+        op_respuesta_alumno: pregunta,
         estado_evaluacion: evaluacionProtocolo?.estado || null,
         guard_activado: evaluacionProtocolo?.guardActivado || false,
-      })
+      }).select('id').single()
       supabase.from('usuarios').update({ ultimo_acceso: new Date().toISOString() }).eq('id', user.id).then(() => {})
       
       // Verificar alertas pedagógicas
       await verificarAlertasBajaComprension(supabase, user.id, perfil, gradoEfectivo, materia, respuesta, null)
       
       // Si incorrecto conservar pendingMathId para reintento; si correcto ya fue marcado evaluada
-      const returnPendingId = (evaluacionProtocolo?.estado === 'incorrecto') ? pendingMathId : null
+      const returnPendingId = (evaluacionProtocolo?.estado === 'incorrecto') ? (pendingMathId || evaluacionInsertada?.id || null) : null
       return NextResponse.json({ respuesta, tokens: 0, pending_math_interaction_id: returnPendingId })
     }
 
@@ -781,7 +637,11 @@ export async function POST(req: NextRequest) {
     }
 
     const docsConfig = await leerConfig()
-    const promptBase = (cfg.prompt_personalizado || PROMPT_BASE) +
+    const promptPersonalizado = cfg.prompt_personalizado?.trim()
+    const promptBase = PROMPT_BASE +
+      (promptPersonalizado
+        ? '\n\nINSTRUCCIONES ADICIONALES DEL COLEGIO (no reemplazan el protocolo anti-error anterior):\n' + promptPersonalizado
+        : '') +
       (idiomaIngles ? '\n\nIDIOMA: El alumno está en modo inglés. Responde SIEMPRE en inglés.' : '') +
       contextoEvaluacion
 
@@ -859,7 +719,18 @@ ${contextoContenido}`
     if (studentN !== null) {
       const respuestaLow = respuesta.toLowerCase()
       const dijoIncorrecto = respuestaLow.includes('incorrecto') || respuestaLow.includes('incorrect')
-      const valorCorrectoEnRespuesta = respuesta.match(/respuesta correcta es (\d+(?:[.,]\d+)?)/i)
+      const opDeContexto = materiaNumerica
+        ? (inferCanonicalOperationFromText(ultimoMensajeAsistente(historial)) || inferCanonicalOperationFromText(respuesta))
+        : null
+      const respuestaCorrectaCalculada = opDeContexto ? solveOperation(opDeContexto) : null
+      if (dijoIncorrecto && respuestaCorrectaCalculada !== null && Math.abs(studentN - respuestaCorrectaCalculada) < 0.001) {
+        respuesta = idiomaIngles
+          ? `Correct. ${studentN} is the right answer. Can you explain how you solved it?`
+          : `¡Correcto! ${studentN} es la respuesta correcta. Bien hecho. ¿Puedes explicarme cómo llegaste a ese resultado?`
+        console.log('CONTRADICTION GUARD FINAL activado con operación:', opDeContexto)
+      }
+
+      const valorCorrectoEnRespuesta = respuesta.match(/(?:respuesta correcta|resultado correcto|correct result|correct answer)\s+(?:es|is)\s+(-?\d+(?:[.,]\d+)?)/i)
       if (dijoIncorrecto && valorCorrectoEnRespuesta) {
         const valorCorrecto = parseFloat(valorCorrectoEnRespuesta[1].replace(',', '.'))
         if (!isNaN(valorCorrecto) && Math.abs(studentN - valorCorrecto) < 0.001) {
@@ -882,7 +753,11 @@ ${contextoContenido}`
     // Extraer OP de la respuesta del tutor y limpiar texto visible
     const { visibleText: _respLimpia, operation: _opExtraida } = extractAndCleanOperation(respuesta)
     respuesta = _respLimpia
-    const opValidaEnRespuesta = isSafeCanonicalOperation(_opExtraida) ? _opExtraida : null
+    const opInferida = !_opExtraida && materiaNumerica && looksLikeMathPracticePrompt(respuesta)
+      ? inferCanonicalOperationFromText(respuesta)
+      : null
+    const opFinalRespuesta = _opExtraida || opInferida
+    const opValidaEnRespuesta = isSafeCanonicalOperation(opFinalRespuesta) ? opFinalRespuesta : null
 
     const { data: insertedRow, error: insertErr } = await supabase.from('interacciones').insert({
       usuario_id: user.id, colegio_id: perfil.colegio_id, materia_id: materia_uuid,

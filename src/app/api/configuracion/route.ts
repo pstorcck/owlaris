@@ -1,16 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient, createAdminClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/server'
+import { canAccessColegio, requireRoles } from '@/lib/auth'
 
 export async function GET(req: NextRequest) {
   try {
-    const supabase = createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+    const auth = await requireRoles(['admin', 'superadmin'])
+    if (!auth.ok) return auth.response
 
     const { searchParams } = new URL(req.url)
     const colegio_id = searchParams.get('colegio_id')
+    if (!canAccessColegio(auth.perfil, colegio_id)) {
+      return NextResponse.json({ error: 'Sin permisos para este colegio' }, { status: 403 })
+    }
 
-    const { data } = await supabase
+    const { data } = await auth.supabase
       .from('configuracion')
       .select('*')
       .eq('colegio_id', colegio_id)
@@ -25,8 +28,17 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
+    const auth = await requireRoles(['admin', 'superadmin'])
+    if (!auth.ok) return auth.response
+
     const admin = createAdminClient()
     const { colegio_id, clave, valor } = await req.json()
+    if (!colegio_id || !clave) {
+      return NextResponse.json({ error: 'colegio_id y clave son requeridos' }, { status: 400 })
+    }
+    if (!canAccessColegio(auth.perfil, colegio_id)) {
+      return NextResponse.json({ error: 'Sin permisos para este colegio' }, { status: 403 })
+    }
 
     const { error } = await admin
       .from('configuracion')

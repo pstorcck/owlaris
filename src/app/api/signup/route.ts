@@ -1,10 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
+import { createClient as createSupabaseAdminClient } from '@supabase/supabase-js'
+import { createClient as createServerClient } from '@/lib/supabase/server'
+import { canAccessColegio } from '@/lib/auth'
 
 const DOMINIOS_PERMITIDOS: Record<string, { colegio_slug: string; nombre: string }> = {
   'colegiomontano.edu.gt': { colegio_slug: 'colegio-montano', nombre: 'Colegio Montano' },
   'escolaris.edu.gt':      { colegio_slug: 'escolaris',       nombre: 'Colegio Escolaris' },
 }
+
+const ROLES_ADMIN_PERMITIDOS = ['alumno', 'maestro', 'padre', 'admin', 'superadmin']
 
 function generarPassword(): string {
   const chars      = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789'
@@ -19,14 +23,15 @@ function generarPassword(): string {
 export async function POST(req: NextRequest) {
   try {
     // Usar cliente admin directo sin cookies
-    const admin = createClient(
+    const admin = createSupabaseAdminClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.SUPABASE_SERVICE_ROLE_KEY!,
       { auth: { autoRefreshToken: false, persistSession: false } }
     )
+    const supabase = createServerClient()
 
     const body = await req.json()
-    const { nombre_completo, email, grado, rol } = body
+    const { nombre_completo, email, grado, rol, colegio_id } = body
 
     console.log('Signup request:', { nombre_completo, email, grado })
 
@@ -37,17 +42,44 @@ export async function POST(req: NextRequest) {
     const dominio     = email.split('@')[1]?.toLowerCase()
     const colegioInfo = DOMINIOS_PERMITIDOS[dominio]
 
-    if (!colegioInfo) {
+    const { data: { user } } = await supabase.auth.getUser()
+    const { data: perfilAdmin } = user
+      ? await supabase.from('usuarios').select('rol, colegio_id').eq('id', user.id).single()
+      : { data: null }
+    const esAdmin = !!perfilAdmin && ['admin', 'superadmin'].includes(perfilAdmin.rol)
+
+    let rolFinal = 'alumno'
+    let colegio = null as null | { id: string; nombre: string }
+
+    if (esAdmin) {
+      rolFinal = ROLES_ADMIN_PERMITIDOS.includes(rol) ? rol : 'alumno'
+      if (perfilAdmin.rol !== 'superadmin' && rolFinal === 'superadmin') {
+        return NextResponse.json({ error: 'Solo superadmin puede crear superadmin' }, { status: 403 })
+      }
+
+      const colegioObjetivo = colegio_id || perfilAdmin.colegio_id
+      if (!canAccessColegio(perfilAdmin, colegioObjetivo)) {
+        return NextResponse.json({ error: 'Sin permisos para este colegio' }, { status: 403 })
+      }
+
+      const { data } = await admin
+        .from('colegios')
+        .select('id, nombre')
+        .eq('id', colegioObjetivo)
+        .single()
+      colegio = data
+    } else if (!colegioInfo) {
       return NextResponse.json({
         error: `El dominio @${dominio} no está autorizado. Solo se permiten correos @colegiomontano.edu.gt y @escolaris.edu.gt`
       }, { status: 403 })
+    } else {
+      const { data } = await admin
+        .from('colegios')
+        .select('id, nombre')
+        .eq('slug', colegioInfo.colegio_slug)
+        .single()
+      colegio = data
     }
-
-    const { data: colegio } = await admin
-      .from('colegios')
-      .select('id, nombre')
-      .eq('slug', colegioInfo.colegio_slug)
-      .single()
 
     if (!colegio) {
       return NextResponse.json({ error: 'Colegio no encontrado' }, { status: 404 })
@@ -77,7 +109,7 @@ export async function POST(req: NextRequest) {
       colegio_id:      colegio.id,
       nombre_completo: nombre_completo.trim(),
       email:           email.toLowerCase().trim(),
-      rol:             rol || 'alumno',
+      rol:             rolFinal,
       grado:           grado || null,
       activo:          true,
     })

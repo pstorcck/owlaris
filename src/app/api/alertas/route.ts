@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { Resend } from 'resend'
-
-const resend = new Resend(process.env.RESEND_API_KEY)
+import { canAccessColegio, requireRoles } from '@/lib/auth'
 
 export async function GET(req: NextRequest) {
   const supabase = createClient()
@@ -26,9 +25,15 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const supabase = createClient()
+  const auth = await requireRoles(['maestro', 'admin', 'superadmin'])
+  if (!auth.ok) return auth.response
+
+  const supabase = auth.supabase
   const body = await req.json()
   const { alumno_id, tipo, descripcion, contexto, colegio_id } = body
+  if (!alumno_id || !tipo) {
+    return NextResponse.json({ error: 'alumno_id y tipo son requeridos' }, { status: 400 })
+  }
 
   // Evitar alertas duplicadas recientes (última hora)
   const unaHoraAtras = new Date(Date.now() - 3600000).toISOString()
@@ -49,6 +54,11 @@ export async function POST(req: NextRequest) {
     .select('nombre_completo, grado, colegio_id')
     .eq('id', alumno_id)
     .single()
+
+  const colegioIdFinal = colegio_id || alumno?.colegio_id || auth.perfil.colegio_id
+  if (!canAccessColegio(auth.perfil, colegioIdFinal) || (alumno?.colegio_id && alumno.colegio_id !== colegioIdFinal)) {
+    return NextResponse.json({ error: 'Sin permisos para este colegio' }, { status: 403 })
+  }
 
   let guiaId = null
   let guiaEmail = null
@@ -72,7 +82,7 @@ export async function POST(req: NextRequest) {
       .from('guia_asignaciones')
       .select('guia_id, guia:guia_id(email, nombre_completo)')
       .eq('grado', alumno.grado)
-      .eq('colegio_id', colegio_id)
+      .eq('colegio_id', colegioIdFinal)
       .eq('tipo', 'grado')
       .eq('activo', true)
       .single()
@@ -86,11 +96,12 @@ export async function POST(req: NextRequest) {
 
   // Crear alerta
   await supabase.from('alertas').insert({
-    colegio_id, alumno_id, guia_id: guiaId, tipo, descripcion, contexto
+    colegio_id: colegioIdFinal, alumno_id, guia_id: guiaId, tipo, descripcion, contexto
   })
 
   // Enviar email si hay guía
-  if (guiaEmail) {
+  if (guiaEmail && process.env.RESEND_API_KEY) {
+    const resend = new Resend(process.env.RESEND_API_KEY)
     const tipoLabel: Record<string,string> = {
       baja_comprension: '⚠️ Baja comprensión',
       bloqueo_recurrente: '🔄 Bloqueo recurrente',
@@ -125,8 +136,19 @@ export async function POST(req: NextRequest) {
 }
 
 export async function PATCH(req: NextRequest) {
-  const supabase = createClient()
+  const auth = await requireRoles(['maestro', 'admin', 'superadmin'])
+  if (!auth.ok) return auth.response
+
+  const supabase = auth.supabase
   const { id } = await req.json()
+  if (!id) return NextResponse.json({ error: 'ID requerido' }, { status: 400 })
+
+  const { data: alerta } = await supabase.from('alertas').select('colegio_id').eq('id', id).single()
+  if (!alerta) return NextResponse.json({ error: 'Alerta no encontrada' }, { status: 404 })
+  if (!canAccessColegio(auth.perfil, alerta.colegio_id)) {
+    return NextResponse.json({ error: 'Sin permisos para esta alerta' }, { status: 403 })
+  }
+
   await supabase.from('alertas').update({ resuelta: true, resuelta_en: new Date().toISOString() }).eq('id', id)
   return NextResponse.json({ ok: true })
 }

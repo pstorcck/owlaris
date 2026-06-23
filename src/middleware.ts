@@ -10,8 +10,7 @@ export async function middleware(request: NextRequest) {
   if (pathname === '/signup' || 
       pathname === '/login' || 
       pathname === '/padres/login' || 
-      pathname.startsWith('/api/signup') ||
-      pathname.startsWith('/api/alertas')) {
+      pathname.startsWith('/api/signup')) {
     return supabaseResponse
   }
 
