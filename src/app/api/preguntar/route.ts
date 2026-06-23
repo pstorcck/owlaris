@@ -879,6 +879,11 @@ ${contextoContenido}`
     const tokensUsados = completion.usage?.total_tokens || 0
     const costoUSD = tokensUsados * 0.00000015
 
+    // Extraer OP de la respuesta del tutor y limpiar texto visible
+    const { visibleText: _respLimpia, operation: _opExtraida } = extractAndCleanOperation(respuesta)
+    respuesta = _respLimpia
+    const opValidaEnRespuesta = isSafeCanonicalOperation(_opExtraida) ? _opExtraida : null
+
     const { data: insertedRow, error: insertErr } = await supabase.from('interacciones').insert({
       usuario_id: user.id, colegio_id: perfil.colegio_id, materia_id: materia_uuid,
       grado: gradoEfectivo, tema_detectado: pregunta.substring(0, 100),
