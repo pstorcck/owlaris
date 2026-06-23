@@ -720,7 +720,7 @@ export async function POST(req: NextRequest) {
       supabase.from('usuarios').update({ ultimo_acceso: new Date().toISOString() }).eq('id', user.id).then(() => {})
       
       // Verificar alertas pedagógicas
-      await verificarAlertasBajaComprension(supabase, user.id, perfil, gradoEfectivo, materia, respuesta, documentoFuenteAlerta)
+      await verificarAlertasBajaComprension(supabase, user.id, perfil, gradoEfectivo, materia, respuesta, null)
       
       return NextResponse.json({ respuesta, tokens: 0 })
     }
@@ -736,9 +736,7 @@ export async function POST(req: NextRequest) {
 
     let contenidoCurricular = ''
     let documentoFuente: string | null = null
-    const documentoFuenteAlerta: string | null = null
-
-    if (tipoPregunta === 'academica' && !esBienvenida) {
+      if (tipoPregunta === 'academica' && !esBienvenida) {
       const result = await buscarContenido(colegioSlug, gradoEfectivo, materia_id || '', pregunta)
       contenidoCurricular = result.contenido
       documentoFuente = result.archivo
