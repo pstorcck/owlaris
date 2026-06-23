@@ -879,17 +879,19 @@ ${contextoContenido}`
     const tokensUsados = completion.usage?.total_tokens || 0
     const costoUSD = tokensUsados * 0.00000015
 
-    const { error: insertErr } = await supabase.from('interacciones').insert({
+    const { data: insertedRow, error: insertErr } = await supabase.from('interacciones').insert({
       usuario_id: user.id, colegio_id: perfil.colegio_id, materia_id: materia_uuid,
       grado: gradoEfectivo, tema_detectado: pregunta.substring(0, 100),
       pregunta, respuesta, tokens_usados: tokensUsados, costo_usd: costoUSD,
       modelo_usado: 'gpt-4o-mini', documento_fuente: documentoFuente,
       sospecha_copia: detectarCopia(pregunta),
-      operacion_canonica: evaluacionProtocolo?.op || null,
+      operacion_canonica: opValidaEnRespuesta || null,
+      op_estado: opValidaEnRespuesta ? 'pendiente' : null,
       estado_evaluacion: evaluacionProtocolo?.estado || null,
       guard_activado: evaluacionProtocolo?.guardActivado || false,
-    })
-    console.log('INSERT interaccion:', insertErr ? 'ERROR: ' + insertErr.message : 'OK')
+    }).select('id').single()
+    const insertedId = insertedRow?.id || null
+    if (insertErr) console.error('INSERT interaccion ERROR:', insertErr.message)
 
     if (tipoPregunta === 'academica' && !contenidoCurricular && materia) await registrarPendiente(supabase, perfil, materia, pregunta)
 
