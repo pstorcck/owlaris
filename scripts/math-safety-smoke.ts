@@ -56,6 +56,36 @@ Respuesta: 13`,
   )
   assert.equal(explainedAnswer?.estado, 'correcto')
 
+  const simpleEquation = await handleMathEvaluation('Resuelve: x + 5 = 12 [OP: x+5=12]', 'x = 7', false)
+  assert.equal(simpleEquation?.estado, 'correcto')
+  assert.equal(simpleEquation?.correctAnswer, 7)
+
+  const parenthesisEquation = await handleMathEvaluation('Resuelve: 2(x + 3) = 18 [OP: 2(x+3)=18]', '6', false)
+  assert.equal(parenthesisEquation?.estado, 'correcto')
+  assert.equal(parenthesisEquation?.correctAnswer, 6)
+
+  const bothSidesEquation = await handleMathEvaluation('Resuelve: 5x + 3 = 2x + 15 [OP: 5x+3=2x+15]', '4', false)
+  assert.equal(bothSidesEquation?.estado, 'correcto')
+  assert.equal(bothSidesEquation?.correctAnswer, 4)
+
+  const inferredEquation = inferCanonicalOperationFromText('Ahora resuelve: 2*x - 4 = 10. ¿Cuánto vale x?')
+  assert.equal(inferredEquation, '2*x-4=10')
+  assert.equal(solveOperation(inferredEquation), 7)
+
+  const multipleChoicePrompt = `¿Cuánto es 20 - 4 * 2?
+A) 16
+B) 12
+C) 8
+D) 10
+[OP: 20-4*2]`
+  const multipleChoiceCorrect = await handleMathEvaluation(multipleChoicePrompt, 'B', false)
+  assert.equal(multipleChoiceCorrect?.estado, 'correcto')
+  assert.equal(multipleChoiceCorrect?.correctAnswer, 12)
+
+  const multipleChoiceWrong = await handleMathEvaluation(multipleChoicePrompt, 'opción A', false)
+  assert.equal(multipleChoiceWrong?.estado, 'incorrecto')
+  assert.equal(multipleChoiceWrong?.correctAnswer, 12)
+
   console.log('math-safety smoke passed')
 }
 

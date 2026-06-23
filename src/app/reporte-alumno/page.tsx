@@ -1,6 +1,8 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 
+export const dynamic = 'force-dynamic'
+
 export default async function ReporteAlumnoPage({ searchParams }: { searchParams: { id?: string } }) {
   const supabase = createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -9,8 +11,19 @@ export default async function ReporteAlumnoPage({ searchParams }: { searchParams
   const alumnoId = searchParams.id
   if (!alumnoId) redirect('/guia')
 
+  const { data: perfil } = await supabase
+    .from('usuarios').select('rol, colegio_id').eq('id', user.id).single()
+  if (!perfil) redirect('/login')
+
   const { data: alumno } = await supabase
     .from('usuarios').select('*, colegio:colegios(nombre)').eq('id', alumnoId).single()
+  if (!alumno) redirect('/guia')
+
+  const puedeVer = perfil.rol === 'superadmin' ||
+    (perfil.rol === 'alumno' && user.id === alumnoId) ||
+    (['maestro', 'admin'].includes(perfil.rol) && perfil.colegio_id === alumno.colegio_id)
+
+  if (!puedeVer) redirect('/guia')
 
   const { data: interacciones } = await supabase
     .from('interacciones').select('*')

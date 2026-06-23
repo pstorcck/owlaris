@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { canAccessColegio, requireRoles } from '@/lib/auth'
+
+export const dynamic = 'force-dynamic'
 
 // POST — forzar sync de SharePoint (limpiar cache)
-export async function POST(req: NextRequest) {
+export async function POST() {
   try {
-    const supabase = createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+    const auth = await requireRoles(['admin', 'superadmin'])
+    if (!auth.ok) return auth.response
 
     // El cache vive en memoria del servidor — al hacer redeploy se limpia
     // Para limpieza inmediata llamamos al endpoint de contenido con flag de reset
@@ -22,19 +23,21 @@ export async function POST(req: NextRequest) {
 // GET — métricas del dashboard
 export async function GET(req: NextRequest) {
   try {
-    const supabase = createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+    const auth = await requireRoles(['admin', 'superadmin'])
+    if (!auth.ok) return auth.response
 
     const { searchParams } = new URL(req.url)
-    const colegio_id = searchParams.get('colegio_id')
+    const colegio_id = searchParams.get('colegio_id') || auth.perfil.colegio_id
     const dias = parseInt(searchParams.get('dias') || '30')
+    if (!canAccessColegio(auth.perfil, colegio_id)) {
+      return NextResponse.json({ error: 'Sin permisos para este colegio' }, { status: 403 })
+    }
 
     const desde = new Date()
     desde.setDate(desde.getDate() - dias)
     const desdeStr = desde.toISOString()
 
-    let query = supabase
+    let query = auth.supabase
       .from('interacciones')
       .select('*')
       .gte('creado_en', desdeStr)
@@ -58,7 +61,7 @@ export async function GET(req: NextRequest) {
     const alumnosUnicos = new Set(interacciones?.map(i => i.usuario_id)).size
 
     // Pendientes
-    let pendQuery = supabase.from('pendientes').select('*').eq('resuelto', false)
+    let pendQuery = auth.supabase.from('pendientes').select('*').eq('resuelto', false)
     if (colegio_id) pendQuery = pendQuery.eq('colegio_id', colegio_id)
     const { data: pendientes } = await pendQuery
 

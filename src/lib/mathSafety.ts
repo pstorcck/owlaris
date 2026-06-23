@@ -35,6 +35,19 @@ function normalizeOperation(op: string): string {
     .replace(/\s+/g, '')
 }
 
+function parseNumericAnswerToken(raw: string): number | null {
+  const normalized = raw.trim().replace(',', '.')
+  const fracMatch = normalized.match(/^(-?\d+(?:\.\d+)?)\s*\/\s*(-?\d+(?:\.\d+)?)$/)
+  if (fracMatch) {
+    const denominator = parseFloat(fracMatch[2])
+    if (denominator === 0) return null
+    return parseFloat(fracMatch[1]) / denominator
+  }
+  if (!/^-?\d+(?:\.\d+)?$/.test(normalized)) return null
+  const n = parseFloat(normalized)
+  return isNaN(n) ? null : n
+}
+
 export function isSafeCanonicalOperation(op: string | null): boolean {
   if (!op || op.trim().length === 0 || op.length > 200) return false
   const normalized = normalizeOperation(op)
@@ -51,41 +64,72 @@ export function validateOperation(op: string): { ok: boolean; reason?: string } 
 
 export function normalizeStudentAnswer(respuesta: string): number | null {
   const s = String(respuesta).trim().toLowerCase()
-  const parseNumericToken = (raw: string): number | null => {
-    const normalized = raw.trim().replace(',', '.')
-    const fracMatch = normalized.match(/^(-?\d+(?:\.\d+)?)\s*\/\s*(-?\d+(?:\.\d+)?)$/)
-    if (fracMatch) {
-      const denominator = parseFloat(fracMatch[2])
-      if (denominator === 0) return null
-      return parseFloat(fracMatch[1]) / denominator
-    }
-    if (!/^-?\d+(?:\.\d+)?$/.test(normalized)) return null
-    const n = parseFloat(normalized)
-    return isNaN(n) ? null : n
-  }
 
   const direct = s.match(/^(?:x\s*=\s*)?(-?\d+(?:[.,]\d+)?(?:\s*\/\s*-?\d+(?:[.,]\d+)?)?)$/i)
-  if (direct) return parseNumericToken(direct[1])
+  if (direct) return parseNumericAnswerToken(direct[1])
 
   const labeled = Array.from(s.matchAll(/\b(?:respuesta|resultado|answer|result)\s*(?:final|correcta|correct)?\s*(?:es|is|:|=)?\s*(-?\d+(?:[.,]\d+)?(?:\s*\/\s*-?\d+(?:[.,]\d+)?)?)/gi))
-  if (labeled.length > 0) return parseNumericToken(labeled[labeled.length - 1][1])
+  if (labeled.length > 0) return parseNumericAnswerToken(labeled[labeled.length - 1][1])
 
   const equations = Array.from(s.matchAll(/=\s*(-?\d+(?:[.,]\d+)?(?:\s*\/\s*-?\d+(?:[.,]\d+)?)?)/g))
-  if (equations.length > 0) return parseNumericToken(equations[equations.length - 1][1])
+  if (equations.length > 0) return parseNumericAnswerToken(equations[equations.length - 1][1])
 
   const numbers = Array.from(s.matchAll(/-?\d+(?:[.,]\d+)?(?:\s*\/\s*-?\d+(?:[.,]\d+)?)?/g))
-  if (numbers.length === 1) return parseNumericToken(numbers[0][0])
+  if (numbers.length === 1) return parseNumericAnswerToken(numbers[0][0])
 
   return null
+}
+
+function withImplicitMultiplication(expr: string): string {
+  return expr
+    .replace(/X/g, 'x')
+    .replace(/(\d(?:\.\d+)?)(?=x|\()/gi, '$1*')
+    .replace(/\)(?=\d|x|\()/gi, ')*')
+    .replace(/x(?=\()/gi, 'x*')
+}
+
+function evaluateNumericExpression(expr: string, scope?: { x?: number }): number | null {
+  try {
+    const normalized = withImplicitMultiplication(expr)
+    const result = scope ? evaluate(normalized, scope) : evaluate(normalized)
+    return typeof result === 'number' && isFinite(result) ? result : null
+  } catch {
+    return null
+  }
+}
+
+function solveLinearEquation(op: string): number | null {
+  const parts = normalizeOperation(op).replace(/X/g, 'x').split('=')
+  if (parts.length !== 2 || !parts[0] || !parts[1] || !/[x]/i.test(op)) return null
+
+  const differenceAt = (x: number): number | null => {
+    const left = evaluateNumericExpression(parts[0], { x })
+    const right = evaluateNumericExpression(parts[1], { x })
+    return left !== null && right !== null ? left - right : null
+  }
+
+  const y0 = differenceAt(0)
+  const y1 = differenceAt(1)
+  if (y0 === null || y1 === null) return null
+
+  const coefficient = y1 - y0
+  if (Math.abs(coefficient) < 1e-12) return null
+
+  const solution = -y0 / coefficient
+  const check = differenceAt(solution)
+  if (check === null || Math.abs(check) > 0.001) return null
+
+  const rounded = Math.round(solution)
+  return Math.abs(solution - rounded) < 0.000001 ? rounded : solution
 }
 
 export function solveOperation(op: string): number | null {
   try {
     const clean = normalizeOperation(op)
+    if (clean.includes('=') && /x/i.test(clean)) return solveLinearEquation(clean)
     const opSinFunciones = clean.replace(/sqrt|log|sin|cos|tan|pi|abs/gi, '0')
-    if (clean.includes('=') && /[a-zA-Z]/.test(opSinFunciones)) return null
-    const result = evaluate(clean)
-    return typeof result === 'number' && isFinite(result) ? result : null
+    if (/[a-zA-Z]/.test(opSinFunciones)) return null
+    return evaluateNumericExpression(clean)
   } catch {
     return null
   }
@@ -165,6 +209,21 @@ function logEvaluation(data: Record<string, unknown>) {
   if (process.env.NODE_ENV !== 'production') console.log('EVAL:', JSON.stringify(data))
 }
 
+function normalizeOptionAnswer(respuesta: string): string | null {
+  const match = String(respuesta).trim().match(/^(?:opci[oó]n\s*)?([abcd])[\).:\s]*$/i)
+  return match ? match[1].toUpperCase() : null
+}
+
+function extractMultipleChoiceValue(tutorQuestion: string, studentAnswer: string): number | null {
+  const option = normalizeOptionAnswer(studentAnswer)
+  if (!option) return null
+
+  const optionRegex = /(?:^|[\s\n\r])([A-D])\s*[\).:-]\s*(-?\d+(?:[.,]\d+)?(?:\s*\/\s*-?\d+(?:[.,]\d+)?)?)/gi
+  const matches = Array.from(tutorQuestion.matchAll(optionRegex))
+  const selected = matches.find((match) => match[1].toUpperCase() === option)
+  return selected ? parseNumericAnswerToken(selected[2]) : null
+}
+
 export async function handleMathEvaluation(
   tutorQuestion: string,
   studentAnswer: string,
@@ -196,7 +255,7 @@ export async function handleMathEvaluation(
     }
   }
 
-  const studentN = normalizeStudentAnswer(studentAnswer)
+  const studentN = normalizeStudentAnswer(studentAnswer) ?? extractMultipleChoiceValue(tutorQuestion, studentAnswer)
   const comparison = compareAnswers(studentN, correctAnswer)
   const estado = buildEvaluationState(comparison, correctAnswer !== null)
   const feedbackBase = generatePedagogicalFeedback(estado, studentAnswer, correctAnswer, idiomaIngles)
@@ -240,6 +299,13 @@ export function inferCanonicalOperationFromText(text: string): string | null {
   const percentMatches = Array.from(normalized.matchAll(/(\d+(?:\.\d+)?)\s*%\s*(?:de|of)\s*(\d+(?:\.\d+)?)/gi))
   const percent = percentMatches.length > 0 ? percentMatches[percentMatches.length - 1] : null
   if (percent) return `${parseFloat(percent[1]) / 100}*${percent[2]}`
+
+  const equations = Array.from(normalized.matchAll(/[\dxX().+\-*/^\s]+=[\dxX().+\-*/^\s]+/g))
+  const equation = equations.length > 0 ? equations[equations.length - 1] : null
+  if (equation) {
+    const op = normalizeOperation(equation[0]).replace(/\.+$/g, '')
+    if (/[xX]/.test(op) && isSafeCanonicalOperation(op)) return op
+  }
 
   const expressions = Array.from(normalized.matchAll(/-?\d+(?:\.\d+)?(?:\s*(?:[+\-*/^])\s*-?\d+(?:\.\d+)?){1,4}/g))
   const expression = expressions.length > 0 ? expressions[expressions.length - 1] : null
