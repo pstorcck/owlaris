@@ -88,10 +88,26 @@ Si el tema toca salud mental, crisis, violencia, abuso o autolesión, responde c
 // PROTOCOLO ANTI-ERRORES — 10 FUNCIONES
 // ============================================================
 
-// 1. extractCanonicalOperation
+// 1. extractAndCleanOperation — extrae OP y limpia el texto visible
+function extractAndCleanOperation(rawText: string): { visibleText: string; operation: string | null } {
+  if (!rawText || typeof rawText !== 'string') return { visibleText: '', operation: null }
+  const opRegex = /\[?\s*OP\s*:\s*([^\]\n]+)\]?/gi
+  const matches = Array.from(rawText.matchAll(opRegex))
+  const lastMatch = matches.length > 0 ? matches[matches.length - 1] : null
+  const operation = lastMatch?.[1]?.trim() || null
+  const visibleText = rawText
+    .replace(/(?:^|\n)\s*\[?\s*OP\s*:\s*[^\]\n]+\]?\s*(?=\n|$)/gi, '\n')
+    .replace(/\s*\[?\s*OP\s*:\s*[^\]\n]+\]?\s*/gi, ' ')
+    .replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n')
+    .replace(/[ \t]{2,}/g, ' ').trim()
+  return { visibleText, operation }
+}
 function extractCanonicalOperation(texto: string): string | null {
-  const match = texto.match(/\[OP:\s*([^\]]+)\]/)
-  return match ? match[1].trim() : null
+  return extractAndCleanOperation(texto).operation
+}
+function isSafeCanonicalOperation(op: string | null): boolean {
+  if (!op || op.trim().length === 0 || op.length > 200) return false
+  return /^[0-9xX+\-*/().=\s%^]+$/.test(op.replace(/sqrt|log|sin|cos|tan/gi, ''))
 }
 
 // 2. validateOperation
@@ -695,17 +711,34 @@ export async function POST(req: NextRequest) {
 
     // ── PROTOCOLO ANTI-ERRORES — evaluación por backend ─────────────
     let evaluacionProtocolo: { estado: string; feedback: string; correctAnswer: number | null; op: string | null; guardActivado: boolean } | null = null
-    
-    if (historial?.length > 0) {
-      const ultimoTutor = [...(historial || [])].reverse().find((m: {rol:string}) => m.rol === 'asistente')
-      if (ultimoTutor && esMateriaNumerica(materia_id || '')) {
-        evaluacionProtocolo = await handleMathEvaluation(
-          ultimoTutor.contenido,
-          pregunta,
-          idiomaIngles,
-          process.env.WOLFRAM_APP_ID
-        )
-      }
+    const pendingMathId: string | null = body.pending_math_interaction_id || null
+
+    if (pendingMathId && esMateriaNumerica(materia_id || '')) {
+      try {
+        const { data: preguntaPendiente } = await supabase
+          .from('interacciones')
+          .select('id, respuesta, operacion_canonica, op_estado, op_evaluada_en')
+          .eq('id', pendingMathId)
+          .eq('usuario_id', user.id)
+          .eq('op_estado', 'pendiente')
+          .is('op_evaluada_en', null)
+          .maybeSingle()
+
+        if (preguntaPendiente?.operacion_canonica && isSafeCanonicalOperation(preguntaPendiente.operacion_canonica)) {
+          const textoConOP = preguntaPendiente.respuesta + '\n[OP: ' + preguntaPendiente.operacion_canonica + ']'
+          evaluacionProtocolo = await handleMathEvaluation(textoConOP, pregunta, idiomaIngles, process.env.WOLFRAM_APP_ID)
+          // Si acertó: marcar como evaluada
+          if (evaluacionProtocolo && (evaluacionProtocolo.estado === 'correcto' || evaluacionProtocolo.estado === 'equivalente')) {
+            await supabase.from('interacciones')
+              .update({ op_estado: 'evaluada', op_evaluada_en: new Date().toISOString(), op_respuesta_alumno: pregunta })
+              .eq('id', pendingMathId).eq('usuario_id', user.id)
+          }
+          // Si incorrecto: mantener pendiente — no actualizar, el frontend conserva el mismo ID
+        } else {
+          // ID inválido o OP no segura — no evaluar
+          evaluacionProtocolo = { estado: 'no_evaluable', feedback: idiomaIngles ? 'I cannot verify that safely. Let me explain step by step.' : 'No puedo verificarlo con seguridad. Revisemos el procedimiento paso a paso.', correctAnswer: null, op: null, guardActivado: false }
+        }
+      } catch (e) { console.error('Error recuperando OP pendiente:', e) }
     }
 
     // Si el protocolo evaluó y tiene resultado definitivo, responder directo
@@ -725,7 +758,9 @@ export async function POST(req: NextRequest) {
       // Verificar alertas pedagógicas
       await verificarAlertasBajaComprension(supabase, user.id, perfil, gradoEfectivo, materia, respuesta, null)
       
-      return NextResponse.json({ respuesta, tokens: 0 })
+      // Si incorrecto conservar pendingMathId para reintento; si correcto ya fue marcado evaluada
+      const returnPendingId = (evaluacionProtocolo?.estado === 'incorrecto') ? pendingMathId : null
+      return NextResponse.json({ respuesta, tokens: 0, pending_math_interaction_id: returnPendingId })
     }
 
     // Inyectar contexto de evaluación al prompt si hay resultado no_evaluable o sin OP
@@ -863,7 +898,11 @@ ${contextoContenido}`
 
     supabase.from('usuarios').update({ ultimo_acceso: new Date().toISOString() }).eq('id', user.id).then(() => {})
 
-    return NextResponse.json({ respuesta, tokens: tokensUsados, documento_fuente: documentoFuente })
+    return NextResponse.json({ 
+      respuesta, tokens: tokensUsados, documento_fuente: documentoFuente,
+      interaction_id: insertedId,
+      pending_math_interaction_id: opValidaEnRespuesta ? insertedId : null,
+    })
 
   } catch (err) {
     console.error('Error /api/preguntar:', err)

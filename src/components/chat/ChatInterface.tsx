@@ -91,6 +91,7 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
       .catch(() => {})
   }, [])
   const [idiomaIngles, setIdiomaIngles]       = useState(false)
+  const [pendingMathId, setPendingMathId]     = useState<string | null>(null)
   const [modoConversacion, setModoConversacion] = useState(false)
   const [grabando, setGrabando]               = useState(false)
   const [reproduciendo, setReproduciendo]     = useState(false)
@@ -192,6 +193,7 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
           modo_conversacion: modoConversacion || estadoChat === 'activo' && idiomaIngles,
           nivel_dificultad: nivelDificultad,
           aciertos_consecutivos: aciertosConsec,
+          pending_math_interaction_id: pendingMathId,
         })
       })
       if (!res.ok) throw new Error()
@@ -218,6 +220,8 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
       }
       if (data.aciertos_consecutivos !== undefined) setAciertosConsec(data.aciertos_consecutivos)
       if (data.materia_sugerida) setMateriaSugerida(data.materia_sugerida)
+      // Punto 2 asesor: conservar pendingMathId si incorrecto, limpiar si correcto o null
+      if ('pending_math_interaction_id' in data) setPendingMathId(data.pending_math_interaction_id)
       if (data.nuevo_estado && data.nuevo_estado !== 'esperando_confirmacion_cambio_materia') setMateriaSugerida('')
 
       setMensajes(prev => [...prev, {
