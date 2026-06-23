@@ -51,11 +51,32 @@ export function validateOperation(op: string): { ok: boolean; reason?: string } 
 
 export function normalizeStudentAnswer(respuesta: string): number | null {
   const s = String(respuesta).trim().toLowerCase()
-  const fracMatch = s.match(/^(-?\d+)\s*\/\s*(\d+)$/)
-  if (fracMatch) return parseFloat(fracMatch[1]) / parseFloat(fracMatch[2])
-  const numStr = s.replace(/[=xX\s]/g, '').replace(',', '.')
-  const n = parseFloat(numStr)
-  return isNaN(n) ? null : n
+  const parseNumericToken = (raw: string): number | null => {
+    const normalized = raw.trim().replace(',', '.')
+    const fracMatch = normalized.match(/^(-?\d+(?:\.\d+)?)\s*\/\s*(-?\d+(?:\.\d+)?)$/)
+    if (fracMatch) {
+      const denominator = parseFloat(fracMatch[2])
+      if (denominator === 0) return null
+      return parseFloat(fracMatch[1]) / denominator
+    }
+    if (!/^-?\d+(?:\.\d+)?$/.test(normalized)) return null
+    const n = parseFloat(normalized)
+    return isNaN(n) ? null : n
+  }
+
+  const direct = s.match(/^(?:x\s*=\s*)?(-?\d+(?:[.,]\d+)?(?:\s*\/\s*-?\d+(?:[.,]\d+)?)?)$/i)
+  if (direct) return parseNumericToken(direct[1])
+
+  const labeled = Array.from(s.matchAll(/\b(?:respuesta|resultado|answer|result)\s*(?:final|correcta|correct)?\s*(?:es|is|:|=)?\s*(-?\d+(?:[.,]\d+)?(?:\s*\/\s*-?\d+(?:[.,]\d+)?)?)/gi))
+  if (labeled.length > 0) return parseNumericToken(labeled[labeled.length - 1][1])
+
+  const equations = Array.from(s.matchAll(/=\s*(-?\d+(?:[.,]\d+)?(?:\s*\/\s*-?\d+(?:[.,]\d+)?)?)/g))
+  if (equations.length > 0) return parseNumericToken(equations[equations.length - 1][1])
+
+  const numbers = Array.from(s.matchAll(/-?\d+(?:[.,]\d+)?(?:\s*\/\s*-?\d+(?:[.,]\d+)?)?/g))
+  if (numbers.length === 1) return parseNumericToken(numbers[0][0])
+
+  return null
 }
 
 export function solveOperation(op: string): number | null {
@@ -186,22 +207,42 @@ export async function handleMathEvaluation(
   return { estado, feedback, correctAnswer, op, guardActivado }
 }
 
+function selectRelevantMathText(text: string): string {
+  const normalized = text.replace(/\r/g, '\n')
+  const questionChunks = Array.from(normalized.matchAll(/¿?[^?]*\?/g))
+    .map((match) => match[0].trim())
+    .filter((chunk) => looksLikeMathPracticePrompt(chunk))
+
+  if (questionChunks.length > 0) return questionChunks[questionChunks.length - 1]
+
+  const practiceLines = normalized
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => /(?:cu[aá]nto|resuelve|calcula|resultado|what is|solve|calculate)/i.test(line))
+
+  if (practiceLines.length > 0) return practiceLines[practiceLines.length - 1]
+  return text
+}
+
 export function inferCanonicalOperationFromText(text: string): string | null {
   if (!text) return null
 
   const explicit = extractCanonicalOperation(text)
   if (explicit && isSafeCanonicalOperation(explicit)) return normalizeOperation(explicit)
 
-  const normalized = text
+  const relevantText = selectRelevantMathText(text)
+  const normalized = relevantText
     .replace(/×/g, '*')
     .replace(/÷/g, '/')
     .replace(/−/g, '-')
     .replace(/,/g, '.')
 
-  const percent = normalized.match(/(\d+(?:\.\d+)?)\s*%\s*(?:de|of)\s*(\d+(?:\.\d+)?)/i)
+  const percentMatches = Array.from(normalized.matchAll(/(\d+(?:\.\d+)?)\s*%\s*(?:de|of)\s*(\d+(?:\.\d+)?)/gi))
+  const percent = percentMatches.length > 0 ? percentMatches[percentMatches.length - 1] : null
   if (percent) return `${parseFloat(percent[1]) / 100}*${percent[2]}`
 
-  const expression = normalized.match(/-?\d+(?:\.\d+)?(?:\s*(?:[+\-*/^])\s*-?\d+(?:\.\d+)?){1,4}/)
+  const expressions = Array.from(normalized.matchAll(/-?\d+(?:\.\d+)?(?:\s*(?:[+\-*/^])\s*-?\d+(?:\.\d+)?){1,4}/g))
+  const expression = expressions.length > 0 ? expressions[expressions.length - 1] : null
   if (!expression) return null
 
   const op = normalizeOperation(expression[0])
