@@ -202,7 +202,7 @@ function generatePedagogicalFeedback(
 
 // 9. logEvaluation
 function logEvaluation(data: Record<string, unknown>) {
-  console.log('EVAL:', JSON.stringify(data))
+  if (process.env.NODE_ENV !== 'production') console.log('EVAL:', JSON.stringify(data))
 }
 
 // 10. handleMathEvaluation — flujo completo del protocolo
@@ -716,6 +716,9 @@ export async function POST(req: NextRequest) {
         grado: gradoEfectivo, tema_detectado: pregunta.substring(0, 100),
         pregunta, respuesta, tokens_usados: 0, costo_usd: 0,
         modelo_usado: 'calculadora', documento_fuente: null, sospecha_copia: false,
+        operacion_canonica: evaluacionProtocolo?.op || null,
+        estado_evaluacion: evaluacionProtocolo?.estado || null,
+        guard_activado: evaluacionProtocolo?.guardActivado || false,
       })
       supabase.from('usuarios').update({ ultimo_acceso: new Date().toISOString() }).eq('id', user.id).then(() => {})
       
@@ -847,6 +850,9 @@ ${contextoContenido}`
       pregunta, respuesta, tokens_usados: tokensUsados, costo_usd: costoUSD,
       modelo_usado: 'gpt-4o-mini', documento_fuente: documentoFuente,
       sospecha_copia: detectarCopia(pregunta),
+      operacion_canonica: evaluacionProtocolo?.op || null,
+      estado_evaluacion: evaluacionProtocolo?.estado || null,
+      guard_activado: evaluacionProtocolo?.guardActivado || false,
     })
     console.log('INSERT interaccion:', insertErr ? 'ERROR: ' + insertErr.message : 'OK')
 
