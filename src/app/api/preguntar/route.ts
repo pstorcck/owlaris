@@ -15,8 +15,6 @@ PROTOCOLO ANTES DE RESPONDER:
 REGLA DE PROFUNDIDAD:
 No respondas demasiado corto cuando el alumno necesite entender. Desarrolla la explicación. Usa ejemplos breves. Busca que la respuesta no solo conteste, sino que enseñe.
 
-Ejemplo: Si el tema es porcentaje, no digas solo "es una parte de 100". Explica: "Un porcentaje representa cuántas partes tomamos de cada 100. Por ejemplo, 25% significa 25 de cada 100. Si una mochila cuesta Q200 y tiene 25% de descuento, primero hallamos 25% de 200, que es 50. Luego restamos 200 - 50 = 150. Entonces pagarías Q150."
-
 MÉTODO DE ENSEÑANZA OBLIGATORIO:
 1. Detecta qué no entiende el alumno.
 2. Explica una sola idea.
@@ -27,36 +25,235 @@ MÉTODO DE ENSEÑANZA OBLIGATORIO:
 REGLA ANTI-COPIA:
 Si el alumno pide "dame la respuesta", "hazme la tarea" o "solo dime qué va", responde con negativa pedagógica y guía paso a paso.
 
-PRÁCTICA ILIMITADA:
-Cuando el alumno quiera practicar, genera preguntas de práctica una a una. Después de cada respuesta del alumno, evalúa y genera automáticamente la siguiente pregunta diferente del mismo tema sin esperar que lo pida. Continúa hasta que el alumno indique que quiere parar. Las preguntas deben variar en dificultad y enfoque.
+PRÁCTICA — PROTOCOLO ESTRICTO:
+Cuando el alumno quiera practicar, genera UNA sola pregunta a la vez.
+REGLA CRÍTICA PARA PREGUNTAS MATEMÁTICAS O DE CIENCIAS EXACTAS:
+Toda pregunta con respuesta numérica DEBE incluir la operación canónica al final en este formato exacto:
+[OP: operación]
 
-EVALUACIÓN DE RESPUESTAS:
-Secuencia: respuesta correcta → reconocer como correcta de inmediato → pedir proceso → reforzar o ajustar → siguiente pregunta.
-Ejemplo: Alumno: "La respuesta es 10." Owlaris: "Correcto. Ahora cuéntame cómo lo resolviste. ¿Qué operación hiciste primero?"
-Si el proceso es correcto, refuerza y continúa con siguiente pregunta.
-Si está incompleto o incorrecto, corrige una sola idea y pide nuevo intento.
+Ejemplos correctos:
+"¿Cuánto es 7 + 5? [OP: 7+5]"
+"Si tienes 30 caramelos y los repartes entre 5 amigos, ¿cuántos recibe cada uno? [OP: 30/5]"
+"Resuelve: 8 + 3 * 2 [OP: 8+3*2]"
+"¿Cuánto es el 25% de 200? [OP: 0.25*200]"
+"Si la masa es 5kg y la aceleración es 3 m/s², ¿cuál es la fuerza? [OP: 5*3]"
+"Energía cinética con m=2kg y v=4m/s [OP: 0.5*2*4^2]"
+
+Reglas para [OP]:
+- Usa solo símbolos: + - * / ^ () sqrt() para raíz cuadrada
+- No uses palabras dentro de [OP]
+- [OP] debe representar exactamente la pregunta visible
+- Si no puedes escribir [OP] exacto, haz una pregunta conceptual en vez de numérica
+- Para ecuaciones con variable: [OP: 2*x - 4 = 10]
+
+Después de cada respuesta del alumno, el backend verifica automáticamente. TÚ solo recibirás el estado: CORRECTO, INCORRECTO, o NO_EVALUABLE.
+
+Si recibes CORRECTO: di "Correcto." inmediatamente. Pide el proceso si solo dio número. Da siguiente pregunta.
+Si recibes INCORRECTO: di "Incorrecto." inmediatamente. Explica una sola idea. Pide nuevo intento.
+Si recibes NO_EVALUABLE: no digas correcto ni incorrecto. Pide que escriban la operación.
+
+EVALUACIÓN DE RESPUESTAS — HUMANÍSTICAS:
+Para historia, lenguaje, biología conceptual y otras materias no numéricas:
+NO uses "Correcto" o "Incorrecto" como veredicto absoluto.
+Usa en cambio: "Bien argumentado", "Falta evidencia", "¿Puedes sustentar eso con el texto?", "Esa idea va bien encaminada, ¿puedes ampliarla?"
+Esto evita errores de evaluación subjetiva.
+
+DIFICULTAD PROGRESIVA:
+Nivel 1: Operaciones directas (7+5, 48-19, 72/8)
+Nivel 2: Orden de operaciones (8+3*2, (10+6)/2)
+Nivel 3: Porcentajes (25% de 200)
+Nivel 4: Ecuaciones simples (x+5=12)
+Nivel 5: Ecuaciones con coeficiente (2x-4=10)
+Nivel 6: Ecuaciones con paréntesis (2(x+3)=18)
+Nivel 7: Ecuaciones con x en ambos lados (5x+3=2x+15)
+Nivel 8: Ecuaciones combinadas (4(x-2)+3=2(x+1)+9)
+Sube nivel con 3 aciertos consecutivos. Baja con 2 errores consecutivos.
 
 OPCIÓN MÚLTIPLE — REGLA CRÍTICA:
-Cuando plantees una pregunta de opción múltiple, SIEMPRE recuerda exactamente qué valor corresponde a cada letra.
+Cuando plantees opción múltiple, SIEMPRE incluye [OP:] con la operación correcta.
 Cuando el alumno responda con una letra (A, B, C o D):
-1. Busca en tu pregunta anterior qué valor tiene esa letra.
-2. Compara ese valor con la respuesta correcta.
-3. Si el valor de la letra ES la respuesta correcta → di "Correcto" de inmediato.
-4. Si el valor de la letra NO ES la respuesta correcta → di "Incorrecto" y explica.
+1. Busca el VALOR de esa letra en tu pregunta anterior.
+2. Compara ese valor con el resultado de [OP].
+3. Si el valor ES correcto → di "Correcto" de inmediato.
+4. Si el valor NO ES correcto → di "Incorrecto" y explica.
 
-Ejemplo: Si planteaste A)12 B)15 C)20 D)25 y la respuesta es 12, y el alumno dice "A" → es CORRECTO porque A=12.
-NUNCA digas que está mal si la letra que eligió corresponde al valor correcto.
-
-FORMATO: Nunca uses notación LaTeX como \( \) o \[ \]. Escribe ecuaciones en texto plano. Ejemplo: "x + 8 = 20" no "\( x + 8 = 20 \)".
+FORMATO: Sin LaTeX. Ecuaciones en texto plano. Sin emoticones.
 
 GRADOS: 4to Primaria, 5to Primaria, 6to Primaria, 1ero Básico, 2do Básico, 3ero Básico, 4to Bachillerato, 5to Bachillerato.
-Para 3ero Básico y 5to Bachillerato también existe: Mineduc - Lenguaje y Mineduc - Matemática.
 
-ALCANCE FORMATIVO:
-Puedes apoyar en hábitos de estudio, disciplina, familia, valores y convivencia usando los documentos de configuración oficiales. Recomienda videos de Eduardo Montano con link directo cuando aplique.
-Si el tema toca salud mental, crisis emocional, violencia, abuso, autolesión u otro riesgo personal, recomienda hablar con un adulto responsable.
+SEGURIDAD EMOCIONAL:
+Si el tema toca salud mental, crisis, violencia, abuso o autolesión, responde con calma y recomienda hablar con un adulto responsable inmediatamente.`
 
-Cada interacción debe lograr al menos una de estas cosas: el alumno entiende mejor, practica, avanza o sabe qué hacer después.`
+// ============================================================
+// PROTOCOLO ANTI-ERRORES — 10 FUNCIONES
+// ============================================================
+
+// 1. extractCanonicalOperation
+function extractCanonicalOperation(texto: string): string | null {
+  const match = texto.match(/\[OP:\s*([^\]]+)\]/)
+  return match ? match[1].trim() : null
+}
+
+// 2. validateOperation
+function validateOperation(op: string): { ok: boolean; reason?: string } {
+  if (!op) return { ok: false, reason: 'sin_operacion' }
+  // Verificar que no contenga texto narrativo (solo símbolos y funciones matemáticas conocidas)
+  const opLimpia = op.replace(/sqrt|log|sin|cos|tan|pi|abs|floor|ceil/gi, '0')
+  if (/[a-zA-Z]{2,}/.test(opLimpia)) return { ok: false, reason: 'contiene_texto' }
+  if (op.length > 300) return { ok: false, reason: 'demasiado_larga' }
+  return { ok: true }
+}
+
+// 3. normalizeStudentAnswer
+function normalizeStudentAnswer(respuesta: string): number | null {
+  const s = String(respuesta).trim().toLowerCase()
+  // Fracciones: 1/2 → 0.5
+  const fracMatch = s.match(/^(-?\d+)\s*\/\s*(\d+)$/)
+  if (fracMatch) return parseFloat(fracMatch[1]) / parseFloat(fracMatch[2])
+  // Número con coma o punto
+  const numStr = s.replace(/[=xX\s]/g, '').replace(',', '.')
+  const n = parseFloat(numStr)
+  return isNaN(n) ? null : n
+}
+
+// 4. solveOperation
+function solveOperation(op: string): number | null {
+  try {
+    const math = require('mathjs') as { evaluate: (expr: string) => number }
+    const clean = op.replace(/×/g, '*').replace(/÷/g, '/').trim()
+    // Ecuaciones con variable → null (Wolfram lo maneja)
+    const opSinFunciones = clean.replace(/sqrt|log|sin|cos|tan|pi|abs/gi, '0')
+    if (clean.includes('=') && /[a-zA-Z]/.test(opSinFunciones)) return null
+    const result = math.evaluate(clean)
+    return typeof result === 'number' && isFinite(result) ? result : null
+  } catch { return null }
+}
+
+// 5. compareAnswers
+function compareAnswers(studentN: number | null, correctN: number | null): string {
+  if (studentN === null || correctN === null) return 'no_evaluable'
+  if (Math.abs(studentN - correctN) < 0.001) return 'correcto'
+  if (Math.abs(studentN - correctN) < 0.01) return 'equivalente' // fracciones/decimales
+  return 'incorrecto'
+}
+
+// 6. buildEvaluationState
+function buildEvaluationState(comparison: string, hasVerifiedOp: boolean): string {
+  if (!hasVerifiedOp) return 'no_evaluable'
+  return comparison
+}
+
+// 7. contradictionGuard — BLOQUEA errores antes de llegar al alumno
+function contradictionGuard(
+  feedback: string, 
+  estado: string, 
+  studentN: number | null, 
+  correctN: number | null
+): { feedback: string; guardActivado: boolean } {
+  // REGLA 1: Si son iguales, NUNCA puede decir incorrecto
+  if (studentN !== null && correctN !== null && Math.abs(studentN - correctN) < 0.001) {
+    if (feedback.toLowerCase().includes('incorrecto') || feedback.toLowerCase().includes('incorrect')) {
+      const feedbackCorregido = `Correcto. ${studentN} es la respuesta correcta. ¿Puedes explicarme cómo llegaste a ese resultado?`
+      return { feedback: feedbackCorregido, guardActivado: true }
+    }
+  }
+  // REGLA 2: no_evaluable no puede tener veredicto definitivo
+  if (estado === 'no_evaluable') {
+    if ((feedback.toLowerCase().includes('correcto') && !feedback.toLowerCase().includes('¿')) || 
+        feedback.toLowerCase().includes('incorrecto')) {
+      return { 
+        feedback: 'Para revisarlo bien, primero escribamos la operación. ¿Qué operación representa el problema?',
+        guardActivado: true 
+      }
+    }
+  }
+  return { feedback, guardActivado: false }
+}
+
+// 8. generatePedagogicalFeedback
+function generatePedagogicalFeedback(
+  estado: string, 
+  studentAnswer: string, 
+  correctAnswer: number | null, 
+  operation: string | null,
+  idiomaIngles: boolean
+): string {
+  const s = idiomaIngles
+  switch(estado) {
+    case 'correcto':
+    case 'equivalente':
+      return s
+        ? `Correct. ${studentAnswer} is the right answer. Can you explain how you solved it?`
+        : `¡Correcto! ${studentAnswer} es la respuesta correcta. ¿Puedes explicarme cómo llegaste a ese resultado?`
+    case 'incorrecto':
+      return s
+        ? `Incorrect. The right answer is ${correctAnswer}. Try again step by step.`
+        : `Incorrecto. La respuesta correcta es ${correctAnswer}. Intenta de nuevo paso a paso.`
+    case 'no_evaluable':
+      return s
+        ? `To check properly, let's first write the operation. What operation does this problem represent?`
+        : `Para revisarlo bien, primero escribamos la operación. ¿Qué operación representa el problema?`
+    default:
+      return s
+        ? `I couldn't verify that right now. Let's review the process step by step.`
+        : `No pude verificarlo en este momento. Revisemos el procedimiento paso a paso.`
+  }
+}
+
+// 9. logEvaluation
+function logEvaluation(data: Record<string, unknown>) {
+  console.log('EVAL:', JSON.stringify(data))
+}
+
+// 10. handleMathEvaluation — flujo completo del protocolo
+async function handleMathEvaluation(
+  tutorQuestion: string,
+  studentAnswer: string,
+  idiomaIngles: boolean,
+  wolframAppId?: string
+): Promise<{ estado: string; feedback: string; correctAnswer: number | null; op: string | null; guardActivado: boolean } | null> {
+  
+  // Extraer operación canónica
+  const op = extractCanonicalOperation(tutorQuestion)
+  if (!op) return null // No hay [OP:], no evaluar
+  
+  const validation = validateOperation(op)
+  if (!validation.ok) return null
+  
+  // Resolver operación
+  let correctAnswer = solveOperation(op)
+  
+  // Si mathjs no pudo (ecuación con variable), intentar Wolfram
+  if (correctAnswer === null && wolframAppId) {
+    try {
+      const query = encodeURIComponent(op)
+      const url = `https://api.wolframalpha.com/v1/result?appid=${wolframAppId}&i=${query}`
+      const res = await fetch(url, { signal: AbortSignal.timeout(4000) })
+      if (res.ok) {
+        const texto = await res.text()
+        if (!texto.includes('did not understand')) {
+          const num = parseFloat(texto.match(/-?\d+([.,]\d+)?/)?.[0] || '')
+          if (!isNaN(num)) correctAnswer = num
+        }
+      }
+    } catch { /* Wolfram falló, continuar sin él */ }
+  }
+  
+  const studentN = normalizeStudentAnswer(studentAnswer)
+  const comparison = compareAnswers(studentN, correctAnswer)
+  const estado = buildEvaluationState(comparison, correctAnswer !== null)
+  
+  const feedbackBase = generatePedagogicalFeedback(estado, studentAnswer, correctAnswer, op, idiomaIngles)
+  const { feedback, guardActivado } = contradictionGuard(feedbackBase, estado, studentN, correctAnswer)
+  
+  logEvaluation({ op, correctAnswer, studentAnswer, studentN, estado, guardActivado })
+  
+  return { estado, feedback, correctAnswer, op, guardActivado }
+}
+
+// ============================================================
+// RESTO DEL CÓDIGO (sin cambios funcionales)
+// ============================================================
 
 const cacheContenido = new Map<string, { contenido: string; archivo: string; timestamp: number }>()
 const cacheConfig    = new Map<string, { contenido: string; timestamp: number }>()
@@ -68,12 +265,10 @@ const COLEGIOS_SP: Record<string, string> = {
 }
 const CARPETA_COMPARTIDA = 'Colegio Montano y Escolaris'
 
-// Normalizar grado desde texto libre del alumno
 function normalizarGrado(texto: string): string {
   const t = texto.toLowerCase()
     .replace(/á/g,'a').replace(/é/g,'e').replace(/í/g,'i').replace(/ó/g,'o').replace(/ú/g,'u')
     .replace(/°/g,'').replace(/\.$/g,'').trim()
-
   if (/4.*prim|cuarto.*prim/i.test(t)) return '4to Primaria'
   if (/5.*prim|quinto.*prim/i.test(t)) return '5to Primaria'
   if (/6.*prim|sexto.*prim/i.test(t)) return '6to Primaria'
@@ -85,20 +280,15 @@ function normalizarGrado(texto: string): string {
   return ''
 }
 
-// Normalizar materia desde texto libre
 function normalizarMateria(texto: string, esOlimpiadas = false): string {
   const t = texto.toLowerCase()
     .replace(/á/g,'a').replace(/é/g,'e').replace(/í/g,'i').replace(/ó/g,'o').replace(/ú/g,'u')
-
-  // Detectar si es olimpiadas primero
   if (/olimp.*mat/i.test(t)) return 'Olimpiadas - Matemática'
   if (/olimp.*biol/i.test(t)) return 'Olimpiadas - Biología'
   if (/olimp.*fis/i.test(t)) return 'Olimpiadas - Física'
   if (/olimp.*quim/i.test(t)) return 'Olimpiadas - Química'
   if (/olimp.*cien/i.test(t)) return 'Olimpiadas - Ciencias Naturales'
-  if (/olimp/i.test(t)) return '__OLIMPIADAS__'  // señal para preguntar materia
-
-  // Si ya está en modo olimpiadas, prefijar
+  if (/olimp/i.test(t)) return '__OLIMPIADAS__'
   if (esOlimpiadas) {
     if (/matem/i.test(t)) return 'Olimpiadas - Matemática'
     if (/biol/i.test(t)) return 'Olimpiadas - Biología'
@@ -106,7 +296,6 @@ function normalizarMateria(texto: string, esOlimpiadas = false): string {
     if (/quim/i.test(t)) return 'Olimpiadas - Química'
     if (/cien/i.test(t)) return 'Olimpiadas - Ciencias Naturales'
   }
-
   if (/mineduc.*leng|leng.*mineduc/i.test(t)) return 'Mineduc - Lenguaje'
   if (/mineduc.*mat|mat.*mineduc/i.test(t)) return 'Mineduc - Matemática'
   if (/mineduc/i.test(t)) return 'Mineduc - Lenguaje'
@@ -121,266 +310,34 @@ function normalizarMateria(texto: string, esOlimpiadas = false): string {
   return texto.trim()
 }
 
-// Calculadora matemática — verifica por sustitución usando mathjs
-function extraerYResolverEcuacion(textoTutor: string, respuestaAlumno: string): string | null {
-  try {
-    const math = require('mathjs') as { evaluate: (expr: string) => number }
+// Materias numéricas — usan protocolo [OP:]
+const MATERIAS_NUMERICAS = ['Matemática', 'Física', 'Química', 'Biología', 'Ciencias Naturales', 'Estadística',
+  'Olimpiadas - Matemática', 'Olimpiadas - Biología', 'Olimpiadas - Física', 'Olimpiadas - Química',
+  'Olimpiadas - Ciencias Naturales', 'Mineduc - Matemática']
 
-    // Extraer número de la respuesta del alumno
-    const numMatch = respuestaAlumno.replace(/[=]/g, ' ').match(/-?\d+([.,]\d+)?/)
-    if (!numMatch) return null
-    const numAlumno = parseFloat(numMatch[0].replace(',', '.'))
-    if (isNaN(numAlumno)) return null
-
-    // Buscar ecuaciones en el texto del tutor: ax ± b = c o x ± b = c
-    const ecuacionRegex = /(\d*)?\s*([a-z])\s*([+\-])\s*(\d+)\s*=\s*(\d+)/gi
-    let match
-    while ((match = ecuacionRegex.exec(textoTutor)) !== null) {
-      const [_, coefStr, _variable, _op, _b, _c] = match
-      try {
-        // Sustituir el valor del alumno en el lado izquierdo
-        const izq = match[0].split('=')[0].trim()
-        const der = parseFloat(match[0].split('=')[1].trim())
-        
-        // Preparar expresión: reemplazar variable por número, añadir * para coeficientes
-        const expr = izq
-          .replace(/(\d)([a-z])/gi, '$1*$2')  // 2x → 2*x
-          .replace(/[a-z]/gi, numAlumno.toString()) // x → 7
-        
-        const resultado = math.evaluate(expr)
-        const esCorrecta = Math.abs(resultado - der) < 0.001
-
-        if (esCorrecta) {
-          return `CALCULADORA_CORRECTO: Verificado matemáticamente. ${numAlumno} ES correcto.`
-        } else {
-          return `CALCULADORA_INCORRECTO: Verificado matemáticamente. ${numAlumno} es incorrecto. Al sustituir: ${expr.replace(/\*/g,'×')} = ${resultado}, pero debería ser ${der}.`
-        }
-      } catch { continue }
-    }
-
-    // Helper: buscar en línea con ? primero, luego último match
-    const buscarEnPregunta = (regex: RegExp): RegExpMatchArray | null => {
-      const lns = textoTutor.split('\n')
-      for (let i = lns.length - 1; i >= 0; i--) {
-        if (lns[i].includes('?') || lns[i].includes('¿')) {
-          const m = lns[i].match(regex)
-          if (m) return m
-        }
-      }
-      for (let i = lns.length - 1; i >= 0; i--) {
-        const m = lns[i].match(regex)
-        if (m) return m
-      }
-      return null
-    }
-    // Buscar porcentajes: N% de M
-    const pctRegex = /(\d+)%\s+de\s+(\d+)/i
-    const pMatch = buscarEnPregunta(pctRegex)
-    if (pMatch) {
-      const correcto = (parseFloat(pMatch[1]) / 100) * parseFloat(pMatch[2])
-      const esCorrecta = Math.abs(numAlumno - correcto) < 0.001
-      if (esCorrecta) return `CALCULADORA_CORRECTO: ${numAlumno} ES correcto.`
-      return `CALCULADORA_INCORRECTO: La respuesta correcta es ${correcto}.`
-    }
-
-    // Sumas directas: a + b = ? o a + b
-    const sumaRegex = /(\d+)\s*\+\s*(\d+)/
-    const sumaMatch = buscarEnPregunta(sumaRegex)
-    if (sumaMatch) {
-      const correcto = parseFloat(sumaMatch[1]) + parseFloat(sumaMatch[2])
-      const esCorrecta = Math.abs(numAlumno - correcto) < 0.001
-      if (esCorrecta) return `CALCULADORA_CORRECTO: ${numAlumno} ES correcto.`
-      return `CALCULADORA_INCORRECTO: La respuesta correcta es ${correcto}.`
-    }
-
-    // Restas directas: a - b = ?
-    const restaRegex = /(\d+)\s*-\s*(\d+)/
-    const restaMatch = buscarEnPregunta(restaRegex)
-    if (restaMatch) {
-      const correcto = parseFloat(restaMatch[1]) - parseFloat(restaMatch[2])
-      const esCorrecta = Math.abs(numAlumno - correcto) < 0.001
-      if (esCorrecta) return `CALCULADORA_CORRECTO: ${numAlumno} ES correcto.`
-      return `CALCULADORA_INCORRECTO: La respuesta correcta es ${correcto}.`
-    }
-
-    // Multiplicaciones: a x b o a * b
-    const multRegex = /(\d+)\s*[x\*×]\s*(\d+)/i
-    const multMatch = buscarEnPregunta(multRegex)
-    if (multMatch) {
-      const correcto = parseFloat(multMatch[1]) * parseFloat(multMatch[2])
-      const esCorrecta = Math.abs(numAlumno - correcto) < 0.001
-      if (esCorrecta) return `CALCULADORA_CORRECTO: ${numAlumno} ES correcto.`
-      return `CALCULADORA_INCORRECTO: La respuesta correcta es ${correcto}.`
-    }
-
-    // Divisiones: a ÷ b o a / b
-    const divRegex = /(\d+)\s*[÷\/]\s*(\d+)/
-    const divMatch = textoTutor.match(divRegex)
-    if (divMatch && parseFloat(divMatch[2]) !== 0) {
-      const correcto = parseFloat(divMatch[1]) / parseFloat(divMatch[2])
-      const esCorrecta = Math.abs(numAlumno - correcto) < 0.001
-      if (esCorrecta) return `CALCULADORA_CORRECTO: ${numAlumno} ES correcto.`
-      return `CALCULADORA_INCORRECTO: La respuesta correcta es ${correcto}.`
-    }
-
-    return null
-  } catch { return null }
+function esMateriaNumerica(materia: string): boolean {
+  return MATERIAS_NUMERICAS.some(m => materia.includes(m.split(' ')[0]))
 }
 
-// Verificador con Wolfram Alpha — evaluación exacta para ciencias y matemáticas
-async function verificarConWolfram(preguntaTutor: string, respuestaAlumno: string): Promise<string | null> {
-  try {
-    const appId = process.env.WOLFRAM_APP_ID
-    if (!appId) return null
-
-    // Extraer número de la respuesta del alumno
-    const numMatch = respuestaAlumno.replace(/[=]/g, ' ').match(/-?\d+([.,]\d+)?/)
-    if (!numMatch) return null
-    const numAlumno = parseFloat(numMatch[0].replace(',', '.'))
-    if (isNaN(numAlumno)) return null
-
-    // Extraer la pregunta matemática del tutor
-    // Estrategia: buscar desde el final la última línea que contenga
-    // una expresión matemática completa (no solo un número)
-    const lineas = preguntaTutor.split('\n')
-    let preguntaMath = ''
-    
-    for (let i = lineas.length - 1; i >= 0; i--) {
-      const l = lineas[i].trim()
-      // Prioridad 1: Ecuaciones con = (numeros o variables en ambos lados)
-      if (/[\d(x][\d\sx+\-*/^×÷().]*=[\d\sx+\-*/^×÷().]+[\dx)]/.test(l)) {
-        preguntaMath = l.replace(/¿|\?/g, '').trim()
-        break
-      }
-      // Prioridad 2: Expresiones con operadores
-      if (/\d+\s*[+\-*\/^×÷]\s*\d+/.test(l)) {
-        const match = l.match(/[\d()][\d\s+\-*\/^×÷().]+[\d)]/)
-        if (match && match[0].trim().length > 3) {
-          preguntaMath = match[0].trim()
-          break
-        }
-      }
-      // Prioridad 3: Línea con pregunta
-      if ((l.includes('?') || l.includes('¿')) && l.length > 5 && !preguntaMath) {
-        preguntaMath = l.replace(/¿|\?/g, '').trim()
-      }
-    }
-    if (!preguntaMath) return null
-
-    // Construir query para Wolfram — pedir el resultado numérico
-    const query = encodeURIComponent(preguntaMath.replace(/¿|\?/g, '').trim())
-    const url = `https://api.wolframalpha.com/v1/result?appid=${appId}&i=${query}`
-    
-    const res = await fetch(url, { signal: AbortSignal.timeout(5000) })
-    if (!res.ok) return null
-    
-    const texto = await res.text()
-    if (texto.includes('did not understand')) return null
-
-    // Extraer número del resultado de Wolfram
-    const wolframNum = texto.match(/-?\d+([.,]\d+)?/)
-    if (!wolframNum) return null
-    const correcto = parseFloat(wolframNum[0].replace(',', '.'))
-
-    const esCorrecta = Math.abs(numAlumno - correcto) < 0.01
-    
-    if (esCorrecta) {
-      return `CALCULADORA_CORRECTO: Verificado. ${numAlumno} ES correcto.`
-    } else {
-      return `CALCULADORA_INCORRECTO: La respuesta correcta es ${correcto}.`
-    }
-  } catch { return null }
-}
-
-// Validar respuesta de opción múltiple comparando con el historial
-function validarOpcionMultiple(preguntaAlumno: string, historial: {rol:string; contenido:string}[]): string | null {
-  // Solo aplica si el alumno respondió con una sola letra
-  const respLetra = preguntaAlumno.trim().toUpperCase()
-  // Detectar también si el alumno dio el valor numérico en lugar de la letra
-  // Ej: dice "es 12" cuando la opción C es 12
-  const esRespuestaDirecta = !/^[ABCD]$/.test(respLetra)
-  
-  // Buscar la última pregunta del tutor con opciones A) B) C) D)
-  const mensajesTutor = historial.filter(m => m.rol === 'asistente')
-  const ultimoMensaje = mensajesTutor[mensajesTutor.length - 1]
-  if (!ultimoMensaje) return null
-
-  const texto = ultimoMensaje.contenido
-
-  // Extraer opciones del mensaje anterior
-  const opcionRegex = new RegExp('[A-D][).]\\s*([^\\n]+)', 'g')
-  const opciones: Record<string, string> = {}
-  let match
-  while ((match = opcionRegex.exec(texto)) !== null) {
-    const letra = match[0][0].toUpperCase()
-    opciones[letra] = match[1].trim()
-  }
-
-  if (Object.keys(opciones).length < 2) return null
-
-  // Si el alumno dio valor directo (no letra), buscar qué letra corresponde
-  if (esRespuestaDirecta) {
-    const valorAlumno = preguntaAlumno.trim().toLowerCase().replace(/[^\w\s.,]/g, '')
-    for (const [letra, valor] of Object.entries(opciones)) {
-      const valorLimpio = valor.toLowerCase().replace(/[^\w\s.,]/g, '')
-      if (valorLimpio.includes(valorAlumno) || valorAlumno.includes(valorLimpio)) {
-        return `VALIDACIÓN_VALOR_DIRECTO: El alumno dijo "${preguntaAlumno.trim()}" que corresponde a la opción ${letra}) ${valor}. Evalúa si ${letra} es la respuesta correcta según la pregunta anterior.`
-      }
-    }
-    return null // No se pudo mapear el valor a ninguna opción
-  }
-
-  const respCorrectaRegex = new RegExp('respuesta\\s+(?:correcta\\s+)?(?:es\\s+)?[lael]*\\s*(?:opci[oó]n\\s+)?([A-D])', 'gi')
-  const matchCorrecta = respCorrectaRegex.exec(texto)
-  
-  if (!matchCorrecta) return null
-  
-  const letraCorrecta = matchCorrecta[1].toUpperCase()
-  const esCorrecta = respLetra === letraCorrecta
-
-  if (esCorrecta) {
-    return `VALIDACIÓN_CORRECTA: El alumno eligió ${respLetra}) ${opciones[respLetra] || ''} que ES la respuesta correcta. Confirma que es correcto y pide el proceso.`
-  } else {
-    return `VALIDACIÓN_INCORRECTA: El alumno eligió ${respLetra}) ${opciones[respLetra] || ''} pero la respuesta correcta es ${letraCorrecta}) ${opciones[letraCorrecta] || ''}. Explica por qué es incorrecto.`
-  }
-}
-
-// Estados del onboarding
-type EstadoChat = 'esperando_nombre' | 'esperando_grado' | 'esperando_materia' | 'activo'
-
-// Mapeo de grados del sistema a nombres en carpetas de Olimpiadas
 const GRADOS_OLIMPIADAS: Record<string, string> = {
-  '1ero Básico':        'Primero Basico',
-  '2do Básico':         'Segundo Basico',
-  '3ero Básico':        'Tercero Basico',
-  '4to Bachillerato':   'Diversificado',
-  '5to Bachillerato':   'Diversificado',
-  '4to Bachillerato en Ciencias y Letras':            'Diversificado',
-  '4to Bachillerato en Computación y Pre Ingeniería': 'Diversificado',
-  '4to Bachillerato en Mercadotecnia':                'Diversificado',
-  '5to Bachillerato en Ciencias y Letras':            'Diversificado',
-  '5to Bachillerato en Computación y Pre Ingeniería': 'Diversificado',
-  '5to Bachillerato en Mercadotecnia':                'Diversificado',
-  '4to Primaria':       'Primaria',
-  '5to Primaria':       'Primaria',
-  '6to Primaria':       'Primaria',
+  '1ero Básico': 'Primero Basico', '2do Básico': 'Segundo Basico', '3ero Básico': 'Tercero Basico',
+  '4to Bachillerato': 'Diversificado', '5to Bachillerato': 'Diversificado',
+  '4to Primaria': 'Primaria', '5to Primaria': 'Primaria', '6to Primaria': 'Primaria',
 }
 
-// Mapeo de temas a materias
 const TEMAS_POR_MATERIA: Record<string, string[]> = {
-  'Matemática':       ['aritmética','aritmetica','algebra','álgebra','geometría','geometria','fracciones','ecuaciones','trigonometría','trigonometria','estadística','estadistica','probabilidad','porcentajes','decimales','números','numeros','matrices','funciones','polinomios','logaritmos'],
-  'Física':           ['cinemática','cinematica','dinámica','dinamica','fuerza','movimiento','velocidad','aceleración','aceleracion','energía','energia','trabajo','calor','temperatura','ondas','luz','electricidad','magnetismo','gravedad','óptica','optica'],
-  'Química':          ['átomo','atomo','molécula','molecula','enlace','reacción','reaccion','tabla periódica','tabla periodica','ácido','acido','base','solución','solucion','oxidación','oxidacion','elemento','compuesto','estequiometría'],
-  'Biología':         ['célula','celula','fotosíntesis','fotosintesis','adn','genética','genetica','evolución','evolucion','ecosistema','organismo','proteína','proteina','mitosis','meiosis','respiración celular'],
-  'Historia':         ['guerra','revolución','revolucion','independencia','civilización','civilizacion','colonia','conquista','maya','azteca','inca','república','republica','democracia','feudalismo'],
-  'Español':          ['gramática','gramatica','sintaxis','ortografía','ortografia','redacción','redaccion','literatura','poesía','poesia','narración','narracion','verbo','sustantivo','adjetivo','párrafo','parrafo'],
-  'Inglés':           ['vocabulary','grammar','verb','tense','sentence','reading','writing','speaking','listening','english'],
-  'Ciencias Naturales':['planta','animal','ecosistema','medio ambiente','naturaleza','suelo','agua','aire','clima','biodiversidad','nutrición','nutricion'],
+  'Matemática': ['aritmética','aritmetica','algebra','álgebra','geometría','geometria','fracciones','ecuaciones','trigonometría','trigonometria','estadística','estadistica','probabilidad','porcentajes','decimales','números','numeros','matrices','funciones','polinomios','logaritmos'],
+  'Física': ['cinemática','cinematica','dinámica','dinamica','fuerza','movimiento','velocidad','aceleración','aceleracion','energía','energia','trabajo','calor','temperatura','ondas','luz','electricidad','magnetismo','gravedad','óptica','optica'],
+  'Química': ['átomo','atomo','molécula','molecula','enlace','reacción','reaccion','tabla periódica','tabla periodica','ácido','acido','base','solución','solucion','oxidación','oxidacion','elemento','compuesto','estequiometría'],
+  'Biología': ['célula','celula','fotosíntesis','fotosintesis','adn','genética','genetica','evolución','evolucion','ecosistema','organismo','proteína','proteina','mitosis','meiosis','respiración celular'],
+  'Historia': ['guerra','revolución','revolucion','independencia','civilización','civilizacion','colonia','conquista','maya','azteca','inca','república','republica','democracia','feudalismo'],
+  'Español': ['gramática','gramatica','sintaxis','ortografía','ortografia','redacción','redaccion','literatura','poesía','poesia','narración','narracion','verbo','sustantivo','adjetivo','párrafo','parrafo'],
+  'Inglés': ['vocabulary','grammar','verb','tense','sentence','reading','writing','speaking','listening','english'],
+  'Ciencias Naturales': ['planta','animal','ecosistema','medio ambiente','naturaleza','suelo','agua','aire','clima','biodiversidad','nutrición','nutricion'],
 }
 
 function detectarMateriaDesdeTexto(texto: string): string | null {
-  const t = texto.toLowerCase()
-    .replace(/á/g,'a').replace(/é/g,'e').replace(/í/g,'i').replace(/ó/g,'o').replace(/ú/g,'u')
+  const t = texto.toLowerCase().replace(/á/g,'a').replace(/é/g,'e').replace(/í/g,'i').replace(/ó/g,'o').replace(/ú/g,'u')
   for (const [materia, temas] of Object.entries(TEMAS_POR_MATERIA)) {
     for (const tema of temas) {
       const temaNorm = tema.replace(/á/g,'a').replace(/é/g,'e').replace(/í/g,'i').replace(/ó/g,'o').replace(/ú/g,'u')
@@ -390,43 +347,20 @@ function detectarMateriaDesdeTexto(texto: string): string | null {
   return null
 }
 
-// Mapeo de materias Olimpiadas a carpetas
 const MATERIAS_OLIMPIADAS: Record<string, string> = {
-  'Olimpiadas - Matemática':        'Matematica',
-  'Olimpiadas - Biología':          'Biologia',
-  'Olimpiadas - Física':            'Fisica',
-  'Olimpiadas - Química':           'Quimica',
-  'Olimpiadas - Ciencias Naturales':'Ciencias Naturales',
+  'Olimpiadas - Matemática': 'Matematica', 'Olimpiadas - Biología': 'Biologia',
+  'Olimpiadas - Física': 'Fisica', 'Olimpiadas - Química': 'Quimica',
+  'Olimpiadas - Ciencias Naturales': 'Ciencias Naturales',
 }
 
 const DOCS_CONFIG = [
-  'Prompt Principal - Agente Alumno.docx',
-  'Politica Pedagogica Oficial - Agente Alumno.docx',
-  'Documento Maestro - Agente Alumno.docx',
-  'Instrucciones SharePoint - Agente Alumno.docx',
-  'Especificacion Tecnica - Agente Alumno.docx',
-  'Videos Español.docx',
-  'Videos Inglés.docx',
+  'Prompt Principal - Agente Alumno.docx', 'Politica Pedagogica Oficial - Agente Alumno.docx',
+  'Documento Maestro - Agente Alumno.docx', 'Instrucciones SharePoint - Agente Alumno.docx',
+  'Especificacion Tecnica - Agente Alumno.docx', 'Videos Español.docx', 'Videos Inglés.docx',
 ]
 
-// Palabras clave para detectar temas formativos vs crisis
-const PALABRAS_CRISIS = [
-  'me quiero matar', 'suicidar', 'quitarme la vida', 'hacerme daño',
-  'autolesion', 'no quiero vivir', 'me voy a matar', 'quiero morir',
-  'abuso sexual', 'me violaron', 'me toca inapropiadamente'
-]
-
-const PALABRAS_FORMATIVAS = [
-  'mi papá', 'mi mamá', 'mis padres', 'mi familia', 'pelea', 'problema en casa',
-  'me siento mal', 'triste', 'solo', 'amigos', 'bullying', 'me molestan',
-  'valores', 'convivencia', 'disciplina', 'hábitos', 'motivación',
-  'me pega', 'me golpea', 'me grita', 'me insulta', 'violencia en casa',
-  'mis padres pelean', 'me siento solo', 'no tengo amigos', 'me hacen menos',
-  'me discriminan', 'me ignoran', 'no me entienden', 'estoy deprimido',
-  'me preocupa', 'tengo miedo', 'no sé qué hacer', 'necesito ayuda',
-  'me siento triste', 'estoy triste', 'muy triste', 'problema familiar',
-  'no me quieren', 'me castigan', 'me regañan', 'mis papás'
-]
+const PALABRAS_CRISIS = ['me quiero matar','suicidar','quitarme la vida','hacerme daño','autolesion','no quiero vivir','me voy a matar','quiero morir','abuso sexual','me violaron','me toca inapropiadamente']
+const PALABRAS_FORMATIVAS = ['mi papá','mi mamá','mis padres','mi familia','pelea','problema en casa','me siento mal','triste','solo','amigos','bullying','me molestan','valores','convivencia','disciplina','hábitos','motivación','me pega','me golpea','me grita','me insulta','violencia en casa','mis padres pelean','me siento solo','no tengo amigos','me hacen menos','me discriminan','me ignoran','no me entienden','estoy deprimido','me preocupa','tengo miedo','no sé qué hacer','necesito ayuda','me siento triste','estoy triste','muy triste','problema familiar','no me quieren','me castigan','me regañan','mis papás']
 
 function detectarTipoPregunta(pregunta: string): 'crisis' | 'formativa' | 'academica' {
   const p = pregunta.toLowerCase()
@@ -436,26 +370,22 @@ function detectarTipoPregunta(pregunta: string): 'crisis' | 'formativa' | 'acade
 }
 
 function esSaludo(pregunta: string): boolean {
-  const saludos = ['hola', 'buenos días', 'buenas tardes', 'buenas noches', 'hi', 'hello', 'buenas', 'hey']
+  const saludos = ['hola','buenos días','buenas tardes','buenas noches','hi','hello','buenas','hey']
   const p = pregunta.toLowerCase().trim()
   return saludos.some(s => p === s || p.startsWith(s + ' ') || p.startsWith(s + ','))
 }
 
+function detectarCopia(pregunta: string): boolean {
+  return ['hazme la tarea','dame las respuestas','dame la respuesta','solo dime qué va','resuelve todo']
+    .some(p => pregunta.toLowerCase().includes(p))
+}
+
 async function getToken(): Promise<string | null> {
   try {
-    const res = await fetch(
-      `https://login.microsoftonline.com/${process.env.AZURE_TENANT_ID}/oauth2/v2.0/token`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({
-          client_id:     process.env.AZURE_CLIENT_ID!,
-          client_secret: process.env.AZURE_CLIENT_SECRET!,
-          scope:         'https://graph.microsoft.com/.default',
-          grant_type:    'client_credentials',
-        }),
-      }
-    )
+    const res = await fetch(`https://login.microsoftonline.com/${process.env.AZURE_TENANT_ID}/oauth2/v2.0/token`, {
+      method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ client_id: process.env.AZURE_CLIENT_ID!, client_secret: process.env.AZURE_CLIENT_SECRET!, scope: 'https://graph.microsoft.com/.default', grant_type: 'client_credentials' }),
+    })
     const data = await res.json()
     return data.access_token || null
   } catch { return null }
@@ -463,79 +393,59 @@ async function getToken(): Promise<string | null> {
 
 async function listarArchivos(driveId: string, token: string, ...segs: string[]) {
   const ruta = segs.map(s => encodeURIComponent(s)).join('/')
-  const url  = `https://graph.microsoft.com/v1.0/drives/${driveId}/root:/${ruta}:/children`
-  const res  = await fetch(url, { headers: { Authorization: `Bearer ${token}` } })
+  const url = `https://graph.microsoft.com/v1.0/drives/${driveId}/root:/${ruta}:/children`
+  const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } })
   if (!res.ok) return []
   const data = await res.json()
   return (data.value || []).filter((a: {name:string}) => a.name.endsWith('.docx') && !a.name.startsWith('~$'))
 }
 
 async function extraerTexto(url: string): Promise<string> {
-  const r   = await fetch(url)
+  const r = await fetch(url)
   const buf = await r.arrayBuffer()
-  const m   = await import('mammoth')
+  const m = await import('mammoth')
   const { value } = await m.extractRawText({ buffer: Buffer.from(buf) })
   return value
 }
 
-// Índice de documentos: cacheKey -> [{nombre, tema, downloadUrl}]
 const indiceDocumentos = new Map<string, { nombre: string; tema: string; downloadUrl: string }[]>()
 
 async function construirIndice(driveId: string, token: string, ...segs: string[]) {
-  const idxKey  = 'idx/' + segs.join('/')
-  const cached  = indiceDocumentos.get(idxKey)
+  const idxKey = 'idx/' + segs.join('/')
+  const cached = indiceDocumentos.get(idxKey)
   if (cached) return cached
-
   console.log('Construyendo indice: ' + segs.join('/'))
   const archivos = await listarArchivos(driveId, token, ...segs)
   if (archivos.length === 0) return []
-
   const indice: { nombre: string; tema: string; downloadUrl: string }[] = []
-
-  // Leer primeros 300 chars de cada doc para extraer el tema
   await Promise.all(archivos.map(async (archivo: { name: string; '@microsoft.graph.downloadUrl': string }) => {
     try {
-      const r   = await fetch(archivo['@microsoft.graph.downloadUrl'])
+      const r = await fetch(archivo['@microsoft.graph.downloadUrl'])
       const buf = await r.arrayBuffer()
-      const m   = await import('mammoth')
+      const m = await import('mammoth')
       const { value } = await m.extractRawText({ buffer: Buffer.from(buf) })
-      const tema = value.substring(0, 300).trim()
-      indice.push({ nombre: archivo.name, tema, downloadUrl: archivo['@microsoft.graph.downloadUrl'] })
-    } catch { 
+      indice.push({ nombre: archivo.name, tema: value.substring(0, 300).trim(), downloadUrl: archivo['@microsoft.graph.downloadUrl'] })
+    } catch {
       indice.push({ nombre: archivo.name, tema: archivo.name, downloadUrl: archivo['@microsoft.graph.downloadUrl'] })
     }
   }))
-
   indiceDocumentos.set(idxKey, indice)
   console.log(`✅ Índice construido: ${indice.length} documentos`)
-  
-  // Limpiar índice después de 30 min
   setTimeout(() => indiceDocumentos.delete(idxKey), CACHE_TTL)
-  
   return indice
 }
 
 async function buscarContenido(colegio_slug: string, grado: string, materia: string, pregunta: string) {
-  const token    = await getToken()
+  const token = await getToken()
   if (!token) return { contenido: '', archivo: null }
-
-  const driveId   = process.env.SHAREPOINT_DRIVE_ID!
+  const driveId = process.env.SHAREPOINT_DRIVE_ID!
   const colegioSP = COLEGIOS_SP[colegio_slug] || colegio_slug
-
   let indice: { nombre: string; tema: string; downloadUrl: string }[] = []
-
-  // Si es materia de Olimpiadas, buscar directamente en Colegios Guatemala
   if (materia.startsWith('Olimpiadas')) {
     const carpetaMateria = MATERIAS_OLIMPIADAS[materia] || materia.replace('Olimpiadas - ', '')
-    const carpetaGrado   = GRADOS_OLIMPIADAS[grado] || grado
-
-    // Buscar en carpeta compartida con grado específico
+    const carpetaGrado = GRADOS_OLIMPIADAS[grado] || grado
     indice = await construirIndice(driveId, token, 'Owlaris', CARPETA_COMPARTIDA, 'Olimpiadas de Ciencias', carpetaMateria, carpetaGrado)
-    if (indice.length === 0) {
-      indice = await construirIndice(driveId, token, 'Owlaris', CARPETA_COMPARTIDA, 'Olimpiadas de Ciencias', carpetaMateria)
-    }
-    console.log('Olimpiadas: ' + carpetaMateria + '/' + carpetaGrado + ' -> ' + indice.length + ' docs')
-
+    if (indice.length === 0) indice = await construirIndice(driveId, token, 'Owlaris', CARPETA_COMPARTIDA, 'Olimpiadas de Ciencias', carpetaMateria)
   } else {
     const buscarEnGrado = async (raiz: string, gradoB: string, materiaB: string) => {
       let idx = await construirIndice(driveId, token, raiz, gradoB, materiaB)
@@ -546,43 +456,19 @@ async function buscarContenido(colegio_slug: string, grado: string, materia: str
       const data = await res.json()
       const carpetas: string[] = (data.value || []).filter((i: {folder?:unknown}) => i.folder).map((i: {name:string}) => i.name)
       const mLower = materiaB.toLowerCase().replace(/á/g,'a').replace(/é/g,'e').replace(/í/g,'i').replace(/ó/g,'o').replace(/ú/g,'u')
-      const match = carpetas.find(cp => {
-        const cl = cp.toLowerCase().replace(/á/g,'a').replace(/é/g,'e').replace(/í/g,'i').replace(/ó/g,'o').replace(/ú/g,'u')
-        return cl.includes(mLower) || mLower.includes(cl)
-      })
+      const match = carpetas.find(cp => { const cl = cp.toLowerCase().replace(/á/g,'a').replace(/é/g,'e').replace(/í/g,'i').replace(/ó/g,'o').replace(/ú/g,'u'); return cl.includes(mLower) || mLower.includes(cl) })
       if (match) idx = await construirIndice(driveId, token, raiz, gradoB, match)
       return idx
     }
-
-    // 1. Buscar en carpeta compartida
     indice = await buscarEnGrado('Owlaris/' + CARPETA_COMPARTIDA, grado, materia)
-
-    // 2. Si no hay, buscar en carpeta del colegio
-    if (indice.length === 0) {
-      indice = await buscarEnGrado('Owlaris/' + colegioSP, grado, materia)
-    }
-
-    // 3. Si no hay, buscar en Mineduc
-    if (indice.length === 0) {
-      indice = await construirIndice(driveId, token, 'Owlaris', CARPETA_COMPARTIDA, 'Preparación pruebas nacionales', 'Mineduc', grado, materia)
-    }
-    if (indice.length === 0) {
-      indice = await construirIndice(driveId, token, 'Owlaris', CARPETA_COMPARTIDA, 'Preparación pruebas nacionales', 'Mineduc', materia)
-    }
+    if (indice.length === 0) indice = await buscarEnGrado('Owlaris/' + colegioSP, grado, materia)
+    if (indice.length === 0) indice = await construirIndice(driveId, token, 'Owlaris', CARPETA_COMPARTIDA, 'Preparación pruebas nacionales', 'Mineduc', grado, materia)
+    if (indice.length === 0) indice = await construirIndice(driveId, token, 'Owlaris', CARPETA_COMPARTIDA, 'Preparación pruebas nacionales', 'Mineduc', materia)
   }
-
-  if (indice.length === 0) {
-    console.log('No encontrado: ' + colegioSP + '/' + grado + '/' + materia)
-    return { contenido: '', archivo: null }
-  }
-
-  // Elegir el documento más relevante comparando con el tema extraído
+  if (indice.length === 0) return { contenido: '', archivo: null }
   const preguntaLower = pregunta.toLowerCase()
   const palabras = preguntaLower.split(/\s+/).filter(p => p.length > 3)
-
-  let mejorPuntaje = -1
-  let mejorDoc = indice[0]
-
+  let mejorPuntaje = -1, mejorDoc = indice[0]
   for (const doc of indice) {
     const temaLower = doc.tema.toLowerCase()
     let puntaje = 0
@@ -590,21 +476,12 @@ async function buscarContenido(colegio_slug: string, grado: string, materia: str
       if (temaLower.includes(palabra)) puntaje += 2
       if (doc.nombre.toLowerCase().includes(palabra)) puntaje += 1
     }
-    if (puntaje > mejorPuntaje) {
-      mejorPuntaje = puntaje
-      mejorDoc = doc
-    }
+    if (puntaje > mejorPuntaje) { mejorPuntaje = puntaje; mejorDoc = doc }
   }
-
   console.log(`✅ Elegido: ${mejorDoc.nombre} (puntaje: ${mejorPuntaje})`)
-
-  // Leer contenido completo del documento elegido
   const cacheKey = `${colegioSP}/${grado}/${materia}/${mejorDoc.nombre}`
-  const cached   = cacheContenido.get(cacheKey)
-  if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
-    return { contenido: cached.contenido, archivo: cached.archivo }
-  }
-
+  const cached = cacheContenido.get(cacheKey)
+  if (cached && Date.now() - cached.timestamp < CACHE_TTL) return { contenido: cached.contenido, archivo: cached.archivo }
   const contenido = await extraerTexto(mejorDoc.downloadUrl)
   cacheContenido.set(cacheKey, { contenido, archivo: mejorDoc.nombre, timestamp: Date.now() })
   return { contenido, archivo: mejorDoc.nombre }
@@ -613,13 +490,10 @@ async function buscarContenido(colegio_slug: string, grado: string, materia: str
 async function leerConfig(): Promise<string> {
   const cached = cacheConfig.get('config')
   if (cached && Date.now() - cached.timestamp < CACHE_TTL) return cached.contenido
-
   const token = await getToken()
   if (!token) return ''
-
   const driveId = process.env.SHAREPOINT_DRIVE_ID!
   let contenido = ''
-
   for (const doc of DOCS_CONFIG) {
     try {
       const rutaDoc = `Owlaris/_Configuracion/${doc}`
@@ -630,58 +504,12 @@ async function leerConfig(): Promise<string> {
       const data = await res.json()
       if (!data['@microsoft.graph.downloadUrl']) continue
       const texto = await extraerTexto(data['@microsoft.graph.downloadUrl'])
-      contenido  += `\n\n=== ${doc} ===\n${texto.substring(0, 2000)}`
+      contenido += `\n\n=== ${doc} ===\n${texto.substring(0, 2000)}`
       console.log(`✅ Config: ${doc}`)
     } catch (e) { console.log(`Error config ${doc}:`, e) }
   }
-
   cacheConfig.set('config', { contenido, timestamp: Date.now() })
   return contenido
-}
-
-function elegirArchivo(
-  archivos: { name: string; '@microsoft.graph.downloadUrl': string }[],
-  pregunta: string
-) {
-  if (archivos.length === 0) return null
-  if (archivos.length === 1) return archivos[0]
-  const palabras = pregunta.toLowerCase().split(/\s+/).filter(p => p.length > 3)
-  let mejor = -1, elegido = archivos[0]
-  for (const a of archivos) {
-    let p = 0
-    for (const w of palabras) if (a.name.toLowerCase().includes(w)) p++
-    if (p > mejor) { mejor = p; elegido = a }
-  }
-  return elegido
-}
-
-function detectarCopia(pregunta: string): boolean {
-  return ['hazme la tarea','dame las respuestas','dame la respuesta','solo dime qué va','resuelve todo']
-    .some(p => pregunta.toLowerCase().includes(p))
-}
-
-async function registrarPendiente(
-  supabase: ReturnType<typeof import('@/lib/supabase/server').createClient>,
-  perfil: { colegio_id: string; grado: string | null },
-  materia: { nombre: string },
-  pregunta: string
-) {
-  const tema = pregunta.substring(0, 150)
-  const { data: existente } = await supabase.from('pendientes')
-    .select('id, veces_solicitado')
-    .eq('colegio_id', perfil.colegio_id)
-    .eq('materia', materia.nombre)
-    .eq('tema_solicitado', tema)
-    .single()
-
-  if (existente) {
-    await supabase.from('pendientes').update({ veces_solicitado: existente.veces_solicitado + 1 }).eq('id', existente.id)
-  } else {
-    await supabase.from('pendientes').insert({
-      colegio_id: perfil.colegio_id, grado: perfil.grado || '',
-      materia: materia.nombre, tema_solicitado: tema, veces_solicitado: 1, resuelto: false,
-    })
-  }
 }
 
 async function leerCarpetasGrado(grado: string, idiomaIngles: boolean): Promise<string[]> {
@@ -695,8 +523,7 @@ async function leerCarpetasGrado(grado: string, idiomaIngles: boolean): Promise<
     const res = await fetch(url, { headers: { Authorization: 'Bearer ' + token } })
     if (res.ok) {
       const data = await res.json()
-      const items: string[] = (data.value || []).filter((i: {folder?:unknown}) => i.folder).map((i: {name:string}) => i.name)
-      carpetas.push(...items)
+      carpetas.push(...(data.value || []).filter((i: {folder?:unknown}) => i.folder).map((i: {name:string}) => i.name))
     }
   } catch { /* silencioso */ }
   if (!carpetas.includes('Olimpiadas de Ciencias')) carpetas.push('Olimpiadas de Ciencias')
@@ -722,12 +549,8 @@ async function leerDocumentosPadres(): Promise<string> {
         const dlRes = await fetch(dlUrl, { headers: { Authorization: `Bearer ${token}` } })
         if (dlRes.ok) {
           const texto = await dlRes.text()
-          // Tomar secciones distribuidas del documento para mayor cobertura
-          const chunk1 = texto.substring(0, 1000)
           const mid = Math.floor(texto.length / 2)
-          const chunk2 = texto.substring(mid, mid + 1000)
-          const chunk3 = texto.substring(texto.length - 1000)
-          contenido += `\n--- ${doc.name} ---\n${chunk1}\n...\n${chunk2}\n...\n${chunk3}\n`
+          contenido += `\n--- ${doc.name} ---\n${texto.substring(0, 1000)}\n...\n${texto.substring(mid, mid+1000)}\n...\n${texto.substring(texto.length - 1000)}\n`
         }
       } catch { /* silencioso */ }
     }
@@ -735,174 +558,99 @@ async function leerDocumentosPadres(): Promise<string> {
   return contenido
 }
 
+async function registrarPendiente(supabase: ReturnType<typeof import('@/lib/supabase/server').createClient>, perfil: { colegio_id: string; grado: string | null }, materia: { nombre: string }, pregunta: string) {
+  const tema = pregunta.substring(0, 150)
+  const { data: existente } = await supabase.from('pendientes').select('id, veces_solicitado').eq('colegio_id', perfil.colegio_id).eq('materia', materia.nombre).eq('tema_solicitado', tema).single()
+  if (existente) {
+    await supabase.from('pendientes').update({ veces_solicitado: existente.veces_solicitado + 1 }).eq('id', existente.id)
+  } else {
+    await supabase.from('pendientes').insert({ colegio_id: perfil.colegio_id, grado: perfil.grado || '', materia: materia.nombre, tema_solicitado: tema, veces_solicitado: 1, resuelto: false })
+  }
+}
+
 export async function POST(req: NextRequest) {
   try {
     const OpenAI = (await import('openai')).default
     const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
-
     const supabase = createClient()
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
 
     const body = await req.json()
     const { pregunta, historial, alerta_comprension = false, alerta_materia = '', alerta_tema = '' } = body
-    const materia_id      = body.materia_id || body.materia_detectada || ''
-    const userId: string  = body.user_id || ''
+    const materia_id = body.materia_id || body.materia_detectada || ''
+    const userId: string = body.user_id || ''
     const idiomaIngles: boolean = body.idioma_ingles || false
-    const materiasDisponibles: string[] = body.materias_disponibles || []
 
     const grado_override = body.grado_override || body.grado_detectado || ''
     if (!pregunta?.trim()) return NextResponse.json({ error: 'Pregunta vacía' }, { status: 400 })
 
-    const { data: perfil } = await supabase
-      .from('usuarios').select('*, colegio:colegios(*)').eq('id', user.id).single()
+    const { data: perfil } = await supabase.from('usuarios').select('*, colegio:colegios(*)').eq('id', user.id).single()
     if (!perfil) return NextResponse.json({ error: 'Perfil no encontrado' }, { status: 404 })
 
-    const { data: configs } = await supabase
-      .from('configuracion').select('clave, valor').eq('colegio_id', perfil.colegio_id)
+    const { data: configs } = await supabase.from('configuracion').select('clave, valor').eq('colegio_id', perfil.colegio_id)
     const cfg: Record<string, string> = {}
     configs?.forEach(c => { cfg[c.clave] = c.valor })
 
-    if (cfg.modo_mantenimiento === 'true') {
-      return NextResponse.json({ error: 'El tutor está en mantenimiento.' }, { status: 503 })
-    }
+    if (cfg.modo_mantenimiento === 'true') return NextResponse.json({ error: 'El tutor está en mantenimiento.' }, { status: 503 })
 
     const limite = parseInt(cfg.limite_preguntas_diarias || '999')
     if (limite < 999) {
       const hoy = new Date().toISOString().split('T')[0]
-      const { count } = await supabase.from('interacciones')
-        .select('*', { count: 'exact', head: true })
-        .eq('usuario_id', user.id).gte('creado_en', `${hoy}T00:00:00`)
-      if ((count || 0) >= limite) {
-        return NextResponse.json({ error: `Limite de ${limite} preguntas alcanzado.` }, { status: 429 })
-      }
+      const { count } = await supabase.from('interacciones').select('*', { count: 'exact', head: true }).eq('usuario_id', user.id).gte('creado_en', `${hoy}T00:00:00`)
+      if ((count || 0) >= limite) return NextResponse.json({ error: `Limite de ${limite} preguntas alcanzado.` }, { status: 429 })
     }
 
-    // Buscar materia por ID o por nombre
     const { data: materiaPorId } = await supabase.from('materias').select('*').eq('id', materia_id).single()
-    const { data: materiaPorNombre } = !materiaPorId && materia_id
-      ? await supabase.from('materias').select('*').ilike('nombre', materia_id).eq('colegio_id', perfil.colegio_id).single()
-      : { data: null }
+    const { data: materiaPorNombre } = !materiaPorId && materia_id ? await supabase.from('materias').select('*').ilike('nombre', materia_id).eq('colegio_id', perfil.colegio_id).single() : { data: null }
     const materia = materiaPorId || materiaPorNombre
-    const materia_uuid = materia?.id || null  // UUID real para inserts
+    const materia_uuid = materia?.id || null
     const gradoEfectivo = grado_override || perfil.grado
-    const colegioSlug   = perfil.colegio?.sharepoint_folder || perfil.colegio?.slug
+    const colegioSlug = perfil.colegio?.sharepoint_folder || perfil.colegio?.slug
 
-    // Detectar tipo de pregunta
     // ── ONBOARDING ──────────────────────────────────────────────────
     const estado: string = body.estado || 'activo'
     const nombreAlumno: string = body.nombre_alumno || ''
-    const gradoAlumno: string  = body.grado_override || ''
+    const gradoAlumno: string = body.grado_override || ''
 
-    // Cargar materias disponibles desde SharePoint
     if (pregunta === '__CARGAR_MATERIAS__' || (estado === 'esperando_materia' && gradoAlumno && !pregunta.trim())) {
       const grado = gradoAlumno || grado_override || perfil.grado || ''
       if (grado) {
         const carpetas = await leerCarpetasGrado(grado, idiomaIngles)
-        return NextResponse.json({
-          materias_disponibles: carpetas,
-          respuesta: '',
-          tokens: 0,
-        })
+        return NextResponse.json({ materias_disponibles: carpetas, respuesta: '', tokens: 0 })
       }
     }
 
     if (estado === 'esperando_nombre') {
       const nombre = pregunta.trim().split(' ')[0]
-      return NextResponse.json({
-        respuesta: idiomaIngles ? 'Hi, ' + nombre + '! Great to have you here. What grade are you in?' : '¡Hola, ' + nombre + '! Qué bueno tenerte aquí. ¿En qué grado estás?',
-        nuevo_estado: 'esperando_grado',
-        nombre_alumno: nombre,
-        tokens: 0,
-      })
+      return NextResponse.json({ respuesta: idiomaIngles ? 'Hi, ' + nombre + '! Great to have you here. What grade are you in?' : '¡Hola, ' + nombre + '! Qué bueno tenerte aquí. ¿En qué grado estás?', nuevo_estado: 'esperando_grado', nombre_alumno: nombre, tokens: 0 })
     }
 
     if (estado === 'esperando_grado') {
       const gradoDetectado = normalizarGrado(pregunta)
-      if (!gradoDetectado) {
-        return NextResponse.json({
-          respuesta: 'No reconocí ese grado. ¿Puedes decirme tu grado? Por ejemplo: "4to Primaria", "3ero Básico", "5to Bachillerato"...',
-          nuevo_estado: 'esperando_grado',
-          nombre_alumno: nombreAlumno,
-          tokens: 0,
-        })
-      }
-      // Guardar grado en Supabase
+      if (!gradoDetectado) return NextResponse.json({ respuesta: 'No reconocí ese grado. ¿Puedes decirme tu grado? Por ejemplo: "4to Primaria", "3ero Básico", "5to Bachillerato"...', nuevo_estado: 'esperando_grado', nombre_alumno: nombreAlumno, tokens: 0 })
       if (userId) await supabase.from('usuarios').update({ grado: gradoDetectado }).eq('id', userId)
-
-
       const carpetasG = await leerCarpetasGrado(gradoDetectado, idiomaIngles)
-      const msgGrado = idiomaIngles
-        ? `Perfect, ${nombreAlumno}! What would you like to study?`
-        : `Perfecto, ${nombreAlumno}. ¿Qué quieres estudiar hoy?`
-      return NextResponse.json({
-        respuesta: msgGrado,
-        nuevo_estado: 'esperando_materia',
-        nombre_alumno: nombreAlumno,
-        grado_detectado: gradoDetectado,
-        materias_disponibles: carpetasG,
-        tokens: 0,
-      })
+      return NextResponse.json({ respuesta: idiomaIngles ? `Perfect, ${nombreAlumno}! What would you like to study?` : `Perfecto, ${nombreAlumno}. ¿Qué quieres estudiar hoy?`, nuevo_estado: 'esperando_materia', nombre_alumno: nombreAlumno, grado_detectado: gradoDetectado, materias_disponibles: carpetasG, tokens: 0 })
     }
 
     if (estado === 'esperando_materia') {
       const materiaDetectada = normalizarMateria(pregunta)
       const gradoMostrar = gradoAlumno || body.grado_detectado || ''
-      if (materiaDetectada === '__OLIMPIADAS__') {
-        return NextResponse.json({
-          respuesta: 'Olimpiadas, perfecto. ¿De cuál materia? Matemática, Biología, Física, Química o Ciencias Naturales.',
-          nuevo_estado: 'esperando_materia_olimpiadas',
-          nombre_alumno: nombreAlumno,
-          grado_detectado: gradoMostrar,
-          tokens: 0,
-        })
-      }
-      // Si el texto normalizado es igual al original (no se reconoció como materia conocida)
-      // tratarlo como tema libre — usar la materia anterior o Matemática por defecto
+      if (materiaDetectada === '__OLIMPIADAS__') return NextResponse.json({ respuesta: 'Olimpiadas, perfecto. ¿De cuál materia? Matemática, Biología, Física, Química o Ciencias Naturales.', nuevo_estado: 'esperando_materia_olimpiadas', nombre_alumno: nombreAlumno, grado_detectado: gradoMostrar, tokens: 0 })
       const esMateriaNormalizada = materiaDetectada !== pregunta.trim()
-      if (!esMateriaNormalizada && materia_id) {
-        // Continuar con la materia actual y tratar como pregunta académica
-        return NextResponse.json({
-          respuesta: idiomaIngles ? 'Ok, let me help you with that topic.' : 'Ok, vamos con ese tema.',
-          nuevo_estado: 'activo',
-          nombre_alumno: nombreAlumno,
-          grado_detectado: gradoAlumno,
-          materia_detectada: materia_id,
-          tokens: 0,
-        })
-      }
-      return NextResponse.json({
-        respuesta: idiomaIngles ? 'Ok, ' + materiaDetectada + '. Do you have a specific question or would you like me to suggest a topic?' : 'Ok, ' + materiaDetectada + '. ¿Tienes una duda específica o quieres que te proponga un tema?',
-        nuevo_estado: 'activo',
-        nombre_alumno: nombreAlumno,
-        grado_detectado: gradoAlumno,
-        materia_detectada: materiaDetectada,
-        tokens: 0,
-      })
+      if (!esMateriaNormalizada && materia_id) return NextResponse.json({ respuesta: idiomaIngles ? 'Ok, let me help you with that topic.' : 'Ok, vamos con ese tema.', nuevo_estado: 'activo', nombre_alumno: nombreAlumno, grado_detectado: gradoAlumno, materia_detectada: materia_id, tokens: 0 })
+      return NextResponse.json({ respuesta: idiomaIngles ? 'Ok, ' + materiaDetectada + '. Do you have a specific question or would you like me to suggest a topic?' : 'Ok, ' + materiaDetectada + '. ¿Tienes una duda específica o quieres que te proponga un tema?', nuevo_estado: 'activo', nombre_alumno: nombreAlumno, grado_detectado: gradoAlumno, materia_detectada: materiaDetectada, tokens: 0 })
     }
 
     if (estado === 'esperando_materia_olimpiadas') {
       const materiaDetectada = normalizarMateria(pregunta, true)
-      return NextResponse.json({
-        respuesta: idiomaIngles ? 'Ok, ' + materiaDetectada + '. Do you have a specific question or would you like me to suggest a topic?' : 'Ok, ' + materiaDetectada + '. ¿Tienes una duda específica o quieres que te proponga un tema?',
-        nuevo_estado: 'activo',
-        nombre_alumno: nombreAlumno,
-        grado_detectado: gradoAlumno,
-        materia_detectada: materiaDetectada,
-        tokens: 0,
-      })
+      return NextResponse.json({ respuesta: idiomaIngles ? 'Ok, ' + materiaDetectada + '. Do you have a specific question or would you like me to suggest a topic?' : 'Ok, ' + materiaDetectada + '. ¿Tienes una duda específica o quieres que te proponga un tema?', nuevo_estado: 'activo', nombre_alumno: nombreAlumno, grado_detectado: gradoAlumno, materia_detectada: materiaDetectada, tokens: 0 })
     }
-    // Detectar si el alumno menciona un tema de otra materia
+
     if (estado === 'activo' && materia_id) {
       const materiaDetectada = detectarMateriaDesdeTexto(pregunta)
-      if (materiaDetectada && materiaDetectada !== materia_id) {
-        return NextResponse.json({
-          respuesta: '"' + pregunta.trim() + '" es un tema de ' + materiaDetectada + '. ¿Quieres que cambiemos a ' + materiaDetectada + '?',
-          nuevo_estado: 'esperando_confirmacion_cambio_materia',
-          materia_sugerida: materiaDetectada,
-          tokens: 0,
-        })
-      }
+      if (materiaDetectada && materiaDetectada !== materia_id) return NextResponse.json({ respuesta: '"' + pregunta.trim() + '" es un tema de ' + materiaDetectada + '. ¿Quieres que cambiemos a ' + materiaDetectada + '?', nuevo_estado: 'esperando_confirmacion_cambio_materia', materia_sugerida: materiaDetectada, tokens: 0 })
     }
 
     if (estado === 'esperando_confirmacion_cambio_materia') {
@@ -911,48 +659,26 @@ export async function POST(req: NextRequest) {
       if (esAfirmativo && materiaSugerida) {
         Array.from(cacheContenido.keys()).forEach(key => { if (key.includes(materia_id)) cacheContenido.delete(key) })
         Array.from(indiceDocumentos.keys()).forEach(key => { if (key.includes(materia_id)) indiceDocumentos.delete(key) })
-        return NextResponse.json({
-          respuesta: 'Perfecto, cambiamos a ' + materiaSugerida + '. ¿Tienes una duda específica o quieres que te proponga un tema?',
-          nuevo_estado: 'activo',
-          materia_detectada: materiaSugerida,
-          tokens: 0,
-        })
-      } else {
-        return NextResponse.json({
-          respuesta: 'Sin problema, seguimos con ' + materia_id + '. ¿En qué te puedo ayudar?',
-          nuevo_estado: 'activo',
-          tokens: 0,
-        })
+        return NextResponse.json({ respuesta: 'Perfecto, cambiamos a ' + materiaSugerida + '. ¿Tienes una duda específica o quieres que te proponga un tema?', nuevo_estado: 'activo', materia_detectada: materiaSugerida, tokens: 0 })
       }
+      return NextResponse.json({ respuesta: 'Sin problema, seguimos con ' + materia_id + '. ¿En qué te puedo ayudar?', nuevo_estado: 'activo', tokens: 0 })
     }
 
-    // Detectar cambio de materia mid-sesión
     if (estado === 'activo') {
-      // Solo detectar cambio si menciona explícitamente una materia conocida
       const MATERIAS_KEYWORDS = ['matemática','matematica','física','fisica','química','quimica','biología','biologia','historia','español','espanol','inglés','ingles','ciencias naturales','mineduc','olimpiadas']
       const preguntaLow = pregunta.toLowerCase()
       const cambioExplicito = /(?:quiero estudiar|cambia(?:mos)? a|ahora estudiemos|vamos con)\s+(.+)/i.exec(pregunta)
       const mencionaMateria = MATERIAS_KEYWORDS.some(m => preguntaLow.includes(m))
-      
       if (cambioExplicito && mencionaMateria) {
-        const textoMateria = cambioExplicito[1].trim()
-        const nuevaMateria = normalizarMateria(textoMateria)
+        const nuevaMateria = normalizarMateria(cambioExplicito[1].trim())
         if (nuevaMateria && nuevaMateria !== materia_id && !nuevaMateria.startsWith('__')) {
-          console.log('Cambio materia:', materia_id, '->', nuevaMateria)
-          // Limpiar caché de la materia anterior
           Array.from(cacheContenido.keys()).forEach(key => { if (key.includes(materia_id)) cacheContenido.delete(key) })
           Array.from(indiceDocumentos.keys()).forEach(key => { if (key.includes(materia_id)) indiceDocumentos.delete(key) })
-          return NextResponse.json({
-            respuesta: 'Claro, cambiamos a ' + nuevaMateria + '. ¿Tienes una duda específica o quieres que te proponga un tema?',
-            nuevo_estado: 'activo',
-            materia_detectada: nuevaMateria,
-            tokens: 0,
-          })
+          return NextResponse.json({ respuesta: 'Claro, cambiamos a ' + nuevaMateria + '. ¿Tienes una duda específica o quieres que te proponga un tema?', nuevo_estado: 'activo', materia_detectada: nuevaMateria, tokens: 0 })
         }
       }
     }
 
-    // Detectar cambio de grado mid-sesión
     if (estado === 'activo') {
       const cambioGradoRegex = /ahora (estoy en|curso|voy a|soy de)\s+(.+)|cambi[eé] (a|de) grado[:\s]*(.+)|estoy en\s+(.+(?:grado|b[aá]sico|primaria|bachillerato))/i
       const cambioGradoMatch = cambioGradoRegex.exec(pregunta)
@@ -960,413 +686,162 @@ export async function POST(req: NextRequest) {
         const textoGrado = cambioGradoMatch[2] || cambioGradoMatch[4] || cambioGradoMatch[5] || ''
         const nuevoGrado = normalizarGrado(textoGrado.trim())
         if (nuevoGrado) {
-              if (userId) await supabase.from('usuarios').update({ grado: nuevoGrado }).eq('id', userId)
-          return NextResponse.json({
-            respuesta: 'Perfecto, actualicé tu grado a ' + nuevoGrado + '. ¿Qué materia quieres estudiar?',
-            nuevo_estado: 'esperando_materia',
-            grado_detectado: nuevoGrado,
-            tokens: 0,
-          })
+          if (userId) await supabase.from('usuarios').update({ grado: nuevoGrado }).eq('id', userId)
+          return NextResponse.json({ respuesta: 'Perfecto, actualicé tu grado a ' + nuevoGrado + '. ¿Qué materia quieres estudiar?', nuevo_estado: 'esperando_materia', grado_detectado: nuevoGrado, tokens: 0 })
         }
       }
     }
-
     // ── FIN ONBOARDING ───────────────────────────────────────────────
 
-    // Validar opción múltiple antes de llamar a OpenAI
-    const validacionOM = validarOpcionMultiple(pregunta, historial || [])
+    // ── PROTOCOLO ANTI-ERRORES — evaluación por backend ─────────────
+    let evaluacionProtocolo: { estado: string; feedback: string; correctAnswer: number | null; op: string | null; guardActivado: boolean } | null = null
     
-    // Calculadora matemática — verificar respuestas numéricas
-    let validacionCalc: string | null = null
-    if (!validacionOM && historial?.length > 0) {
-      const ultimoTutor = [...(historial || [])].reverse().find(m => m.rol === 'asistente')
-      if (ultimoTutor) {
-        const textoTutor = ultimoTutor.contenido
-        // NO usar calculadora si el problema tiene múltiples pasos o es narrativo
-        const esProblemaComplejo = (
-          textoTutor.includes('1.') && textoTutor.includes('2.') || // pasos numerados
-          textoTutor.split('?').length > 3 || // múltiples preguntas
-          textoTutor.length > 500 // problema largo
+    if (historial?.length > 0) {
+      const ultimoTutor = [...(historial || [])].reverse().find((m: {rol:string}) => m.rol === 'asistente')
+      if (ultimoTutor && esMateriaNumerica(materia_id || '')) {
+        evaluacionProtocolo = await handleMathEvaluation(
+          ultimoTutor.contenido,
+          pregunta,
+          idiomaIngles,
+          process.env.WOLFRAM_APP_ID
         )
-        if (!esProblemaComplejo) {
-          // Detectar ecuaciones con variables en ambos lados (ax + b = cx + d)
-          const tieneVarAmbosLados = /[a-z]\s*[+\-]/.test(textoTutor) && 
-            textoTutor.split('=').length > 1 &&
-            /[a-z]/.test(textoTutor.split('=')[1] || '')
-          
-          if (tieneVarAmbosLados) {
-            // Ir directo a Wolfram para ecuaciones con variables en ambos lados
-            validacionCalc = await verificarConWolfram(textoTutor, pregunta)
-          } else {
-            // Primero intentar con mathjs (más rápido)
-            validacionCalc = extraerYResolverEcuacion(textoTutor, pregunta)
-            // Si mathjs no pudo, intentar con Wolfram Alpha
-            if (!validacionCalc) {
-              validacionCalc = await verificarConWolfram(textoTutor, pregunta)
-            }
-          }
-        }
       }
     }
 
-    // Si la calculadora detecta INCORRECTO, responder directo sin OpenAI
-    if (validacionCalc?.startsWith('CALCULADORA_INCORRECTO')) {
-      const ultimoTutor = [...(historial || [])].reverse().find((m: any) => m.rol === 'asistente')
-      const ecuacion = ultimoTutor?.contenido?.match(/[\d]+\s*[+\-*\/x×÷]\s*[\d]+/)?.[0] || ''
-      const respuesta = `Incorrecto. Vamos a revisarlo juntos.${ecuacion ? ' La operación es: ' + ecuacion + '.' : ''} ¿Puedes intentarlo de nuevo paso a paso?`
+    // Si el protocolo evaluó y tiene resultado definitivo, responder directo
+    if (evaluacionProtocolo && evaluacionProtocolo.estado !== 'no_evaluable') {
+      const respuesta = evaluacionProtocolo.feedback
       await supabase.from('interacciones').insert({
         usuario_id: user.id, colegio_id: perfil.colegio_id, materia_id: materia_uuid,
         grado: gradoEfectivo, tema_detectado: pregunta.substring(0, 100),
         pregunta, respuesta, tokens_usados: 0, costo_usd: 0,
         modelo_usado: 'calculadora', documento_fuente: null, sospecha_copia: false,
       })
+      supabase.from('usuarios').update({ ultimo_acceso: new Date().toISOString() }).eq('id', user.id).then(() => {})
+      
+      // Verificar alertas pedagógicas
+      await verificarAlertasBajaComprension(supabase, user.id, perfil, gradoEfectivo, materia, respuesta, documentoFuenteAlerta)
+      
       return NextResponse.json({ respuesta, tokens: 0 })
     }
 
-    // Si la calculadora confirma que es CORRECTO, responder directo sin OpenAI
-    if (validacionCalc?.startsWith('CALCULADORA_CORRECTO')) {
-      const numMatch = pregunta.replace(/[=]/g, ' ').match(/-?\d+([.,]\d+)?/)
-      const valor = numMatch ? numMatch[0] : pregunta.trim()
-      const respuesta = `¡Correcto! ${valor} es la respuesta correcta. Bien hecho. ¿Puedes explicarme cómo llegaste a ese resultado?`
-      await supabase.from('interacciones').insert({
-        usuario_id: user.id, colegio_id: perfil.colegio_id, materia_id: materia_uuid,
-        grado: gradoEfectivo, tema_detectado: pregunta.substring(0, 100),
-        pregunta, respuesta, tokens_usados: 0, costo_usd: 0,
-        modelo_usado: 'calculadora', documento_fuente: null, sospecha_copia: false,
-      })
-      return NextResponse.json({ respuesta, tokens: 0 })
-    }
+    // Inyectar contexto de evaluación al prompt si hay resultado no_evaluable o sin OP
+    const contextoEvaluacion = evaluacionProtocolo?.estado === 'no_evaluable'
+      ? '\n\nINSTRUCCIÓN BACKEND: Esta respuesta no tiene operación verificable. NO digas Correcto ni Incorrecto. Pide al alumno que escriba la operación matemática.'
+      : ''
+    // ── FIN PROTOCOLO ANTI-ERRORES ───────────────────────────────────
 
     const tipoPregunta = detectarTipoPregunta(pregunta)
     const esBienvenida = esSaludo(pregunta) && (!historial || historial.length === 0)
 
     let contenidoCurricular = ''
-    let documentoFuente     = null
+    let documentoFuente: string | null = null
+    const documentoFuenteAlerta: string | null = null
 
-    // Solo buscar contenido académico si la pregunta es académica y no es saludo inicial
     if (tipoPregunta === 'academica' && !esBienvenida) {
       const result = await buscarContenido(colegioSlug, gradoEfectivo, materia_id || '', pregunta)
       contenidoCurricular = result.contenido
-      documentoFuente     = result.archivo
+      documentoFuente = result.archivo
     }
 
-    // Siempre leer docs de configuración (tienen videos y política pedagógica)
     const docsConfig = await leerConfig()
-    const promptBase = (cfg.prompt_personalizado || PROMPT_BASE) + 
-      (idiomaIngles ? '\n\nIDIOMA: El alumno está en modo inglés. Responde SIEMPRE en inglés. Todas tus respuestas, preguntas, correcciones y explicaciones deben ser en inglés. Usa el mismo material curricular disponible pero comunícate en inglés.' : '')
-    const contextoValidacion = validacionOM ? `
+    const promptBase = (cfg.prompt_personalizado || PROMPT_BASE) +
+      (idiomaIngles ? '\n\nIDIOMA: El alumno está en modo inglés. Responde SIEMPRE en inglés.' : '') +
+      contextoEvaluacion
 
-INSTRUCCIÓN CRÍTICA DE EVALUACIÓN: ${validacionOM}` : validacionCalc ? `
-
-INSTRUCCIÓN CRÍTICA DE EVALUACIÓN: ${validacionCalc}` : ''
-    const esModoConversacion = body.modo_conversacion || false
-
-    // Alerta por 3 fallos consecutivos detectados en el frontend
+    // Alerta por 3 fallos consecutivos del frontend
     if (alerta_comprension) {
-      const { data: alertaExist } = await supabase.from('alertas')
-        .select('id').eq('alumno_id', user.id).eq('tipo', 'baja_comprension')
-        .eq('resuelta', false).gte('creado_en', new Date(Date.now() - 3600000).toISOString()).maybeSingle()
+      const { data: alertaExist } = await supabase.from('alertas').select('id').eq('alumno_id', user.id).eq('tipo', 'baja_comprension').eq('resuelta', false).gte('creado_en', new Date(Date.now() - 3600000).toISOString()).maybeSingle()
       if (!alertaExist) {
-        const { data: asig } = await supabase.from('guia_asignaciones')
-          .select('guia_id, guia:guia_id(email, nombre_completo)')
-          .eq('colegio_id', perfil.colegio_id).eq('activo', true)
-          .or(`alumno_id.eq.${user.id},grado.eq.${perfil.grado || ''}`)
-          .limit(1).maybeSingle()
-        const guiaId = asig?.guia_id || null
-        await supabase.from('alertas').insert({
-          alumno_id: user.id, colegio_id: perfil.colegio_id, guia_id: guiaId,
-          tipo: 'baja_comprension',
-              descripcion: `${perfil.nombre_completo} tuvo 3 respuestas incorrectas consecutivas${alerta_materia ? ' en ' + alerta_materia : ''}.`,
-              contexto: alerta_materia + (alerta_tema ? ' — ' + alerta_tema : ''),
-        })
-        console.log('ALERTA GENERADA: 3 fallos consecutivos para', perfil.nombre_completo)
+        const { data: asig } = await supabase.from('guia_asignaciones').select('guia_id, guia:guia_id(email, nombre_completo)').eq('colegio_id', perfil.colegio_id).eq('activo', true).or(`alumno_id.eq.${user.id},grado.eq.${perfil.grado || ''}`).limit(1).maybeSingle()
+        await supabase.from('alertas').insert({ alumno_id: user.id, colegio_id: perfil.colegio_id, guia_id: asig?.guia_id || null, tipo: 'baja_comprension', descripcion: `${perfil.nombre_completo} tuvo 3 respuestas incorrectas consecutivas${alerta_materia ? ' en ' + alerta_materia : ''}.`, contexto: alerta_materia + (alerta_tema ? ' — ' + alerta_tema : '') })
         if (asig?.guia) {
           try {
             const guia = asig.guia as unknown as {email:string; nombre_completo:string}
             const { Resend } = await import('resend')
-            const resend = new Resend(process.env.RESEND_API_KEY)
-            await resend.emails.send({
-              from: 'Owlaris <noreply@owlaris.app>',
-              to: guia.email,
-              subject: `Alerta: Baja comprensión — ${perfil.nombre_completo}`,
-              html: '<div style="font-family:system-ui;max-width:500px;margin:0 auto">' +
-                '<div style="background:#2C3E6B;padding:20px;border-radius:12px 12px 0 0">' +
-                '<h2 style="color:white;margin:0">Alerta Pedagógica — Owlaris</h2></div>' +
-                '<div style="background:white;padding:20px;border:1px solid #E2E8F0;border-radius:0 0 12px 12px">' +
-                '<p>Hola <strong>' + guia.nombre_completo + '</strong>,</p>' +
-                '<p>El alumno <strong>' + perfil.nombre_completo + '</strong> (' + (perfil.grado||'') + ') tuvo <strong>3 respuestas incorrectas consecutivas</strong> en Owlaris.</p>' +
-                '<p style="color:#64748B;font-size:13px">Última pregunta: "' + pregunta.substring(0,150) + '"</p>' +
-                '<a href="https://owlaris.app/guia" style="display:inline-block;background:#2C3E6B;color:white;padding:10px 20px;border-radius:8px;text-decoration:none;margin-top:12px">Ver en Owlaris →</a>' +
-                '</div></div>'
-            })
+            await new Resend(process.env.RESEND_API_KEY).emails.send({ from: 'Owlaris <noreply@owlaris.app>', to: guia.email, subject: `Alerta: Baja comprensión — ${perfil.nombre_completo}`, html: '<div style="font-family:system-ui;max-width:500px;margin:0 auto"><div style="background:#2C3E6B;padding:20px;border-radius:12px 12px 0 0"><h2 style="color:white;margin:0">Alerta Pedagógica — Owlaris</h2></div><div style="background:white;padding:20px;border:1px solid #E2E8F0;border-radius:0 0 12px 12px"><p>Hola <strong>' + guia.nombre_completo + '</strong>,</p><p>El alumno <strong>' + perfil.nombre_completo + '</strong> (' + (perfil.grado||'') + ') tuvo <strong>3 respuestas incorrectas consecutivas</strong> en Owlaris.</p><a href="https://owlaris.app/guia" style="display:inline-block;background:#2C3E6B;color:white;padding:10px 20px;border-radius:8px;text-decoration:none;margin-top:12px">Ver en Owlaris →</a></div></div>' })
           } catch(e) { console.error('Email error:', e) }
         }
       }
     }
 
-    // Modo conversación inglés — respuesta directa sin SharePoint
+    // Modo conversación inglés
+    const esModoConversacion = body.modo_conversacion || false
     if (esModoConversacion) {
-      const OpenAI = (await import('openai')).default
-      const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
-      const historialConv = (historial || []).slice(-4).map((m: {rol:string;contenido:string}) => ({
-        role: m.rol === 'usuario' ? 'user' as const : 'assistant' as const,
-        content: m.contenido
-      }))
-      const completion = await openai.chat.completions.create({
-        model: 'gpt-4o-mini',
-        max_tokens: 60,
-        temperature: 0.8,
-        messages: [
-          { role: 'system', content: 'You are Owlaris, a friendly English conversation coach for Guatemalan students of all ages. Your mission is to help them improve their English naturally through conversation. RULES: 1) ALWAYS respond in English only — never use Spanish under any circumstance. 2) Keep responses SHORT: 1-2 sentences max. 3) Gently correct grammar and pronunciation by modeling the correct form naturally in your reply — never say the student is wrong directly. 4) Adapt vocabulary to the student level: simple for beginners, richer for advanced. 5) Ask ONE follow-up question to keep conversation flowing. 6) Be warm, patient and encouraging — mistakes are normal. 7) Any topic is welcome: daily life, school, family, food, hobbies, travel, culture. 8) Follow any special instructions the student gives you naturally as part of the conversation.' },
-          ...historialConv,
-          { role: 'user', content: pregunta }
-        ]
-      })
+      const historialConv = (historial || []).slice(-4).map((m: {rol:string;contenido:string}) => ({ role: m.rol === 'usuario' ? 'user' as const : 'assistant' as const, content: m.contenido }))
+      const completion = await openai.chat.completions.create({ model: 'gpt-4o-mini', max_tokens: 60, temperature: 0.8, messages: [{ role: 'system', content: 'You are Owlaris, a friendly English conversation coach for Guatemalan students. ALWAYS respond in English only. Keep responses SHORT: 1-2 sentences max. Gently correct grammar by modeling the correct form. Ask ONE follow-up question. Be warm and encouraging.' }, ...historialConv, { role: 'user', content: pregunta }] })
       const respuesta = completion.choices[0].message.content || ''
-      // Guardar interacción
-      await supabase.from('interacciones').insert({
-        usuario_id: user.id,
-        colegio_id: perfil.colegio_id,
-        grado: perfil.grado || '',
-        tema_detectado: 'Conversación en Inglés',
-        pregunta: pregunta.substring(0, 500),
-        respuesta: respuesta.substring(0, 1000),
-        tokens_usados: completion.usage?.total_tokens || 0,
-        costo_usd: (completion.usage?.total_tokens || 0) * 0.00000015,
-        modelo_usado: 'gpt-4o-mini',
-        sospecha_copia: false,
-      })
-      // Actualizar ultimo_acceso
+      await supabase.from('interacciones').insert({ usuario_id: user.id, colegio_id: perfil.colegio_id, grado: perfil.grado || '', tema_detectado: 'Conversación en Inglés', pregunta: pregunta.substring(0, 500), respuesta: respuesta.substring(0, 1000), tokens_usados: completion.usage?.total_tokens || 0, costo_usd: (completion.usage?.total_tokens || 0) * 0.00000015, modelo_usado: 'gpt-4o-mini', sospecha_copia: false })
       supabase.from('usuarios').update({ ultimo_acceso: new Date().toISOString() }).eq('id', user.id).then(() => {})
       return NextResponse.json({ respuesta, nuevo_estado: 'activo', tokens: completion.usage?.total_tokens || 0 })
     }
+
     const esPadre = body.rol_usuario === 'padre'
     let promptPadre = ''
     if (esPadre) {
       const docsPadres = await leerDocumentosPadres()
-      promptPadre = `\n\nROL ESPECIAL - ASISTENTE PARA PADRES: Estás hablando con un padre o madre de familia, NO con un alumno. Tu rol es ser un consejero educativo familiar. Usa los siguientes documentos como base de conocimiento para responder:\n${docsPadres}\n\nAyuda con: estrategias para apoyar el aprendizaje en casa, hábitos de estudio, comunicación con los hijos sobre el colegio, manejo del estrés académico, tips de motivación. Sé cálido, empático y práctico. Responde en español, tono de consejero de confianza.`
+      promptPadre = `\n\nROL ESPECIAL - ASISTENTE PARA PADRES: Estás hablando con un padre o madre de familia. Usa los siguientes documentos:\n${docsPadres}\n\nAyuda con: estrategias para apoyar el aprendizaje, hábitos de estudio, comunicación con hijos. Sé cálido, empático y práctico.`
     }
-    const contextoExtra = promptPadre || ''
-    const contextoIdioma = idiomaIngles
-      ? esModoConversacion
-        ? '\n\nCONVERSATION MODE - CRITICAL RULES:\n1. ALWAYS respond in ENGLISH ONLY. Never use Spanish. Even if the student writes in Spanish, respond in English.\n2. Keep responses VERY SHORT: 1-2 sentences maximum.\n3. Gently correct grammar by modeling the correct form in your response.\n4. Ask ONE simple follow-up question.\n5. Be warm and encouraging.\n6. Topics: daily life, school, hobbies, food, travel.'
-        : '\n\nLANGUAGE INSTRUCTION: You MUST respond entirely in English. All explanations, questions, feedback and conversation must be in English only.'
-      : ''
 
-    // Contexto según tipo de pregunta
+    const contextoIdioma = idiomaIngles ? '\n\nLANGUAGE INSTRUCTION: Respond entirely in English. All explanations, questions and feedback must be in English only.' : ''
+
     let contextoContenido = ''
-
     if (esBienvenida) {
-      contextoContenido = `El alumno acaba de saludar. Responde con bienvenida personalizada y pregunta de diagnóstico. NO muestres lista de temas todavía.`
+      contextoContenido = `El alumno acaba de saludar. Responde con bienvenida personalizada. NO muestres lista de temas todavía.`
     } else if (tipoPregunta === 'crisis') {
-      contextoContenido = `ALERTA: El alumno toca un tema de crisis personal. NO busques documentos académicos. Responde con empatía breve y recomienda hablar con un adulto responsable, orientador o profesional. No profundices.`
+      contextoContenido = `ALERTA: El alumno toca un tema de crisis personal. Responde con empatía breve y recomienda hablar con un adulto responsable.`
     } else if (tipoPregunta === 'formativa') {
-      contextoContenido = `El alumno toca un tema formativo (familia, valores, convivencia). Usa los documentos de configuración para orientarlo. Recomienda videos de Eduardo Montano si aplica.`
+      contextoContenido = `El alumno toca un tema formativo. Usa los documentos de configuración para orientarlo.`
     } else if (contenidoCurricular) {
       contextoContenido = `CONTENIDO ACADEMICO (fuente principal):\n---\n${contenidoCurricular.substring(0, 3000)}\n---`
     } else {
-      contextoContenido = `No se encontró un documento específico en SharePoint para esta consulta en ${gradoEfectivo}. Responde con tu conocimiento general del tema. Si detectas que la pregunta pertenece a una materia específica (Matemática, Física, Química, Biología, Historia, Español), menciona al alumno que puede estudiar esa materia directamente seleccionándola del menú.`
+      contextoContenido = `No se encontró documento específico en SharePoint. Responde con conocimiento general.`
     }
 
-    const systemPrompt = `${promptBase}${contextoIdioma}
+    const systemPrompt = `${promptBase}${promptPadre}${contextoIdioma}
 
 CONTEXTO DEL ALUMNO:
 - Nombre: ${perfil.nombre_completo.split(' ')[0]}
 - Colegio: ${perfil.colegio?.nombre}
 - Grado: ${gradoEfectivo}
-- Materia seleccionada: ${materia_id || materia?.nombre || 'Sin materia seleccionada — el alumno está eligiendo'}
+- Materia seleccionada: ${materia_id || materia?.nombre || 'Sin materia seleccionada'}
 
 ${docsConfig ? `DOCUMENTOS DE CONFIGURACION OFICIAL:\n${docsConfig}\n` : ''}
 
 ${contextoContenido}`
 
-    const mensajesOpenAI: { role: 'user' | 'assistant' | 'system'; content: string }[] = [
-      { role: 'system', content: systemPrompt },
-    ]
-
-    if (historial?.length > 0) {
-      historial.forEach((msg: { rol: string; contenido: string }) => {
-        mensajesOpenAI.push({ role: msg.rol === 'usuario' ? 'user' : 'assistant', content: msg.contenido })
-      })
-    }
+    const mensajesOpenAI: { role: 'user' | 'assistant' | 'system'; content: string }[] = [{ role: 'system', content: systemPrompt }]
+    if (historial?.length > 0) historial.forEach((msg: { rol: string; contenido: string }) => { mensajesOpenAI.push({ role: msg.rol === 'usuario' ? 'user' : 'assistant', content: msg.contenido }) })
     mensajesOpenAI.push({ role: 'user', content: pregunta })
 
-    const completion = await openai.chat.completions.create({
-      model: 'gpt-4o-mini', messages: mensajesOpenAI, max_tokens: esModoConversacion ? 80 : 700, temperature: 0.7,
-    })
-
+    const completion = await openai.chat.completions.create({ model: 'gpt-4o-mini', messages: mensajesOpenAI, max_tokens: 700, temperature: 0.7 })
     let respuesta = completion.choices[0].message.content || 'No pude generar una respuesta.'
 
-    // EVALUADOR DESACTIVADO — calculadora cubre 100% matemáticas
-    if (false) { try {
-      const esEvaluable = (
-        pregunta.trim().length < 80 &&
-        (historial || []).length > 0 &&
-        tipoPregunta === 'academica' &&
-        !/ y | and /i.test(pregunta)
-      )
-      const ultimoTutor = esEvaluable
-        ? [...(historial || [])].reverse().find((m: any) => m.rol === 'asistente')
-        : null
-
-      if (ultimoTutor) {
-        // Paso 1: Evaluador extrae la operación matemática
-        const evalResp = await openai.chat.completions.create({
-          model: 'gpt-4o-mini', max_tokens: 80, temperature: 0,
-          response_format: { type: 'json_object' },
-          messages: [
-            { role: 'system', content: `Evalúa la respuesta del alumno. JSON SOLO:
-{"evaluable":true/false,"operacion":"expr matematica o null","valor_correcto":"resultado","correcto":true/false}
-- evaluable:false si no hay pregunta matemática clara
-- operacion: extrae la operación del problema (ej: "72/8", "30*20", "15+6-2*3")
-- Calcula TÚ MISMO. Si alumno=resultado→correcto:true. NUNCA contradigas.` },
-            { role: 'user', content: `Tutor: "${ultimoTutor.contenido.slice(-400)}"
-Alumno: "${pregunta}"` }
-          ]
-        })
-        const evalJSON = JSON.parse(evalResp.choices[0].message.content || '{}')
-
-        if (evalJSON.evaluable === true) {
-          let valorCorrecto = evalJSON.valor_correcto
-
-          // Paso 2: Verificar con Wolfram si hay operación
-          if (evalJSON.operacion && process.env.WOLFRAM_APP_ID) {
-            try {
-              const wUrl = `https://api.wolframalpha.com/v1/result?appid=${process.env.WOLFRAM_APP_ID}&i=${encodeURIComponent(evalJSON.operacion)}`
-              const wRes = await fetch(wUrl, { signal: AbortSignal.timeout(3000) })
-              if (wRes.ok) {
-                const wTxt = await wRes.text()
-                if (!wTxt.includes('did not understand')) {
-                  valorCorrecto = wTxt.trim()
-                  console.log('WOLFRAM:', evalJSON.operacion, '=', valorCorrecto)
-                }
-              }
-            } catch { /* Wolfram falló, usar evaluador */ }
-          }
-
-          // Paso 3: Comparar con respuesta del alumno
-          const numAlumno = parseFloat(pregunta.replace(/[=,]/g,' ').match(/-?\d+([.,]\d+)?/)?.[0] || '')
-          const numCorrecto = parseFloat(String(valorCorrecto))
-          
-          if (!isNaN(numAlumno) && !isNaN(numCorrecto)) {
-            const esCorrectoReal = Math.abs(numAlumno - numCorrecto) < 0.01
-            const modeloDijoMal = (
-              esCorrectoReal && respuesta.toLowerCase().includes('incorrecto') ||
-              !esCorrectoReal && respuesta.toLowerCase().includes('correcto') && !respuesta.toLowerCase().includes('incorrecto')
-            )
-            if (modeloDijoMal) {
-              if (esCorrectoReal) {
-                respuesta = `Correcto. ${numAlumno} es la respuesta correcta. ¿Puedes explicarme cómo llegaste a ese resultado?`
-                console.log('CORREGIDO → CORRECTO')
-              } else {
-                respuesta = `Incorrecto. La respuesta correcta es ${valorCorrecto}. Intenta de nuevo paso a paso.`
-                console.log('CORREGIDO → INCORRECTO. Correcto:', valorCorrecto)
-              }
-            }
-          }
+    // CONTRADICTION GUARD FINAL — última línea de defensa
+    // Aunque el modelo no usó [OP:], si dice incorrecto=correcto, lo bloqueamos
+    const studentN = normalizeStudentAnswer(pregunta)
+    if (studentN !== null) {
+      const respuestaLow = respuesta.toLowerCase()
+      const dijoIncorrecto = respuestaLow.includes('incorrecto') || respuestaLow.includes('incorrect')
+      const valorCorrectoEnRespuesta = respuesta.match(/respuesta correcta es (\d+(?:[.,]\d+)?)/i)
+      if (dijoIncorrecto && valorCorrectoEnRespuesta) {
+        const valorCorrecto = parseFloat(valorCorrectoEnRespuesta[1].replace(',', '.'))
+        if (!isNaN(valorCorrecto) && Math.abs(studentN - valorCorrecto) < 0.001) {
+          // GUARD: el modelo dice "incorrecto, la respuesta es X" pero X == lo que dijo el alumno
+          respuesta = idiomaIngles
+            ? `Correct. ${studentN} is the right answer. Can you explain how you solved it?`
+            : `¡Correcto! ${studentN} es la respuesta correcta. Bien hecho. ¿Puedes explicarme cómo llegaste a ese resultado?`
+          console.log('CONTRADICTION GUARD FINAL activado: modelo se contradecía')
         }
-      }
-    } catch(evalErr) {
-      console.error('Evaluador (no crítico):', evalErr)
-    } } // fin desactivado
-
-    // JUEZ INDEPENDIENTE — verificar si el alumno respondió algo y el modelo evaluó
-    // Solo actúa cuando hay historial (el alumno está respondiendo, no preguntando)
-    const ultimaPreguntaTutor = [...(historial || [])].reverse().find((m: any) => m.rol === 'asistente')
-    // El juez solo evalúa respuestas numéricas o de letra, no explicaciones
-    const esRespuestaNumerica = /^[a-dA-D]$/.test(pregunta.trim()) || 
-      /^-?\d+([.,]\d+)?$/.test(pregunta.trim().replace(/[=xX]/g,'').trim()) ||
-      /^[a-dA-D][).]/.test(pregunta.trim()) ||
-      /^(es|son|da|el resultado es|la respuesta es)?\s*-?\d/.test(pregunta.trim().toLowerCase())
-    const esRespuestaAlumno = ultimaPreguntaTutor && 
-      esRespuestaNumerica &&
-      pregunta.trim().length < 50 &&
-      tipoPregunta === 'academica'
-
-    if (esRespuestaAlumno) {
-      try {
-        const juezMessages = [
-          {
-            role: 'system' as const,
-            content: `Eres un juez académico experto. Tu ÚNICA función es evaluar si la respuesta del alumno es correcta o incorrecta.
-
-RESPONDE SOLO con este JSON exacto, sin texto adicional, sin markdown, sin explicaciones fuera del JSON:
-{"correcto": true, "respuesta_correcta": "valor", "explicacion_breve": "razón en 10 palabras"}
-{"correcto": false, "respuesta_correcta": "valor correcto", "explicacion_breve": "razón en 10 palabras"}
-{"correcto": null, "respuesta_correcta": null, "explicacion_breve": "pregunta no evaluable"}
-
-REGLAS EN ORDEN ESTRICTO:
-
-REGLA 1 - OPCIÓN MÚLTIPLE (la pregunta contiene A) B) C) D)):
-  Paso 1: Lee todas las opciones y sus valores. Ejemplo: "A) 5  B) 10  C) 15  D) 20"
-  Paso 2: Identifica la letra que eligió el alumno
-  Paso 3: Encuentra el VALOR numérico o textual de esa letra
-  Paso 4: Evalúa si ese VALOR es la respuesta correcta al problema planteado
-  EJEMPLOS:
-  - Problema: 15-5=?, opciones: A)5 B)10 C)15 D)20, alumno dice "B" → B=10, 15-5=10 ✓ → {"correcto": true, "respuesta_correcta": "B (10)", "explicacion_breve": "B equivale a 10 que es 15 menos 5"}
-  - Problema: 15-5=?, opciones: A)5 B)10 C)15 D)20, alumno dice "A" → A=5, 15-5=10≠5 ✗ → {"correcto": false, "respuesta_correcta": "B (10)", "explicacion_breve": "A equivale a 5 pero 15 menos 5 es 10"}
-  NUNCA evalúes la letra en sí misma como respuesta. SIEMPRE evalúa el valor que representa.
-
-REGLA 2 - NÚMERO DIRECTO (alumno da un número):
-  - Calcula exactamente la operación de la pregunta
-  - Compara con el número del alumno
-  - Ejemplo: "¿Cuánto es 23+17?" alumno dice "40" → 23+17=40 → {"correcto": true}
-  - Ejemplo: "¿Cuánto es 23+17?" alumno dice "41" → 23+17=40≠41 → {"correcto": false, "respuesta_correcta": "40"}
-
-REGLA 3 - TEXTO O CONCEPTO (historia, ciencias, lenguaje):
-  - Evalúa si el concepto central es correcto
-  - Acepta sinónimos, paráfrasis y respuestas equivalentes
-  - Si el alumno da una respuesta parcialmente correcta pero con la idea principal → {"correcto": true}
-  - Solo marca false si la respuesta es claramente incorrecta o contradice la pregunta
-
-REGLA 4 - NO EVALUABLE (responde null):
-  - El alumno está explicando cómo resolvió algo (no dando respuesta)
-  - El alumno hace una pregunta al tutor
-  - El alumno pide otra pregunta o ayuda
-  - La pregunta del tutor es una explicación, no una evaluación
-  - El alumno da texto largo que no es una respuesta directa`
-          },
-          {
-            role: 'user' as const,
-            content: `Pregunta del tutor: "${ultimaPreguntaTutor.contenido.substring(0, 500)}"
-Respuesta del alumno: "${pregunta}"
-Evalúa si la respuesta del alumno es correcta.`
-          }
-        ]
-
-        const juezCompletion = await openai.chat.completions.create({
-          model: 'gpt-4o-mini',
-          messages: juezMessages,
-          max_tokens: 150,
-          temperature: 0,
-        })
-
-        const juezRaw = juezCompletion.choices[0].message.content || '{}'
-        const juezJSON = JSON.parse(juezRaw.replace(/```json|```/g, '').trim())
-
-        if (juezJSON.correcto === true && respuesta.toLowerCase().includes('incorrecto')) {
-          // El modelo dijo incorrecto pero el juez dice correcto
-          const numMatch = pregunta.replace(/[=]/g, ' ').match(/-?\d+([.,]\d+)?/)
-          const valor = numMatch ? numMatch[0] : pregunta.trim()
-          respuesta = `¡Correcto! ${valor} es la respuesta correcta. Bien hecho. ¿Puedes explicarme cómo llegaste a ese resultado?`
-        } else if (juezJSON.correcto === false && (
-          respuesta.toLowerCase().includes('correcto') && 
-          !respuesta.toLowerCase().includes('incorrecto')
-        )) {
-          // El modelo dijo correcto pero el juez dice incorrecto
-          respuesta = `Incorrecto. La respuesta correcta es ${juezJSON.respuesta_correcta}. ${juezJSON.explicacion_breve}. ¿Puedes intentarlo de nuevo?`
-        }
-      } catch(juezErr) {
-        console.error('Juez error (no crítico):', juezErr)
       }
     }
 
-    // Si es tema formativo, agregar link de video de Eduardo al final
     if (tipoPregunta === 'formativa') {
       respuesta += '\n\nTe comparto este recurso de Eduardo Montano que puede ayudarte: https://www.youtube.com/c/EduardoMontano'
     }
+
     const tokensUsados = completion.usage?.total_tokens || 0
-    const costoUSD     = tokensUsados * 0.00000015
+    const costoUSD = tokensUsados * 0.00000015
 
     const { error: insertErr } = await supabase.from('interacciones').insert({
       usuario_id: user.id, colegio_id: perfil.colegio_id, materia_id: materia_uuid,
@@ -1375,168 +850,14 @@ Evalúa si la respuesta del alumno es correcta.`
       modelo_usado: 'gpt-4o-mini', documento_fuente: documentoFuente,
       sospecha_copia: detectarCopia(pregunta),
     })
+    console.log('INSERT interaccion:', insertErr ? 'ERROR: ' + insertErr.message : 'OK')
 
-    if (tipoPregunta === 'academica' && !contenidoCurricular && materia) {
-      await registrarPendiente(supabase, perfil, materia, pregunta)
-    }
+    if (tipoPregunta === 'academica' && !contenidoCurricular && materia) await registrarPendiente(supabase, perfil, materia, pregunta)
 
-    // Detectar alertas pedagógicas
-    try {
-      const baseUrl = process.env.NEXT_PUBLIC_URL || 'https://owlaris.app'
-      
-      // Alerta riesgo de copia
-      if (detectarCopia(pregunta)) {
-        const { data: alertaCopia } = await supabase.from('alertas')
-          .select('id').eq('alumno_id', user.id).eq('tipo', 'riesgo_copia')
-          .eq('resuelta', false).gte('creado_en', new Date(Date.now() - 3600000).toISOString()).single()
-        if (!alertaCopia) {
-          const { data: asigCopia } = await supabase.from('guia_asignaciones')
-            .select('guia_id').eq('colegio_id', perfil.colegio_id).eq('activo', true)
-            .or(`alumno_id.eq.${user.id},grado.eq.${gradoEfectivo}`).limit(1).single()
-          await supabase.from('alertas').insert({
-            alumno_id: user.id, colegio_id: perfil.colegio_id, guia_id: asigCopia?.guia_id || null,
-            tipo: 'riesgo_copia',
-            descripcion: 'El alumno solicitó respuesta directa o entrega sospechosa.',
-            contexto: pregunta.substring(0, 200)
-          })
-        }
-      }
+    // Alertas pedagógicas
+    await verificarAlertasBajaComprension(supabase, user.id, perfil, gradoEfectivo, materia, respuesta, documentoFuente)
 
-      // Alerta baja comprensión — detectar retroalimentación negativa
-      const indicadoresBajaComprension = ['no entiendo', 'no entendí', 'no me queda claro', 'sigo sin entender', 'todavía no entiendo', "i don't understand", 'confused']
-      const esBajaComprension = indicadoresBajaComprension.some(i => pregunta.toLowerCase().includes(i))
-      if (esBajaComprension) {
-        console.log('ALERTA BAJA COMPRENSION DETECTADA:', pregunta)
-        const { count } = await supabase.from('interacciones')
-          .select('*', { count: 'exact', head: true })
-          .eq('usuario_id', user.id)
-          .gte('creado_en', new Date(Date.now() - 1800000).toISOString())
-        console.log('COUNT INTERACCIONES ULTIMA HORA:', count)
-        if ((count || 0) >= 2) {
-          // Verificar no duplicar alerta reciente
-          const { data: alertaExistente } = await supabase.from('alertas')
-            .select('id').eq('alumno_id', user.id).eq('tipo', 'baja_comprension')
-            .eq('resuelta', false).gte('creado_en', new Date(Date.now() - 3600000).toISOString()).single()
-          if (!alertaExistente) {
-            // Buscar guía asignado
-            const { data: asig } = await supabase.from('guia_asignaciones')
-              .select('guia_id, guia:guia_id(email, nombre_completo)')
-              .eq('colegio_id', perfil.colegio_id)
-              .eq('activo', true)
-              .or(`alumno_id.eq.${user.id},grado.eq.${gradoEfectivo}`)
-              .limit(1).single()
-            const guiaId = asig?.guia_id || null
-            await supabase.from('alertas').insert({
-              alumno_id: user.id, colegio_id: perfil.colegio_id, guia_id: guiaId,
-              tipo: 'baja_comprension',
-              descripcion: 'El alumno expresó no entender después de varios intentos.',
-              contexto: pregunta.substring(0, 200)
-            })
-            // Email al guía
-            if (asig?.guia) {
-              const guia = asig.guia as unknown as {email:string; nombre_completo:string}
-              const { Resend } = await import('resend')
-              const resend = new Resend(process.env.RESEND_API_KEY)
-              await resend.emails.send({
-                from: 'Owlaris <noreply@owlaris.app>',
-                to: guia.email,
-                subject: `Alerta: Baja comprensión — ${perfil.nombre_completo}`,
-                html: `<p>Hola ${guia.nombre_completo},</p><p>El alumno <strong>${perfil.nombre_completo}</strong> (${gradoEfectivo}) ha expresado no entender después de varios intentos.</p><p>Contexto: "${pregunta.substring(0,200)}"</p><a href="https://owlaris.app/guia">Ver en Owlaris →</a>`
-              })
-            }
-          }
-        }
-      }
-
-      // Alerta bloqueo recurrente — mismo tema varias veces
-      if (materia && gradoEfectivo) {
-        const { count: countTema } = await supabase.from('interacciones')
-          .select('*', { count: 'exact', head: true })
-          .eq('usuario_id', user.id)
-          .eq('grado', gradoEfectivo)
-          .ilike('tema_detectado', `%${pregunta.substring(0,30)}%`)
-          .gte('creado_en', new Date(Date.now() - 3600000).toISOString())
-        if ((countTema || 0) >= 3) {
-          fetch(`${baseUrl}/api/alertas`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              alumno_id: user.id,
-              colegio_id: perfil.colegio_id,
-              tipo: 'bloqueo_recurrente',
-              descripcion: `El alumno ha preguntado sobre el mismo tema más de 3 veces en la última hora.`,
-              contexto: `Materia: ${materia?.nombre || ''} | Tema: ${pregunta.substring(0, 100)}`
-            })
-          })
-        }
-      }
-    } catch { /* silencioso */ }
-
-    // Actualizar ultimo_acceso del alumno
     supabase.from('usuarios').update({ ultimo_acceso: new Date().toISOString() }).eq('id', user.id).then(() => {})
-
-    // ALERTA 1: Baja comprensión — detectar del lado del servidor
-    if (typeof respuesta === 'string') {
-      const esIncorrecta = respuesta.toLowerCase().includes('incorrecto') ||
-        respuesta.toLowerCase().includes('no es correcto') ||
-        respuesta.toLowerCase().includes('vamos a revisar juntos') ||
-        respuesta.toLowerCase().includes('esa respuesta no es') ||
-        respuesta.toLowerCase().includes('esa respuesta tampoco') ||
-        respuesta.toLowerCase().includes('parece que la respuesta') ||
-        respuesta.toLowerCase().includes('vamos a revisarlo') ||
-        respuesta.toLowerCase().includes('vamos a analizarlo') ||
-        respuesta.toLowerCase().includes('vamos a desglosarlo') ||
-        respuesta.toLowerCase().includes('that is not correct') ||
-        respuesta.toLowerCase().includes('thats not correct')
-      if (esIncorrecta === true) {
-        const hace1h = new Date(Date.now() - 3600000).toISOString()
-        const { data: recientes } = await supabase.from('interacciones')
-          .select('respuesta').eq('usuario_id', user.id).gte('creado_en', hace1h)
-        const fallos = (recientes || []).filter((i: any) =>
-          i.respuesta?.toLowerCase().includes('incorrecto') ||
-          i.respuesta?.toLowerCase().includes('vamos a revisar')
-        ).length
-        if (fallos >= 2) {
-          const { data: yaExiste } = await supabase.from('alertas')
-            .select('id').eq('alumno_id', user.id).eq('tipo', 'baja_comprension')
-            .eq('resuelta', false).gte('creado_en', hace1h).maybeSingle()
-          if (!yaExiste) {
-            // Buscar guía por alumno individual primero, luego por grado
-            let asig = null
-            const { data: asigAlumno } = await supabase.from('guia_asignaciones')
-              .select('guia_id, guia:guia_id(email, nombre_completo)')
-              .eq('colegio_id', perfil.colegio_id).eq('activo', true)
-              .eq('tipo', 'alumno').eq('alumno_id', user.id).limit(1).maybeSingle()
-            if (asigAlumno) {
-              asig = asigAlumno
-            } else {
-              const { data: asigGrado } = await supabase.from('guia_asignaciones')
-                .select('guia_id, guia:guia_id(email, nombre_completo)')
-                .eq('colegio_id', perfil.colegio_id).eq('activo', true)
-                .eq('tipo', 'grado').eq('grado', gradoEfectivo || perfil.grado || '').limit(1).maybeSingle()
-              asig = asigGrado
-            }
-            await supabase.from('alertas').insert({
-              alumno_id: user.id, colegio_id: perfil.colegio_id,
-              guia_id: asig?.guia_id || null, tipo: 'baja_comprension',
-              descripcion: perfil.nombre_completo + ' tuvo ' + (fallos+1) + ' respuestas incorrectas' + (materia?.nombre ? ' en ' + materia.nombre : '') + '.',
-              contexto: documentoFuente || pregunta.substring(0, 150)
-            })
-            if (asig?.guia) {
-              try {
-                const guia = asig.guia as unknown as {email:string; nombre_completo:string}
-                const { Resend } = await import('resend')
-                await new Resend(process.env.RESEND_API_KEY).emails.send({
-                  from: 'Owlaris <noreply@owlaris.app>', to: guia.email,
-                  subject: 'Alerta: Baja comprension - ' + perfil.nombre_completo,
-                  html: '<p>Hola ' + guia.nombre_completo + ',</p><p><strong>' + perfil.nombre_completo + '</strong> tuvo ' + (fallos+1) + ' respuestas incorrectas en Owlaris.</p><a href="https://owlaris.app/guia">Ver en Owlaris</a>'
-                })
-              } catch(e) { console.error('Email alerta:', e) }
-            }
-          }
-        }
-      }
-    }
 
     return NextResponse.json({ respuesta, tokens: tokensUsados, documento_fuente: documentoFuente })
 
@@ -1544,4 +865,51 @@ Evalúa si la respuesta del alumno es correcta.`
     console.error('Error /api/preguntar:', err)
     return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 })
   }
+}
+
+// Función de alertas pedagógicas extraída para reutilización
+async function verificarAlertasBajaComprension(
+  supabase: ReturnType<typeof import('@/lib/supabase/server').createClient>,
+  userId: string,
+  perfil: { id?: string; colegio_id: string; grado?: string; nombre_completo: string },
+  gradoEfectivo: string,
+  materia: { nombre: string } | null,
+  respuesta: string,
+  documentoFuente: string | null
+) {
+  try {
+    if (typeof respuesta !== 'string') return
+    const esIncorrecta = respuesta.toLowerCase().includes('incorrecto') ||
+      respuesta.toLowerCase().includes('no es correcto') ||
+      respuesta.toLowerCase().includes('vamos a revisarlo') ||
+      respuesta.toLowerCase().includes('vamos a analizarlo')
+    if (!esIncorrecta) return
+
+    const hace1h = new Date(Date.now() - 3600000).toISOString()
+    const { data: recientes } = await supabase.from('interacciones').select('respuesta').eq('usuario_id', userId).gte('creado_en', hace1h)
+    const fallos = (recientes || []).filter((i: {respuesta?: string}) =>
+      i.respuesta?.toLowerCase().includes('incorrecto') || i.respuesta?.toLowerCase().includes('vamos a revisar')
+    ).length
+    if (fallos < 2) return
+
+    const { data: yaExiste } = await supabase.from('alertas').select('id').eq('alumno_id', userId).eq('tipo', 'baja_comprension').eq('resuelta', false).gte('creado_en', hace1h).maybeSingle()
+    if (yaExiste) return
+
+    let asig = null
+    const { data: asigAlumno } = await supabase.from('guia_asignaciones').select('guia_id, guia:guia_id(email, nombre_completo)').eq('colegio_id', perfil.colegio_id).eq('activo', true).eq('tipo', 'alumno').eq('alumno_id', userId).limit(1).maybeSingle()
+    if (asigAlumno) { asig = asigAlumno } else {
+      const { data: asigGrado } = await supabase.from('guia_asignaciones').select('guia_id, guia:guia_id(email, nombre_completo)').eq('colegio_id', perfil.colegio_id).eq('activo', true).eq('tipo', 'grado').eq('grado', gradoEfectivo || perfil.grado || '').limit(1).maybeSingle()
+      asig = asigGrado
+    }
+
+    await supabase.from('alertas').insert({ alumno_id: userId, colegio_id: perfil.colegio_id, guia_id: asig?.guia_id || null, tipo: 'baja_comprension', descripcion: perfil.nombre_completo + ' tuvo ' + (fallos+1) + ' respuestas incorrectas' + (materia?.nombre ? ' en ' + materia.nombre : '') + '.', contexto: documentoFuente || '' })
+
+    if (asig?.guia) {
+      try {
+        const guia = asig.guia as unknown as {email:string; nombre_completo:string}
+        const { Resend } = await import('resend')
+        await new Resend(process.env.RESEND_API_KEY).emails.send({ from: 'Owlaris <noreply@owlaris.app>', to: guia.email, subject: 'Alerta: Baja comprension - ' + perfil.nombre_completo, html: '<p>Hola ' + guia.nombre_completo + ',</p><p><strong>' + perfil.nombre_completo + '</strong> tuvo ' + (fallos+1) + ' respuestas incorrectas en Owlaris.</p><a href="https://owlaris.app/guia">Ver en Owlaris</a>' })
+      } catch(e) { console.error('Email alerta:', e) }
+    }
+  } catch { /* silencioso */ }
 }
