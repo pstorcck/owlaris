@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { guardHumanisticResponse } from '@/lib/humanisticSafety'
 import {
   extractAndCleanOperation,
   handleMathEvaluation,
@@ -758,6 +759,14 @@ ${contextoContenido}`
       : null
     const opFinalRespuesta = _opExtraida || opInferida
     const opValidaEnRespuesta = isSafeCanonicalOperation(opFinalRespuesta) ? opFinalRespuesta : null
+    const guardiaHumanistica = guardHumanisticResponse(respuesta, {
+      materia: materia?.nombre || materia_id,
+      tipoPregunta,
+      materiaNumerica,
+      hasVerifiedOperation: !!opValidaEnRespuesta,
+      idiomaIngles,
+    })
+    respuesta = guardiaHumanistica.text
 
     const { data: insertedRow, error: insertErr } = await supabase.from('interacciones').insert({
       usuario_id: user.id, colegio_id: perfil.colegio_id, materia_id: materia_uuid,
@@ -768,7 +777,7 @@ ${contextoContenido}`
       operacion_canonica: opValidaEnRespuesta || null,
       op_estado: opValidaEnRespuesta ? 'pendiente' : null,
       estado_evaluacion: evaluacionProtocolo?.estado || null,
-      guard_activado: evaluacionProtocolo?.guardActivado || false,
+      guard_activado: evaluacionProtocolo?.guardActivado || guardiaHumanistica.guardActivado || false,
     }).select('id').single()
     const insertedId = insertedRow?.id || null
     if (insertErr) console.error('INSERT interaccion ERROR:', insertErr.message)
