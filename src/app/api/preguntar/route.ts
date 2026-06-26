@@ -442,11 +442,16 @@ export async function POST(req: NextRequest) {
     const grado_override = body.grado_override || body.grado_detectado || ''
     if (!pregunta?.trim()) return NextResponse.json({ error: 'Pregunta vacía' }, { status: 400 })
 
-    // CONTENT SAFETY — protección para menores
-    const idiomaInglesBody: boolean = body.idioma_ingles || false
-    const safetyCheck = checkContentSafety(pregunta, idiomaInglesBody)
-    if (safetyCheck.bloqueado) {
-      return NextResponse.json({ respuesta: safetyCheck.respuesta, source: 'content_safety' })
+    // CONTENT SAFETY - proteccion deterministica para menores
+    const safety = checkContentSafety(pregunta, idiomaIngles)
+    if (safety.bloqueado) {
+      return NextResponse.json({
+        respuesta: safety.respuesta,
+        source: 'content_safety',
+        nuevo_estado: 'activo',
+        tokens: 0,
+        safety_tipo: safety.tipo,
+      })
     }
 
     const { data: perfil } = await supabase.from('usuarios').select('*, colegio:colegios(*)').eq('id', user.id).single()
