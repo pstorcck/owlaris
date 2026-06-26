@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { checkContentSafety } from '@/lib/contentSafety'
 import { guardHumanisticResponse } from '@/lib/humanisticSafety'
 import {
   extractAndCleanOperation,
@@ -440,6 +441,13 @@ export async function POST(req: NextRequest) {
 
     const grado_override = body.grado_override || body.grado_detectado || ''
     if (!pregunta?.trim()) return NextResponse.json({ error: 'Pregunta vacía' }, { status: 400 })
+
+    // CONTENT SAFETY — protección para menores
+    const idiomaInglesBody: boolean = body.idioma_ingles || false
+    const safetyCheck = checkContentSafety(pregunta, idiomaInglesBody)
+    if (safetyCheck.bloqueado) {
+      return NextResponse.json({ respuesta: safetyCheck.respuesta, source: 'content_safety' })
+    }
 
     const { data: perfil } = await supabase.from('usuarios').select('*, colegio:colegios(*)').eq('id', user.id).single()
     if (!perfil) return NextResponse.json({ error: 'Perfil no encontrado' }, { status: 404 })
