@@ -21,7 +21,7 @@ create table if not exists usuarios (
   colegio_id       uuid references colegios(id),
   nombre_completo  text not null,
   email            text not null,
-  rol              text not null check (rol in ('alumno','maestro','padre','admin','superadmin')),
+  rol              text not null check (rol in ('alumno','maestro','padre','director','admin','superadmin')),
   grado            text,
   activo           boolean default true,
   ultimo_acceso    timestamptz,
@@ -30,7 +30,7 @@ create table if not exists usuarios (
 
 alter table usuarios drop constraint if exists usuarios_rol_check;
 alter table usuarios add constraint usuarios_rol_check
-  check (rol in ('alumno','maestro','padre','admin','superadmin'));
+  check (rol in ('alumno','maestro','padre','director','admin','superadmin'));
 
 -- 3. MATERIAS
 create table if not exists materias (
@@ -219,7 +219,7 @@ create policy "alertas_ver_staff_colegio" on alertas
     exists (
       select 1 from usuarios u
       where u.id = auth.uid()
-        and u.rol in ('maestro','admin','superadmin')
+        and u.rol in ('maestro','director','admin','superadmin')
         and (u.rol = 'superadmin' or u.colegio_id = alertas.colegio_id)
     )
   );
@@ -232,7 +232,7 @@ create policy "alertas_actualizar_staff_colegio" on alertas
     exists (
       select 1 from usuarios u
       where u.id = auth.uid()
-        and u.rol in ('maestro','admin','superadmin')
+        and u.rol in ('maestro','director','admin','superadmin')
         and (u.rol = 'superadmin' or u.colegio_id = alertas.colegio_id)
     )
   );

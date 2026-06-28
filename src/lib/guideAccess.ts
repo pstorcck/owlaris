@@ -100,7 +100,7 @@ export async function canStaffAccessStudent(
   if (!alumno || alumno.rol !== 'alumno') return false
   if (perfil.rol === 'superadmin') return true
   if (perfil.rol === 'alumno') return viewerId === alumnoId
-  if (perfil.rol === 'admin') return alumno.colegio_id === perfil.colegio_id
+  if (perfil.rol === 'admin' || perfil.rol === 'director') return alumno.colegio_id === perfil.colegio_id
   if (perfil.rol !== 'maestro' || alumno.colegio_id !== perfil.colegio_id) return false
 
   const assignedIds = await getAssignedStudentIds(admin, viewerId)

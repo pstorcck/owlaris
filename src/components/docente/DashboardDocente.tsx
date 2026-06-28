@@ -5,14 +5,14 @@ import AsistenteDocente from '@/components/docente/AsistenteDocente'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 
-interface Props { perfil: { nombre_completo: string; colegio: { nombre: string } }; esGuia?: boolean }
+interface Props { perfil: { nombre_completo: string; colegio: { nombre: string } }; esGuia?: boolean; esDirector?: boolean }
 interface Alumno {
   id: string; nombre_completo: string; email: string; grado: string | null
   activo: boolean; sesiones: number; ultimaSesion: string | null
   temasUnicos: number; sospechasCopia: number; colegio_nombre?: string
 }
 interface Stats {
-  resumen: { totalAlumnos: number; activosHoy: number; activosSemana: number; totalInteracciones: number }
+  resumen: { totalAlumnos: number; activosHoy: number; activosSemana: number; totalInteracciones: number; alertasActivas?: number }
   topTemas: { tema: string; count: number }[]
   topMaterias: { materia: string; count: number }[]
   actividadSemana: { fecha: string; count: number }[]
@@ -37,7 +37,7 @@ function getSedes(alumnos: Alumno[]): string[] {
   return ['Todas', ...Array.from(sedes).sort()]
 }
 
-export default function DashboardDocente({ perfil, esGuia }: Props) {
+export default function DashboardDocente({ perfil, esGuia, esDirector }: Props) {
   const [stats, setStats]         = useState<Stats | null>(null)
   const [cargando, setCargando]   = useState(true)
   const [buscar, setBuscar]       = useState('')
@@ -78,13 +78,9 @@ export default function DashboardDocente({ perfil, esGuia }: Props) {
     setAlumnoReporte(alumno)
     setTab('reportes')
     setCargandoReporte(true)
-    const { data } = await supabase
-      .from('interacciones')
-      .select('pregunta, respuesta, creado_en, documento_fuente')
-      .eq('usuario_id', alumno.id)
-      .order('creado_en', { ascending: false })
-      .limit(20)
-    setSesionesAlumno(data || [])
+    const res = await fetch(`/api/reporte-alumno?id=${encodeURIComponent(alumno.id)}`)
+    const data = await res.json()
+    setSesionesAlumno((data.interacciones || []).slice(0, 20))
     setCargandoReporte(false)
   }
 
@@ -194,15 +190,15 @@ export default function DashboardDocente({ perfil, esGuia }: Props) {
         <aside className="sidebar">
           <div className="logo">
             <img src="/buho.png" alt="Owlaris"/>
-            <div><div className="logo-text">Owlaris</div><div className="logo-sub">{esGuia ? 'Guía' : 'Docente'}</div></div>
+            <div><div className="logo-text">Owlaris</div><div className="logo-sub">{esDirector ? 'Director' : esGuia ? 'Guía' : 'Docente'}</div></div>
           </div>
           <button className={`nav-item ${tab==='general'?'active':''}`} onClick={()=>setTab('general')}>📊 General</button>
-          <button className={`nav-item ${tab==='alumnos'?'active':''}`} onClick={()=>setTab('alumnos')}>👥 Mis alumnos</button>
+          <button className={`nav-item ${tab==='alumnos'?'active':''}`} onClick={()=>setTab('alumnos')}>👥 {esDirector ? 'Alumnos del colegio' : 'Mis alumnos'}</button>
           <button className={`nav-item ${tab==='temas'?'active':''}`} onClick={()=>setTab('temas')}>📚 Temas populares</button>
 
           <div style={{marginTop:'auto',borderTop:'1px solid rgba(109,40,217,.06)',paddingTop:'16px',display:'flex',flexDirection:'column',gap:'4px'}}>
             <button className="nav-item" onClick={()=>setChatAbierto(true)}>💬 Hablar con Owlaris</button>
-            {!esGuia && <a href="/guia" className="nav-item" style={{display:'block',textDecoration:'none',color:'inherit'}}>🎓 Panel del Guía</a>}
+            {!esGuia && !esDirector && <a href="/guia" className="nav-item" style={{display:'block',textDecoration:'none',color:'inherit'}}>🎓 Panel del Guía</a>}
             <button className="nav-item" onClick={cerrarSesion}>↩ Cerrar sesión</button>
           </div>
         </aside>
@@ -210,7 +206,7 @@ export default function DashboardDocente({ perfil, esGuia }: Props) {
         <main className="main">
           <div className="header">
             <div>
-              <h1>{esGuia ? 'Panel del Guía' : 'Dashboard'}</h1>
+              <h1>{esDirector ? 'Panel del Director' : esGuia ? 'Panel del Guía' : 'Dashboard'}</h1>
               <p>{perfil.nombre_completo.split(' ')[0]} · {new Date().toLocaleDateString('es-GT',{weekday:'long',day:'numeric',month:'long'})}</p>
             </div>
             <div style={{display:'flex',alignItems:'center',gap:'12px'}}>
@@ -268,6 +264,14 @@ export default function DashboardDocente({ perfil, esGuia }: Props) {
                   <div className="card-label">Promedio sesiones</div>
                   <div className="card-value" style={{color:'#EA580C'}}>{stats?.promedioSesiones?.toFixed(1)}</div>
                   <div className="card-sub">por alumno / 30 días</div>
+                </div>
+                <div className="card">
+                  <div className="card-icon" style={{background:(stats?.resumen.alertasActivas || 0) > 0 ? 'rgba(220,38,38,.08)' : 'rgba(34,197,94,.08)'}}>
+                    <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke={(stats?.resumen.alertasActivas || 0) > 0 ? '#DC2626' : '#16A34A'} strokeWidth="2"><path d="M10.3 3.9L1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                  </div>
+                  <div className="card-label">Alertas activas</div>
+                  <div className="card-value" style={{color:(stats?.resumen.alertasActivas || 0) > 0 ? '#DC2626' : '#16A34A'}}>{stats?.resumen.alertasActivas || 0}</div>
+                  <div className="card-sub">pendientes de seguimiento</div>
                 </div>
               </div>
               <div className="grid2">

@@ -13,7 +13,7 @@ export async function GET() {
 
     const { data: perfil } = await supabase
       .from('usuarios').select('colegio_id, rol').eq('id', user.id).single()
-    if (!perfil || !['maestro','admin','superadmin'].includes(perfil.rol)) {
+    if (!perfil || !['maestro','director','admin','superadmin'].includes(perfil.rol)) {
       return NextResponse.json({ error: 'Sin acceso' }, { status: 403 })
     }
 
@@ -24,14 +24,16 @@ export async function GET() {
     const inicioHoy = new Date(hoy.toISOString().split('T')[0] + 'T00:00:00').toISOString()
 
     // Verificar asignaciones de guía
-    const { data: asignaciones } = await admin
-      .from('guia_asignaciones').select('tipo, grado, alumno_id, colegio_id')
-      .eq('guia_id', user.id).eq('activo', true)
-
     let alumnosIdsAsignados: string[] | null = null
-    if (asignaciones && asignaciones.length > 0) {
-      const ids = await getAssignedStudentIds(admin, user.id)
-      alumnosIdsAsignados = ids
+    if (perfil.rol === 'maestro') {
+      const { data: asignaciones } = await admin
+        .from('guia_asignaciones').select('tipo, grado, alumno_id, colegio_id')
+        .eq('guia_id', user.id).eq('activo', true)
+
+      if (asignaciones && asignaciones.length > 0) {
+        const ids = await getAssignedStudentIds(admin, user.id)
+        alumnosIdsAsignados = ids
+      }
     }
 
     const { data: alumnos } = await admin
@@ -63,15 +65,22 @@ export async function GET() {
       .from('interacciones').select('usuario_id', { count: 'exact', head: true })
       .eq('colegio_id', colegioId).gte('creado_en', hace7dias)
 
+    let alertasActivasQuery = admin
+      .from('alertas').select('id', { count: 'exact', head: true })
+      .eq('colegio_id', colegioId)
+      .eq('resuelta', false)
+
     if (alumnosIdsAsignados) {
       const ids = alumnosIdsAsignados.length > 0 ? alumnosIdsAsignados : ['00000000-0000-0000-0000-000000000000']
       activosHoyQuery = activosHoyQuery.in('usuario_id', ids)
       activosSemanaQuery = activosSemanaQuery.in('usuario_id', ids)
+      alertasActivasQuery = alertasActivasQuery.in('alumno_id', ids)
     }
 
-    const [{ count: activosHoy }, { count: activosSemana }] = await Promise.all([
+    const [{ count: activosHoy }, { count: activosSemana }, { count: alertasActivas }] = await Promise.all([
       activosHoyQuery,
       activosSemanaQuery,
+      alertasActivasQuery,
     ])
 
     // Top temas
@@ -142,7 +151,7 @@ export async function GET() {
       ? alumnosConStats.reduce((s,a)=>s+a.sesiones,0)/alumnosConStats.length : 0
 
     return NextResponse.json({
-      resumen: { totalAlumnos: alumnosFiltrados.length||0, activosHoy: activosHoy||0, activosSemana: activosSemana||0, totalInteracciones: interacciones?.length||0 },
+      resumen: { totalAlumnos: alumnosFiltrados.length||0, activosHoy: activosHoy||0, activosSemana: activosSemana||0, totalInteracciones: interacciones?.length||0, alertasActivas: alertasActivas||0 },
       topTemas, topMaterias, actividadSemana, alumnos: alumnosConStats,
       topAlumnos, sinActividad, promedioSesiones,
     })

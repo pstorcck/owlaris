@@ -8,7 +8,7 @@ const DOMINIOS_PERMITIDOS: Record<string, { colegio_slug: string; nombre: string
   'escolaris.edu.gt':      { colegio_slug: 'escolaris',       nombre: 'Colegio Escolaris' },
 }
 
-const ROLES_ADMIN_PERMITIDOS = ['alumno', 'maestro', 'padre', 'admin', 'superadmin']
+const ROLES_ADMIN_PERMITIDOS = ['alumno', 'maestro', 'padre', 'director', 'admin', 'superadmin']
 
 function generarPassword(): string {
   const chars      = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789'

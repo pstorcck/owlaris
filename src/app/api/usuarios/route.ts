@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient, createClient } from '@/lib/supabase/server'
 import { canAccessColegio, requireRoles } from '@/lib/auth'
 
-const ROLES_PERMITIDOS = ['alumno', 'maestro', 'padre', 'admin', 'superadmin']
+const ROLES_PERMITIDOS = ['alumno', 'maestro', 'padre', 'director', 'admin', 'superadmin']
 
 // GET — listar usuarios con filtros
 export async function GET(req: NextRequest) {

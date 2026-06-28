@@ -11,7 +11,7 @@ const GRADOS = [
 
 const ROL_COLOR: Record<string,string> = {
   superadmin: '#DC2626', admin: '#D97706', maestro: '#2563EB',
-  alumno: '#7C3AED', padre: '#0D9488', guia: '#059669'
+  director: '#0F766E', alumno: '#7C3AED', padre: '#0D9488', guia: '#059669'
 }
 
 interface Usuario {
@@ -304,6 +304,7 @@ export default function UsuariosPage() {
                 <option value="">Todos los roles</option>
                 <option value="alumno">Alumnos</option>
                 <option value="maestro">Maestros</option>
+                <option value="director">Directores</option>
                 <option value="admin">Admins</option>
                 <option value="padre">Padres</option>
               </select>
@@ -437,6 +438,7 @@ export default function UsuariosPage() {
                 style={{ width: '100%', padding: '9px 12px', border: '1px solid #E2E8F0', borderRadius: '8px', fontSize: '13px' }}>
                 <option value="alumno">Alumno</option>
                 <option value="maestro">Maestro / Guía</option>
+                <option value="director">Director</option>
                 <option value="padre">Padre de familia</option>
                 <option value="admin">Admin</option>
               </select>
@@ -479,6 +481,7 @@ export default function UsuariosPage() {
                 style={{ width: '100%', padding: '9px 12px', border: '1px solid #E2E8F0', borderRadius: '8px', fontSize: '13px' }}>
                 <option value="alumno">Alumno</option>
                 <option value="maestro">Maestro / Guía</option>
+                <option value="director">Director</option>
                 <option value="padre">Padre de familia</option>
                 <option value="admin">Admin</option>
                 <option value="superadmin">Superadmin</option>

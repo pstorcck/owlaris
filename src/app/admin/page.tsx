@@ -34,6 +34,7 @@ export default async function AdminPage() {
   const menus = [
     { href: '/admin/usuarios', icon: '👥', titulo: 'Usuarios y Guías', desc: 'Crear, importar, asignar guías' },
     { href: '/admin/configuracion', icon: '⚙️', titulo: 'Configuración', desc: 'Límites, prompt, mantenimiento' },
+    { href: '/director', icon: '🏫', titulo: 'Panel del Director', desc: 'Vista completa del colegio' },
     { href: '/guia', icon: '🎓', titulo: 'Panel del Guía', desc: 'Alertas y seguimiento de alumnos' },
   ]
 
@@ -52,6 +53,7 @@ export default async function AdminPage() {
           {[
             { href: '/admin', label: '🏠 Inicio', active: true },
             { href: '/admin/usuarios', label: '👥 Usuarios y Guías' },
+            { href: '/director', label: '🏫 Panel Director' },
             { href: '/guia', label: '🎓 Panel del Guía' },
             { href: '/docente', label: '📊 Dashboard Docente' },
           ].map(item => (

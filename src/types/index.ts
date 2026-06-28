@@ -2,7 +2,7 @@
 // OWLARIS - Tipos principales
 // ================================
 
-export type Rol = 'alumno' | 'maestro' | 'admin' | 'superadmin'
+export type Rol = 'alumno' | 'maestro' | 'padre' | 'director' | 'admin' | 'superadmin'
 
 export interface Colegio {
   id: string

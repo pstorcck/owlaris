@@ -11,7 +11,7 @@ export async function GET(req: NextRequest) {
   if (!user) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
 
   const { data: perfil } = await supabase.from('usuarios').select('rol, colegio_id').eq('id', user.id).single()
-  if (!perfil || !['maestro', 'admin', 'superadmin'].includes(perfil.rol)) {
+  if (!perfil || !['maestro', 'director', 'admin', 'superadmin'].includes(perfil.rol)) {
     return NextResponse.json({ error: 'Sin permiso' }, { status: 403 })
   }
 
@@ -24,7 +24,7 @@ export async function GET(req: NextRequest) {
 
   if (perfil.rol === 'superadmin') {
     // superadmin ve todas
-  } else if (perfil.rol === 'admin') {
+  } else if (perfil.rol === 'admin' || perfil.rol === 'director') {
     query = query.eq('colegio_id', perfil.colegio_id)
   } else {
     const assignedIds = await getAssignedStudentIds(admin, user.id)
@@ -38,7 +38,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const auth = await requireRoles(['maestro', 'admin', 'superadmin'])
+  const auth = await requireRoles(['maestro', 'director', 'admin', 'superadmin'])
   if (!auth.ok) return auth.response
 
   const admin = createAdminClient()
@@ -154,7 +154,7 @@ export async function POST(req: NextRequest) {
 }
 
 export async function PATCH(req: NextRequest) {
-  const auth = await requireRoles(['maestro', 'admin', 'superadmin'])
+  const auth = await requireRoles(['maestro', 'director', 'admin', 'superadmin'])
   if (!auth.ok) return auth.response
 
   const admin = createAdminClient()
