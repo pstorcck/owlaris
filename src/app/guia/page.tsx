@@ -1,9 +1,42 @@
-import { createClient } from '@/lib/supabase/server'
+import { createAdminClient, createClient } from '@/lib/supabase/server'
 import BurbujaGuia from '@/components/guia/BurbujaGuia'
 import { redirect } from 'next/navigation'
+import { canStaffAccessStudent, getAssignedStudents } from '@/lib/guideAccess'
+
+async function resolverAlertaGuia(alertaId: string) {
+  'use server'
+
+  const supabase = createClient()
+  const admin = createAdminClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return
+
+  const { data: perfil } = await supabase
+    .from('usuarios')
+    .select('rol, colegio_id')
+    .eq('id', user.id)
+    .single()
+  if (!perfil || !['maestro', 'admin', 'superadmin'].includes(perfil.rol)) return
+
+  const { data: alerta } = await admin
+    .from('alertas')
+    .select('id, alumno_id')
+    .eq('id', alertaId)
+    .single()
+  if (!alerta?.alumno_id) return
+
+  const puedeResolver = await canStaffAccessStudent(admin, perfil, user.id, alerta.alumno_id)
+  if (!puedeResolver) return
+
+  await admin
+    .from('alertas')
+    .update({ resuelta: true, resuelta_en: new Date().toISOString() })
+    .eq('id', alerta.id)
+}
 
 export default async function GuiaPage() {
   const supabase = createClient()
+  const admin = createAdminClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
@@ -14,54 +47,24 @@ export default async function GuiaPage() {
 
   const colegioNombre = (perfil.colegio as {nombre:string})?.nombre || ''
 
-  // Asignaciones del guía
-  const { data: asignaciones } = await supabase
-    .from('guia_asignaciones')
-    .select('id, tipo, grado, alumno_id, colegio_id, alumno:alumno_id(id, nombre_completo, grado, ultimo_acceso, email)')
-    .eq('guia_id', user.id)
-    .eq('activo', true)
-
-  // Construir lista de alumnos respetando colegio
-  const alumnosIds = new Set<string>()
-  const alumnosList: {id:string; nombre_completo:string; grado:string; ultimo_acceso:string|null; email:string}[] = []
-
-  for (const a of asignaciones || []) {
-    if (a.tipo === 'alumno' && a.alumno) {
-      const al = a.alumno as unknown as {id:string; nombre_completo:string; grado:string; ultimo_acceso:string|null; email:string}
-      if (!alumnosIds.has(al.id)) { alumnosIds.add(al.id); alumnosList.push(al) }
-    } else if (a.tipo === 'grado' && a.grado && a.colegio_id) {
-      const { data: alumnosGrado } = await supabase
-        .from('usuarios')
-        .select('id, nombre_completo, grado, ultimo_acceso, email')
-        .eq('colegio_id', a.colegio_id)
-        .eq('grado', a.grado)
-        .eq('rol', 'alumno')
-        .eq('activo', true)
-        .order('nombre_completo')
-      for (const al of alumnosGrado || []) {
-        if (!alumnosIds.has(al.id)) {
-          alumnosIds.add(al.id)
-          alumnosList.push(al as {id:string; nombre_completo:string; grado:string; ultimo_acceso:string|null; email:string})
-        }
-      }
-    }
-  }
+  const alumnosList = await getAssignedStudents(admin, user.id)
+  const alumnosIds = alumnosList.map(a => a.id)
 
   // Alertas de sus alumnos
-  const { data: alertas } = alumnosList.length > 0 ? await supabase
+  const { data: alertas } = alumnosIds.length > 0 ? await admin
     .from('alertas')
     .select('*, alumno:alumno_id(nombre_completo, grado)')
-    .in('alumno_id', alumnosList.map(a => a.id))
+    .in('alumno_id', alumnosIds)
     .eq('resuelta', false)
     .order('creado_en', { ascending: false })
     .limit(20) : { data: [] }
 
   // Interacciones por alumno
   const interaccionesPorAlumno: Record<string, number> = {}
-  if (alumnosList.length > 0) {
-    const { data: ints } = await supabase
+  if (alumnosIds.length > 0) {
+    const { data: ints } = await admin
       .from('interacciones').select('usuario_id')
-      .in('usuario_id', alumnosList.map(a => a.id))
+      .in('usuario_id', alumnosIds)
     for (const i of ints || []) {
       interaccionesPorAlumno[i.usuario_id] = (interaccionesPorAlumno[i.usuario_id] || 0) + 1
     }
@@ -69,9 +72,9 @@ export default async function GuiaPage() {
 
   // Actividad última semana
   const hace7dias = new Date(Date.now() - 7*24*3600000).toISOString()
-  const { data: actividadSemana } = alumnosList.length > 0 ? await supabase
+  const { data: actividadSemana } = alumnosIds.length > 0 ? await admin
     .from('interacciones').select('usuario_id, creado_en')
-    .in('usuario_id', alumnosList.map(a => a.id))
+    .in('usuario_id', alumnosIds)
     .gte('creado_en', hace7dias) : { data: [] }
 
   const alumnosActivosHoy = alumnosList.filter(a => {
@@ -196,11 +199,13 @@ export default async function GuiaPage() {
                   <p style={{fontSize:'24px',margin:'0 0 8px'}}>✅</p>
                   <p style={{fontSize:'13px',margin:0}}>Sin alertas activas</p>
                 </div>
-              ) : (alertas||[]).map((alerta:any) => (
-                <div key={alerta.id} style={{background:tipoBg[alerta.tipo]||'#F8FAFC',borderRadius:'12px',padding:'14px 16px',marginBottom:'10px',border:`1px solid ${tipoColor[alerta.tipo]}20`}}>
+              ) : (alertas||[]).map((alerta:any) => {
+                const alertColor = tipoColor[alerta.tipo] || '#64748B'
+                return (
+                <div key={alerta.id} style={{background:tipoBg[alerta.tipo]||'#F8FAFC',borderRadius:'12px',padding:'14px 16px',marginBottom:'10px',border:`1px solid ${alertColor}20`}}>
                   <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',gap:'8px'}}>
                     <div style={{flex:1}}>
-                      <span style={{background:`${tipoColor[alerta.tipo]}18`,color:tipoColor[alerta.tipo],borderRadius:'6px',padding:'2px 8px',fontSize:'10px',fontWeight:700,display:'inline-block',marginBottom:'6px'}}>
+                      <span style={{background:`${alertColor}18`,color:alertColor,borderRadius:'6px',padding:'2px 8px',fontSize:'10px',fontWeight:700,display:'inline-block',marginBottom:'6px'}}>
                         {tipoLabel[alerta.tipo] || 'Alerta'}
                       </span>
                       <p style={{fontWeight:600,color:'#0F1C2E',margin:'0 0 3px',fontSize:'13px'}}>
@@ -210,18 +215,14 @@ export default async function GuiaPage() {
                       {alerta.contexto && <p style={{color:'#94A3B8',fontSize:'11px',margin:0,fontStyle:'italic'}}>Tema: {alerta.contexto}</p>}
                       <p style={{color:'#94A3B8',fontSize:'11px',margin:0}}>{new Date(alerta.creado_en).toLocaleString('es-GT')}</p>
                     </div>
-                    <form action={async () => {
-                      'use server'
-                      const { createClient: cc } = await import('@/lib/supabase/server')
-                      await cc().from('alertas').update({ resuelta: true, resuelta_en: new Date().toISOString() }).eq('id', alerta.id)
-                    }}>
+                    <form action={resolverAlertaGuia.bind(null, alerta.id)}>
                       <button type="submit" style={{background:'#059669',color:'white',border:'none',borderRadius:'8px',padding:'6px 12px',fontSize:'11px',fontWeight:600,cursor:'pointer',whiteSpace:'nowrap',flexShrink:0}}>
                         ✓ Resuelta
                       </button>
                     </form>
                   </div>
                 </div>
-              ))}
+              )})}
             </div>
           </div>
 

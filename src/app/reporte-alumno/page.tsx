@@ -1,10 +1,12 @@
-import { createClient } from '@/lib/supabase/server'
+import { createAdminClient, createClient } from '@/lib/supabase/server'
+import { canStaffAccessStudent } from '@/lib/guideAccess'
 import { redirect } from 'next/navigation'
 
 export const dynamic = 'force-dynamic'
 
 export default async function ReporteAlumnoPage({ searchParams }: { searchParams: { id?: string } }) {
   const supabase = createClient()
+  const admin = createAdminClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
@@ -15,17 +17,15 @@ export default async function ReporteAlumnoPage({ searchParams }: { searchParams
     .from('usuarios').select('rol, colegio_id').eq('id', user.id).single()
   if (!perfil) redirect('/login')
 
-  const { data: alumno } = await supabase
+  const { data: alumno } = await admin
     .from('usuarios').select('*, colegio:colegios(nombre)').eq('id', alumnoId).single()
   if (!alumno) redirect('/guia')
 
-  const puedeVer = perfil.rol === 'superadmin' ||
-    (perfil.rol === 'alumno' && user.id === alumnoId) ||
-    (['maestro', 'admin'].includes(perfil.rol) && perfil.colegio_id === alumno.colegio_id)
+  const puedeVer = await canStaffAccessStudent(admin, perfil, user.id, alumnoId)
 
   if (!puedeVer) redirect('/guia')
 
-  const { data: interacciones } = await supabase
+  const { data: interacciones } = await admin
     .from('interacciones').select('*')
     .eq('usuario_id', alumnoId)
     .order('creado_en', { ascending: false })

@@ -1,11 +1,13 @@
 import { NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { createAdminClient, createClient } from '@/lib/supabase/server'
+import { getAssignedStudentIds } from '@/lib/guideAccess'
 
 export const dynamic = 'force-dynamic'
 
 export async function GET() {
   try {
     const supabase = createClient()
+    const admin = createAdminClient()
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
 
@@ -22,26 +24,17 @@ export async function GET() {
     const inicioHoy = new Date(hoy.toISOString().split('T')[0] + 'T00:00:00').toISOString()
 
     // Verificar asignaciones de guía
-    const { data: asignaciones } = await supabase
+    const { data: asignaciones } = await admin
       .from('guia_asignaciones').select('tipo, grado, alumno_id, colegio_id')
       .eq('guia_id', user.id).eq('activo', true)
 
     let alumnosIdsAsignados: string[] | null = null
     if (asignaciones && asignaciones.length > 0) {
-      const ids = new Set<string>()
-      for (const a of asignaciones) {
-        if (a.tipo === 'alumno' && a.alumno_id) {
-          ids.add(a.alumno_id)
-        } else if (a.tipo === 'grado' && a.grado && a.colegio_id) {
-          const { data: ag } = await supabase.from('usuarios').select('id')
-            .eq('colegio_id', a.colegio_id).eq('grado', a.grado).eq('rol', 'alumno').eq('activo', true)
-          for (const al of ag || []) ids.add(al.id)
-        }
-      }
-      if (ids.size > 0) alumnosIdsAsignados = Array.from(ids)
+      const ids = await getAssignedStudentIds(admin, user.id)
+      alumnosIdsAsignados = ids
     }
 
-    const { data: alumnos } = await supabase
+    const { data: alumnos } = await admin
       .from('usuarios')
       .select('id, nombre_completo, email, grado, activo, ultimo_acceso, colegio:colegios(nombre)')
       .eq('colegio_id', colegioId).eq('rol', 'alumno').order('nombre_completo')
@@ -50,18 +43,36 @@ export async function GET() {
       ? (alumnos || []).filter(a => alumnosIdsAsignados!.includes(a.id))
       : (alumnos || [])
 
-    const { data: interacciones } = await supabase
+    let interaccionesQuery = admin
       .from('interacciones')
       .select('usuario_id, grado, tema_detectado, materia_id, tokens_usados, costo_usd, creado_en, sospecha_copia, documento_fuente')
       .eq('colegio_id', colegioId).gte('creado_en', hace30dias)
 
-    const { count: activosHoy } = await supabase
+    if (alumnosIdsAsignados) {
+      if (alumnosIdsAsignados.length === 0) interaccionesQuery = interaccionesQuery.in('usuario_id', ['00000000-0000-0000-0000-000000000000'])
+      else interaccionesQuery = interaccionesQuery.in('usuario_id', alumnosIdsAsignados)
+    }
+
+    const { data: interacciones } = await interaccionesQuery
+
+    let activosHoyQuery = admin
       .from('interacciones').select('usuario_id', { count: 'exact', head: true })
       .eq('colegio_id', colegioId).gte('creado_en', inicioHoy)
 
-    const { count: activosSemana } = await supabase
+    let activosSemanaQuery = admin
       .from('interacciones').select('usuario_id', { count: 'exact', head: true })
       .eq('colegio_id', colegioId).gte('creado_en', hace7dias)
+
+    if (alumnosIdsAsignados) {
+      const ids = alumnosIdsAsignados.length > 0 ? alumnosIdsAsignados : ['00000000-0000-0000-0000-000000000000']
+      activosHoyQuery = activosHoyQuery.in('usuario_id', ids)
+      activosSemanaQuery = activosSemanaQuery.in('usuario_id', ids)
+    }
+
+    const [{ count: activosHoy }, { count: activosSemana }] = await Promise.all([
+      activosHoyQuery,
+      activosSemanaQuery,
+    ])
 
     // Top temas
     const temasCount: Record<string, number> = {}
@@ -131,7 +142,7 @@ export async function GET() {
       ? alumnosConStats.reduce((s,a)=>s+a.sesiones,0)/alumnosConStats.length : 0
 
     return NextResponse.json({
-      resumen: { totalAlumnos: alumnos?.length||0, activosHoy: activosHoy||0, activosSemana: activosSemana||0, totalInteracciones: interacciones?.length||0 },
+      resumen: { totalAlumnos: alumnosFiltrados.length||0, activosHoy: activosHoy||0, activosSemana: activosSemana||0, totalInteracciones: interacciones?.length||0 },
       topTemas, topMaterias, actividadSemana, alumnos: alumnosConStats,
       topAlumnos, sinActividad, promedioSesiones,
     })
