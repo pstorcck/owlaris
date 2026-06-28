@@ -105,7 +105,8 @@ export async function POST(req: NextRequest) {
     const tipoLabel: Record<string,string> = {
       baja_comprension: '⚠️ Baja comprensión',
       bloqueo_recurrente: '🔄 Bloqueo recurrente',
-      riesgo_copia: '🚨 Riesgo de copia'
+      riesgo_copia: '🚨 Riesgo de copia',
+      seguridad_contenido: '🚨 Seguridad del estudiante'
     }
     await resend.emails.send({
       from: 'Owlaris <noreply@owlaris.app>',

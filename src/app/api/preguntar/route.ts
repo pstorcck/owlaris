@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { checkContentSafety } from '@/lib/contentSafety'
+import { checkContentSafety, type ContentSafetyResult } from '@/lib/contentSafety'
 import { guardHumanisticResponse } from '@/lib/humanisticSafety'
 import {
   extractAndCleanOperation,
@@ -425,6 +425,97 @@ async function registrarPendiente(supabase: ReturnType<typeof import('@/lib/supa
   }
 }
 
+function respuestaSinFuenteSuficiente(idiomaIngles: boolean) {
+  return idiomaIngles
+    ? 'With the content available for this lesson, I do not have enough information to answer that safely. We can continue with a topic that is covered in your lesson, or you can ask your teacher to add this material.'
+    : 'Con el contenido disponible para esta lección, no tengo suficiente información para responder eso con seguridad. Podemos continuar con un tema que sí esté cubierto en tu lección, o puedes pedirle a tu maestro que agregue este material.'
+}
+
+async function registrarAlertaContenido(
+  supabase: ReturnType<typeof import('@/lib/supabase/server').createClient>,
+  userId: string,
+  perfil: { colegio_id: string; grado?: string | null; nombre_completo?: string | null },
+  safety: ContentSafetyResult,
+  pregunta: string,
+  materiaSeleccionada: string,
+  gradoEfectivo: string
+) {
+  try {
+    if (!safety.bloqueado || !safety.debeAlertar) return
+
+    const hace1h = new Date(Date.now() - 3600000).toISOString()
+    const { data: existente } = await supabase
+      .from('alertas')
+      .select('id')
+      .eq('alumno_id', userId)
+      .eq('tipo', 'seguridad_contenido')
+      .eq('resuelta', false)
+      .gte('creado_en', hace1h)
+      .maybeSingle()
+    if (existente) return
+
+    let asig = null
+    const { data: asigAlumno } = await supabase
+      .from('guia_asignaciones')
+      .select('guia_id, guia:guia_id(email, nombre_completo)')
+      .eq('colegio_id', perfil.colegio_id)
+      .eq('activo', true)
+      .eq('tipo', 'alumno')
+      .eq('alumno_id', userId)
+      .limit(1)
+      .maybeSingle()
+
+    if (asigAlumno) {
+      asig = asigAlumno
+    } else {
+      const { data: asigGrado } = await supabase
+        .from('guia_asignaciones')
+        .select('guia_id, guia:guia_id(email, nombre_completo)')
+        .eq('colegio_id', perfil.colegio_id)
+        .eq('activo', true)
+        .eq('tipo', 'grado')
+        .eq('grado', gradoEfectivo || perfil.grado || '')
+        .limit(1)
+        .maybeSingle()
+      asig = asigGrado
+    }
+
+    const alumno = perfil.nombre_completo || 'Alumno'
+    const resumenPregunta = pregunta.replace(/\s+/g, ' ').trim().substring(0, 280)
+    const contexto = [
+      `Categoria: ${safety.tipo}`,
+      `Severidad: ${safety.severidad}`,
+      `Grado: ${gradoEfectivo || perfil.grado || 'N/D'}`,
+      `Materia: ${materiaSeleccionada || 'N/D'}`,
+      `Pregunta: ${resumenPregunta}`,
+    ].join(' | ')
+
+    await supabase.from('alertas').insert({
+      alumno_id: userId,
+      colegio_id: perfil.colegio_id,
+      guia_id: asig?.guia_id || null,
+      tipo: 'seguridad_contenido',
+      descripcion: `${alumno} activó una alerta de seguridad (${safety.tipo}, severidad ${safety.severidad}).`,
+      contexto,
+    })
+
+    if (safety.severidad === 'alta' && asig?.guia && process.env.RESEND_API_KEY) {
+      try {
+        const guia = asig.guia as unknown as { email: string; nombre_completo: string }
+        const { Resend } = await import('resend')
+        await new Resend(process.env.RESEND_API_KEY).emails.send({
+          from: 'Owlaris <noreply@owlaris.app>',
+          to: guia.email,
+          subject: 'Alerta de seguridad - ' + alumno,
+          html: '<p>Hola ' + guia.nombre_completo + ',</p><p><strong>' + alumno + '</strong> activó una alerta de seguridad en Owlaris.</p><p><strong>Categoría:</strong> ' + safety.tipo + '<br/><strong>Severidad:</strong> ' + safety.severidad + '</p><a href="https://owlaris.app/guia">Ver en Owlaris</a>'
+        })
+      } catch (e) { console.error('Email alerta seguridad:', e) }
+    }
+  } catch (e) {
+    console.error('Error registrando alerta de contenido:', e)
+  }
+}
+
 export async function POST(req: NextRequest) {
   try {
     const OpenAI = (await import('openai')).default
@@ -442,20 +533,30 @@ export async function POST(req: NextRequest) {
     const grado_override = body.grado_override || body.grado_detectado || ''
     if (!pregunta?.trim()) return NextResponse.json({ error: 'Pregunta vacía' }, { status: 400 })
 
+    const { data: perfil } = await supabase.from('usuarios').select('*, colegio:colegios(*)').eq('id', user.id).single()
+    if (!perfil) return NextResponse.json({ error: 'Perfil no encontrado' }, { status: 404 })
+
     // CONTENT SAFETY - proteccion deterministica para menores
     const safety = checkContentSafety(pregunta, idiomaIngles)
     if (safety.bloqueado) {
+      await registrarAlertaContenido(
+        supabase,
+        user.id,
+        perfil,
+        safety,
+        pregunta,
+        materia_id,
+        grado_override || perfil.grado || ''
+      )
       return NextResponse.json({
         respuesta: safety.respuesta,
         source: 'content_safety',
         nuevo_estado: 'activo',
         tokens: 0,
         safety_tipo: safety.tipo,
+        safety_severidad: safety.severidad,
       })
     }
-
-    const { data: perfil } = await supabase.from('usuarios').select('*, colegio:colegios(*)').eq('id', user.id).single()
-    if (!perfil) return NextResponse.json({ error: 'Perfil no encontrado' }, { status: 404 })
 
     const { data: configs } = await supabase.from('configuracion').select('clave, valor').eq('colegio_id', perfil.colegio_id)
     const cfg: Record<string, string> = {}
@@ -650,6 +751,44 @@ export async function POST(req: NextRequest) {
       documentoFuente = result.archivo
     }
 
+    const operacionDirecta = materiaNumerica ? inferCanonicalOperationFromText(pregunta) : null
+    const tieneOperacionDirectaSegura = !!operacionDirecta && isSafeCanonicalOperation(operacionDirecta) && solveOperation(operacionDirecta) !== null
+
+    if (
+      tipoPregunta === 'academica' &&
+      !esBienvenida &&
+      !contenidoCurricular &&
+      materia &&
+      !tieneOperacionDirectaSegura
+    ) {
+      const respuesta = respuestaSinFuenteSuficiente(idiomaIngles)
+      await registrarPendiente(supabase, perfil, materia, pregunta)
+      const { data: insertedRow } = await supabase.from('interacciones').insert({
+        usuario_id: user.id,
+        colegio_id: perfil.colegio_id,
+        materia_id: materia_uuid,
+        grado: gradoEfectivo,
+        tema_detectado: pregunta.substring(0, 100),
+        pregunta,
+        respuesta,
+        tokens_usados: 0,
+        costo_usd: 0,
+        modelo_usado: 'source_guard',
+        documento_fuente: null,
+        sospecha_copia: detectarCopia(pregunta),
+        guard_activado: true,
+      }).select('id').single()
+      supabase.from('usuarios').update({ ultimo_acceso: new Date().toISOString() }).eq('id', user.id).then(() => {})
+      return NextResponse.json({
+        respuesta,
+        source: 'source_guard',
+        tokens: 0,
+        documento_fuente: null,
+        interaction_id: insertedRow?.id || null,
+        pending_math_interaction_id: null,
+      })
+    }
+
     const docsConfig = await leerConfig()
     const promptPersonalizado = cfg.prompt_personalizado?.trim()
     const promptBase = PROMPT_BASE +
@@ -705,7 +844,7 @@ export async function POST(req: NextRequest) {
     } else if (contenidoCurricular) {
       contextoContenido = `CONTENIDO ACADEMICO (fuente principal):\n---\n${contenidoCurricular.substring(0, 3000)}\n---`
     } else {
-      contextoContenido = `No se encontró documento específico en SharePoint. Responde con conocimiento general.`
+      contextoContenido = `No se encontro documento especifico en SharePoint. No inventes contenido academico. Indica que no hay suficiente informacion en la leccion disponible.`
     }
 
     const systemPrompt = `${promptBase}${promptPadre}${contextoIdioma}

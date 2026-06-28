@@ -84,16 +84,19 @@ export default async function GuiaPage() {
     baja_comprension: 'Baja comprensión',
     bloqueo_recurrente: 'Bloqueo recurrente',
     riesgo_copia: 'Riesgo de copia',
+    seguridad_contenido: 'Seguridad del estudiante',
   }
   const tipoColor: Record<string,string> = {
     baja_comprension: '#D97706',
     bloqueo_recurrente: '#2563EB',
     riesgo_copia: '#DC2626',
+    seguridad_contenido: '#B91C1C',
   }
   const tipoBg: Record<string,string> = {
     baja_comprension: '#FFFBEB',
     bloqueo_recurrente: '#EFF6FF',
     riesgo_copia: '#FEF2F2',
+    seguridad_contenido: '#FEF2F2',
   }
 
   return (
@@ -198,7 +201,7 @@ export default async function GuiaPage() {
                   <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',gap:'8px'}}>
                     <div style={{flex:1}}>
                       <span style={{background:`${tipoColor[alerta.tipo]}18`,color:tipoColor[alerta.tipo],borderRadius:'6px',padding:'2px 8px',fontSize:'10px',fontWeight:700,display:'inline-block',marginBottom:'6px'}}>
-                        {tipoLabel[alerta.tipo]}
+                        {tipoLabel[alerta.tipo] || 'Alerta'}
                       </span>
                       <p style={{fontWeight:600,color:'#0F1C2E',margin:'0 0 3px',fontSize:'13px'}}>
                         {(alerta.alumno as any)?.nombre_completo}
