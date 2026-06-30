@@ -32,8 +32,18 @@ export async function GET() {
     const token = await getToken()
     if (!token) return NextResponse.json({ grados: [] })
 
+    // Obtener colegio del usuario para usar su carpeta de SharePoint correcta
+    const { data: perfil } = await supabase
+      .from('usuarios')
+      .select('colegio:colegios(sharepoint_folder, slug)')
+      .eq('id', user.id)
+      .maybeSingle()
+
+    const carpetaColegio = (perfil?.colegio as {sharepoint_folder?: string; slug?: string} | null)?.sharepoint_folder
+    if (!carpetaColegio) return NextResponse.json({ grados: [] })
+
     const driveId = process.env.SHAREPOINT_DRIVE_ID!
-    const ruta = encodeURIComponent('Owlaris') + '/' + encodeURIComponent('Colegio Montano y Escolaris')
+    const ruta = encodeURIComponent('Owlaris') + '/' + encodeURIComponent(carpetaColegio)
     const url = `https://graph.microsoft.com/v1.0/drives/${driveId}/root:/${ruta}:/children`
     const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } })
     if (!res.ok) return NextResponse.json({ grados: [] })

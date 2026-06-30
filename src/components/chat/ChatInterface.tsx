@@ -202,6 +202,9 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
       // Actualizar estado onboarding
       if (data.nuevo_estado) setEstadoChat(data.nuevo_estado)
       if (data.nombre_alumno) setNombreAlumno(data.nombre_alumno)
+      if (data.nuevo_estado === 'esperando_grado' && gradosDisponibles.length > 0) {
+        setMostrandoGrados(true)
+      }
       if (data.grado_detectado) {
         setGradoAlumno(data.grado_detectado)
         // Guardar grado desde el frontend donde sí hay sesión activa
