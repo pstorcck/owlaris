@@ -811,7 +811,7 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
               </div>
 
               {/* Búho con rings */}
-              <div style={{position:'relative',width:'280px',height:'280px',display:'flex',alignItems:'center',justifyContent:'center'}}>
+              <div style={{position:'relative',width:reproduciendo?'520px':'280px',height:reproduciendo?'520px':'280px',display:'flex',alignItems:'center',justifyContent:'center',transition:'all .3s ease'}}>
                 {/* Ring externo — activo cuando graba o habla */}
                 <div style={{position:'absolute',width:'280px',height:'280px',borderRadius:'50%',border:`2px solid ${grabando?'rgba(220,38,38,.4)':reproduciendo?'rgba(109,40,217,.4)':'rgba(109,40,217,.15)'}`,animation:`ringPulse ${grabando?'0.5s':reproduciendo?'0.8s':'2s'} ease-in-out infinite`,transition:'all .3s'}}/>
                 <div style={{position:'absolute',width:'240px',height:'240px',borderRadius:'50%',border:`2px solid ${grabando?'rgba(220,38,38,.2)':reproduciendo?'rgba(109,40,217,.2)':'rgba(109,40,217,.08)'}`,animation:`ringPulse ${grabando?'0.5s':reproduciendo?'0.8s':'2s'} ease-in-out infinite 0.2s`}}/>
@@ -819,7 +819,7 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
                 {/* Búho 3D */}
                 <OwlarisOwl3D
                   pose={reproduciendo ? 'talking' : cargando ? 'thinking' : grabando ? 'thinking' : 'waving'}
-                  size={260}
+                  size={reproduciendo ? 520 : 260}
                 />
               </div>
 
