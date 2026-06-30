@@ -129,6 +129,35 @@ function normalizarGrado(texto: string): string {
   return ''
 }
 
+// Grados específicos por colegio — eScholaris usa sistema americano (Grado 6-12)
+const GRADOS_ESCHOLARIS = ['6','7','8','9','10','11','12']
+
+function normalizarGradoEscholaris(texto: string): string {
+  const t = texto.toLowerCase()
+    .replace(/á/g,'a').replace(/é/g,'e').replace(/í/g,'i').replace(/ó/g,'o').replace(/ú/g,'u')
+    .replace(/°/g,'').replace(/\.$/g,'').trim()
+  // Buscar "grado N" o solo el número
+  const match = t.match(/grado\s*(\d+)|^(\d+)(?:st|nd|rd|th)?\s*(?:grade|grado)?$/)
+  const numero = match ? (match[1] || match[2]) : null
+  if (numero && GRADOS_ESCHOLARIS.includes(numero)) return `Grado ${numero}`
+  // También aceptar "9th grade", "ninth grade" en inglés
+  const ordinalesIngles: Record<string,string> = {
+    'sixth':'6','seventh':'7','eighth':'8','ninth':'9','tenth':'10','eleventh':'11','twelfth':'12'
+  }
+  for (const [palabra, num] of Object.entries(ordinalesIngles)) {
+    if (t.includes(palabra)) return `Grado ${num}`
+  }
+  return ''
+}
+
+// Wrapper que decide qué sistema de grados usar según el colegio
+function normalizarGradoPorColegio(texto: string, colegioSlug: string): string {
+  if (colegioSlug.toLowerCase() === 'escholaris') {
+    return normalizarGradoEscholaris(texto)
+  }
+  return normalizarGrado(texto)
+}
+
 function normalizarMateria(texto: string, esOlimpiadas = false): string {
   const t = texto.toLowerCase()
     .replace(/á/g,'a').replace(/é/g,'e').replace(/í/g,'i').replace(/ó/g,'o').replace(/ú/g,'u')
@@ -599,7 +628,7 @@ export async function POST(req: NextRequest) {
     }
 
     if (estado === 'esperando_grado') {
-      const gradoDetectado = normalizarGrado(pregunta)
+      const gradoDetectado = normalizarGradoPorColegio(pregunta, colegioSlug)
       if (!gradoDetectado) return NextResponse.json({ respuesta: 'No reconocí ese grado. ¿Puedes decirme tu grado? Por ejemplo: "4to Primaria", "3ero Básico", "5to Bachillerato"...', nuevo_estado: 'esperando_grado', nombre_alumno: nombreAlumno, tokens: 0 })
       if (userId) await supabase.from('usuarios').update({ grado: gradoDetectado }).eq('id', userId)
       const carpetasG = await leerCarpetasGrado(gradoDetectado, idiomaIngles)
@@ -656,7 +685,7 @@ export async function POST(req: NextRequest) {
       const cambioGradoMatch = cambioGradoRegex.exec(pregunta)
       if (cambioGradoMatch) {
         const textoGrado = cambioGradoMatch[2] || cambioGradoMatch[4] || cambioGradoMatch[5] || ''
-        const nuevoGrado = normalizarGrado(textoGrado.trim())
+        const nuevoGrado = normalizarGradoPorColegio(textoGrado.trim(), colegioSlug)
         if (nuevoGrado) {
           if (userId) await supabase.from('usuarios').update({ grado: nuevoGrado }).eq('id', userId)
           return NextResponse.json({ respuesta: 'Perfecto, actualicé tu grado a ' + nuevoGrado + '. ¿Qué materia quieres estudiar?', nuevo_estado: 'esperando_materia', grado_detectado: nuevoGrado, tokens: 0 })
