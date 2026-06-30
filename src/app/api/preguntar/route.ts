@@ -415,13 +415,14 @@ async function leerDocumentosPadres(): Promise<string> {
   return contenido
 }
 
-async function registrarPendiente(supabase: ReturnType<typeof import('@/lib/supabase/server').createClient>, perfil: { colegio_id: string; grado: string | null }, materia: { nombre: string }, pregunta: string) {
+async function registrarPendiente(_supabase: ReturnType<typeof import('@/lib/supabase/server').createClient>, perfil: { colegio_id: string; grado: string | null }, materia: { nombre: string }, pregunta: string) {
+  const admin = createAdminClient()
   const tema = pregunta.substring(0, 150)
-  const { data: existente } = await supabase.from('pendientes').select('id, veces_solicitado').eq('colegio_id', perfil.colegio_id).eq('materia', materia.nombre).eq('tema_solicitado', tema).single()
+  const { data: existente } = await admin.from('pendientes').select('id, veces_solicitado').eq('colegio_id', perfil.colegio_id).eq('materia', materia.nombre).eq('tema_solicitado', tema).single()
   if (existente) {
-    await supabase.from('pendientes').update({ veces_solicitado: existente.veces_solicitado + 1 }).eq('id', existente.id)
+    await admin.from('pendientes').update({ veces_solicitado: existente.veces_solicitado + 1 }).eq('id', existente.id)
   } else {
-    await supabase.from('pendientes').insert({ colegio_id: perfil.colegio_id, grado: perfil.grado || '', materia: materia.nombre, tema_solicitado: tema, veces_solicitado: 1, resuelto: false })
+    await admin.from('pendientes').insert({ colegio_id: perfil.colegio_id, grado: perfil.grado || '', materia: materia.nombre, tema_solicitado: tema, veces_solicitado: 1, resuelto: false })
   }
 }
 
@@ -559,7 +560,10 @@ export async function POST(req: NextRequest) {
       })
     }
 
-    const { data: configs } = await supabase.from('configuracion').select('clave, valor').eq('colegio_id', perfil.colegio_id)
+    const { data: configs } = await createAdminClient()
+      .from('configuracion')
+      .select('clave, valor')
+      .eq('colegio_id', perfil.colegio_id)
     const cfg: Record<string, string> = {}
     configs?.forEach(c => { cfg[c.clave] = c.valor })
 
