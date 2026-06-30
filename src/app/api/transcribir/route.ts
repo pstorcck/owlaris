@@ -13,6 +13,8 @@ export async function POST(req: NextRequest) {
       file: audio,
       model: 'whisper-1',
       language: 'en',
+      prompt: 'English conversation practice by a student. Transcribe clearly without translating.',
+      temperature: 0,
     })
 
     return NextResponse.json({ texto: transcripcion.text })

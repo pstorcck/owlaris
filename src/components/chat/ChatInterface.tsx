@@ -14,6 +14,46 @@ interface Props {
 
 type EstadoChat = 'esperando_nombre' | 'esperando_confirmacion_grado' | 'esperando_grado' | 'esperando_materia' | 'esperando_materia_olimpiadas' | 'esperando_confirmacion_cambio_materia' | 'activo'
 
+type EnviarPreguntaOpciones = {
+  forceConversation?: boolean
+  forceEnglish?: boolean
+  forceEstado?: EstadoChat
+  forceMateria?: string
+  fromVoice?: boolean
+  speechConfidence?: number | null
+}
+
+type SpeechRecognitionAlternativeLike = { transcript?: string; confidence?: number }
+type SpeechRecognitionResultLike = {
+  isFinal?: boolean
+  length: number
+  [index: number]: SpeechRecognitionAlternativeLike
+}
+type SpeechRecognitionEventLike = {
+  resultIndex: number
+  results: {
+    length: number
+    [index: number]: SpeechRecognitionResultLike
+  }
+}
+type SpeechRecognitionLike = {
+  lang: string
+  continuous: boolean
+  interimResults: boolean
+  onresult: ((event: SpeechRecognitionEventLike) => void) | null
+  onerror: (() => void) | null
+  onend: (() => void) | null
+  start: () => void
+  stop: () => void
+  abort: () => void
+}
+type SpeechRecognitionConstructorLike = new () => SpeechRecognitionLike
+type WindowWithSpeechTools = Window & {
+  SpeechRecognition?: SpeechRecognitionConstructorLike
+  webkitSpeechRecognition?: SpeechRecognitionConstructorLike
+  webkitAudioContext?: typeof AudioContext
+}
+
 function renderSegmento(texto: string, key: number): React.ReactNode[] {
   const partes: React.ReactNode[] = []
   const boldRegex = /\*\*([^*]+)\*\*/g
@@ -98,6 +138,14 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const audioChunksRef   = useRef<Blob[]>([])
   const audioRef         = useRef<HTMLAudioElement | null>(null)
+  const recognitionRef   = useRef<SpeechRecognitionLike | null>(null)
+  const transcriptRef    = useRef('')
+  const confidenceValuesRef = useRef<number[]>([])
+  const audioUnlockedRef = useRef(false)
+  const [transcribiendo, setTranscribiendo] = useState(false)
+  const [transcripcionVoz, setTranscripcionVoz] = useState('')
+  const [vozNavegadorActiva, setVozNavegadorActiva] = useState(false)
+  const [audioPendiente, setAudioPendiente] = useState('')
 
   // Estado onboarding
   const gradoGuardado = usuario.grado || ''
@@ -116,6 +164,14 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
   const iniciales = usuario.nombre_completo.split(' ').map((n:string) => n[0]).join('').substring(0,2).toUpperCase()
 
   useEffect(() => { finalRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [mensajes, cargando])
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !('speechSynthesis' in window)) return
+    window.speechSynthesis.getVoices()
+    const cargarVoces = () => window.speechSynthesis.getVoices()
+    window.speechSynthesis.addEventListener?.('voiceschanged', cargarVoces)
+    return () => window.speechSynthesis.removeEventListener?.('voiceschanged', cargarVoces)
+  }, [])
 
   // Cargar materias desde API al iniciar si hay grado guardado
   useEffect(() => {
@@ -165,9 +221,130 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
     }
   }, [idiomaIngles])
 
-  async function enviarPregunta(texto?: string) {
+  function limpiarTextoParaVoz(texto: string) {
+    return texto
+      .replace(/\[OP:[^\]]+\]/gi, '')
+      .replace(/◈.*$/gm, '')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .substring(0, 240)
+  }
+
+  async function asegurarAudioDesbloqueado() {
+    if (audioUnlockedRef.current || typeof window === 'undefined') return
+    try {
+      const win = window as WindowWithSpeechTools
+      const AudioContextCtor = window.AudioContext || win.webkitAudioContext
+      if (!AudioContextCtor) return
+      const ctx = new AudioContextCtor()
+      const buffer = ctx.createBuffer(1, 1, 22050)
+      const source = ctx.createBufferSource()
+      source.buffer = buffer
+      source.connect(ctx.destination)
+      source.start(0)
+      await ctx.resume()
+      audioUnlockedRef.current = true
+      setTimeout(() => ctx.close().catch(() => {}), 300)
+    } catch {
+      audioUnlockedRef.current = true
+    }
+  }
+
+  function hablarConVozDelNavegador(texto: string) {
+    if (typeof window === 'undefined' || !('speechSynthesis' in window)) return false
+    const frase = limpiarTextoParaVoz(texto)
+    if (!frase) return false
+    try {
+      window.speechSynthesis.cancel()
+      const utterance = new SpeechSynthesisUtterance(frase)
+      utterance.lang = 'en-US'
+      utterance.rate = 0.96
+      utterance.pitch = 1.02
+      const voices = window.speechSynthesis.getVoices()
+      const preferred = voices.find(v => /aria|samantha|google us english|natural|jenny/i.test(v.name) && /^en/i.test(v.lang))
+        || voices.find(v => /^en-US/i.test(v.lang))
+        || voices.find(v => /^en/i.test(v.lang))
+      if (preferred) utterance.voice = preferred
+      utterance.onstart = () => { setVozNavegadorActiva(true); setReproduciendo(true); setAudioPendiente('') }
+      utterance.onend = () => { setVozNavegadorActiva(false); setReproduciendo(false) }
+      utterance.onerror = () => { setVozNavegadorActiva(false); setReproduciendo(false); setAudioPendiente(frase) }
+      window.speechSynthesis.speak(utterance)
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  function iniciarReconocimientoVoz() {
+    if (typeof window === 'undefined') return null
+    const win = window as WindowWithSpeechTools
+    const SpeechRecognitionCtor = win.SpeechRecognition || win.webkitSpeechRecognition
+    if (!SpeechRecognitionCtor) return null
+
+    try {
+      const recognition = new SpeechRecognitionCtor()
+      recognition.lang = 'en-US'
+      recognition.continuous = true
+      recognition.interimResults = true
+      recognition.onresult = event => {
+        let interim = ''
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          const result = event.results[i]
+          const transcript = result[0]?.transcript || ''
+          const confidence = result[0]?.confidence
+          if (typeof confidence === 'number' && confidence > 0) confidenceValuesRef.current.push(confidence)
+          if (result.isFinal) {
+            transcriptRef.current = `${transcriptRef.current} ${transcript}`.trim()
+          } else {
+            interim += transcript
+          }
+        }
+        setTranscripcionVoz(`${transcriptRef.current} ${interim}`.trim())
+      }
+      recognition.onerror = () => {}
+      recognition.onend = () => {}
+      recognition.start()
+      recognitionRef.current = recognition
+      return recognition
+    } catch {
+      return null
+    }
+  }
+
+  function detenerReconocimientoVoz() {
+    try { recognitionRef.current?.stop() } catch { /* silencioso */ }
+    recognitionRef.current = null
+  }
+
+  function promedioConfianzaVoz() {
+    const vals = confidenceValuesRef.current.filter(v => Number.isFinite(v) && v > 0)
+    if (vals.length === 0) return null
+    return vals.reduce((a, b) => a + b, 0) / vals.length
+  }
+
+  function iniciarConversacionIngles() {
+    asegurarAudioDesbloqueado()
+    setModoConversacion(true)
+    setIdiomaIngles(true)
+    setMateriaAlumno('Inglés')
+    setEstadoChat('activo')
+    setSugerencias([])
+    setTranscripcionVoz('')
+    enviarPregunta('I want to practice English conversation.', {
+      forceConversation: true,
+      forceEnglish: true,
+      forceEstado: 'activo',
+      forceMateria: 'Inglés',
+    })
+  }
+
+  async function enviarPregunta(texto?: string, opciones: EnviarPreguntaOpciones = {}) {
     const tp = (texto || pregunta).trim()
     if (!tp || cargando) return
+    const idiomaActivo = opciones.forceEnglish ?? idiomaIngles
+    const modoConversacionActivo = opciones.forceConversation ?? modoConversacion
+    const estadoActivo = opciones.forceEstado ?? estadoChat
+    const materiaActiva = opciones.forceMateria ?? materiaAlumno
     setPregunta(''); setError(''); setSugerencias([])
 
     const msgU: MensajeChat = { id: Date.now().toString(), rol: 'usuario', contenido: tp, timestamp: new Date() }
@@ -181,19 +358,21 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
         body: JSON.stringify({
           pregunta: tp,
 
-          estado: estadoChat,
+          estado: estadoActivo,
           nombre_alumno: nombreAlumno,
           grado_override: gradoAlumno || gradoGuardado,
-          materia_id: materiaAlumno,
+          materia_id: materiaActiva,
           historial: mensajes.slice(-6).map(m => ({ rol: m.rol, contenido: m.contenido })),
           user_id: usuario.id,
           materia_sugerida: materiaSugerida,
           materias_disponibles: materiasDisponiblesRef.current,
-          idioma_ingles: idiomaIngles,
-          modo_conversacion: modoConversacion || estadoChat === 'activo' && idiomaIngles,
+          idioma_ingles: idiomaActivo,
+          modo_conversacion: modoConversacionActivo || estadoActivo === 'activo' && idiomaActivo,
           nivel_dificultad: nivelDificultad,
           aciertos_consecutivos: aciertosConsec,
           pending_math_interaction_id: pendingMathId,
+          entrada_voz: opciones.fromVoice || false,
+          speech_confidence: opciones.speechConfidence ?? null,
         })
       })
       if (!res.ok) throw new Error()
@@ -218,7 +397,7 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
       if (data.materias_disponibles) {
         materiasDisponiblesRef.current = data.materias_disponibles
         materiasBaseRef.current = data.materias_disponibles  // guardar base en español
-        setChipsMateria(traducirChips(data.materias_disponibles, idiomaIngles))
+        setChipsMateria(traducirChips(data.materias_disponibles, idiomaActivo))
         setMostrandoSubOlimpiadas(false)
       }
       if (data.aciertos_consecutivos !== undefined) setAciertosConsec(data.aciertos_consecutivos)
@@ -235,14 +414,14 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
         documento_fuente: data.documento_fuente,
       }])
       // TTS en modo conversación
-      if (modoConversacion && data.respuesta) {
-        reproducirTTS(data.respuesta)
+      if (modoConversacionActivo && data.respuesta) {
+        reproducirTTS(data.respuesta, modoConversacionActivo)
       }
 
       // Sugerencias solo cuando está activo
       if (data.nuevo_estado === 'activo' || estadoChat === 'activo') {
         const mat = data.materia_detectada || materiaAlumno
-        setSugerencias(idiomaIngles ? [
+        setSugerencias(idiomaActivo ? [
           { icon: '✦', text: 'Explain with an example' },
           { icon: '◈', text: 'I want to practice' },
           { icon: '◇', text: 'Summarize the topic' },
@@ -258,21 +437,31 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
     finally { setCargando(false); inputRef.current?.focus() }
   }
 
-  async function reproducirTTS(texto: string) {
-    if (!modoConversacion) return
+  async function reproducirTTS(texto: string, force = false) {
+    if (!force && !modoConversacion) return
+    const textoVoz = limpiarTextoParaVoz(texto)
+    if (!textoVoz) return
+    setAudioPendiente('')
+    await asegurarAudioDesbloqueado()
     try {
       // Detener audio anterior
       if (audioRef.current) {
         audioRef.current.pause()
         audioRef.current = null
       }
+      if (typeof window !== 'undefined' && 'speechSynthesis' in window) window.speechSynthesis.cancel()
 
       const res = await fetch('/api/tts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ texto }),
+        body: JSON.stringify({ texto: textoVoz, modo: 'conversation' }),
       })
-      if (!res.ok) { setReproduciendo(false); return }
+      if (!res.ok) {
+        const pudoHablar = hablarConVozDelNavegador(textoVoz)
+        if (!pudoHablar) setAudioPendiente(textoVoz)
+        setReproduciendo(false)
+        return
+      }
 
       const blob = await res.blob()
       
@@ -303,27 +492,41 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
         audio.onended = () => setReproduciendo(false)
         audio.onerror = () => setReproduciendo(false)
       }
+      audio.playbackRate = 1.04
       
       setReproduciendo(true)
       const playPromise = audio.play()
       if (playPromise !== undefined) {
         playPromise.catch(() => {
           // Safari puede rechazar si no hay gesto del usuario reciente
+          const pudoHablar = hablarConVozDelNavegador(textoVoz)
+          if (!pudoHablar) setAudioPendiente(textoVoz)
           setReproduciendo(false)
         })
       }
-    } catch { setReproduciendo(false) }
+    } catch {
+      const pudoHablar = hablarConVozDelNavegador(textoVoz)
+      if (!pudoHablar) setAudioPendiente(textoVoz)
+      setReproduciendo(false)
+    }
   }
 
   async function toggleGrabacion() {
     if (grabando) {
       // Detener grabación
+      detenerReconocimientoVoz()
       mediaRecorderRef.current?.stop()
       setGrabando(false)
     } else {
       // Iniciar grabación — detener audio si está sonando
+      await asegurarAudioDesbloqueado()
       setReproduciendo(false)
+      setTranscribiendo(false)
+      setTranscripcionVoz('')
+      transcriptRef.current = ''
+      confidenceValuesRef.current = []
       if (audioRef.current) { try { audioRef.current.pause() } catch { /* */ } }
+      if (typeof window !== 'undefined' && 'speechSynthesis' in window) window.speechSynthesis.cancel()
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
         const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') 
@@ -332,10 +535,27 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
           ? 'audio/mp4'
           : 'audio/webm'
         const mr = new MediaRecorder(stream, { mimeType })
+        iniciarReconocimientoVoz()
         audioChunksRef.current = []
         mr.ondataavailable = e => audioChunksRef.current.push(e.data)
         mr.onstop = async () => {
           stream.getTracks().forEach(t => t.stop())
+          setTranscribiendo(true)
+          await new Promise(resolve => setTimeout(resolve, 180))
+          const textoReconocido = transcriptRef.current.trim()
+          if (textoReconocido) {
+            setTranscripcionVoz(textoReconocido)
+            setTranscribiendo(false)
+            enviarPregunta(textoReconocido, {
+              forceConversation: true,
+              forceEnglish: true,
+              forceEstado: 'activo',
+              forceMateria: 'Inglés',
+              fromVoice: true,
+              speechConfidence: promedioConfianzaVoz(),
+            })
+            return
+          }
           const blob = new Blob(audioChunksRef.current, { type: mimeType })
           const ext = mimeType.includes('mp4') ? 'mp4' : 'webm'
           const fd   = new FormData()
@@ -343,10 +563,21 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
           try {
             const res  = await fetch('/api/transcribir', { method: 'POST', body: fd })
             const data = await res.json()
-            if (data.texto?.trim()) enviarPregunta(data.texto)
+            if (data.texto?.trim()) {
+              setTranscripcionVoz(data.texto.trim())
+              enviarPregunta(data.texto, {
+                forceConversation: true,
+                forceEnglish: true,
+                forceEstado: 'activo',
+                forceMateria: 'Inglés',
+                fromVoice: true,
+                speechConfidence: null,
+              })
+            }
           } catch { setError('No se pudo transcribir el audio.') }
+          finally { setTranscribiendo(false) }
         }
-        mr.start()
+        mr.start(250)
         mediaRecorderRef.current = mr
         setGrabando(true)
       } catch { setError('No se pudo acceder al micrófono.') }
@@ -608,7 +839,15 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
                 <p style={{fontFamily:"'Syne',sans-serif",fontSize:'16px',fontWeight:700,color:'#1E1B4B',letterSpacing:'-0.4px'}}>Owlaris</p>
                 <p style={{fontSize:'11px',color:'#9490B8',fontWeight:500}}>{idiomaIngles ? 'Your academic tutor' : 'Tu tutor académico'}</p>
               </div>
-              <button onClick={()=>{setIdiomaIngles(!idiomaIngles); if(modoConversacion) setModoConversacion(false)}}
+              <button onClick={()=>{
+                setIdiomaIngles(!idiomaIngles)
+                if(modoConversacion) {
+                  setModoConversacion(false)
+                  detenerReconocimientoVoz()
+                  if (audioRef.current) { try { audioRef.current.pause() } catch { /* */ } }
+                  if (typeof window !== 'undefined' && 'speechSynthesis' in window) window.speechSynthesis.cancel()
+                }
+              }}
                 style={{background:idiomaIngles?'linear-gradient(135deg,#1d4ed8,#1e40af)':'#F3F0FF',border:idiomaIngles?'none':'1px solid rgba(109,40,217,.2)',borderRadius:'10px',padding:'6px 12px',fontSize:'12px',fontWeight:700,color:idiomaIngles?'white':'#7C3AED',cursor:'pointer',display:'flex',alignItems:'center',gap:'5px',transition:'all .2s',flexShrink:0}}>
                 {idiomaIngles ? '🇬🇧 EN' : '🇬🇧 EN'}
               </button>
@@ -742,11 +981,7 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
                             if (esOlimpiadas) {
                               setMostrandoSubOlimpiadas(true)
                             } else if (esIngles) {
-                              setModoConversacion(true)
-                              setIdiomaIngles(true)
-                              setMateriaAlumno('Inglés')
-                              setEstadoChat('activo')
-                              enviarPregunta('Quiero practicar conversación en inglés')
+                              iniciarConversacionIngles()
                             } else {
                               enviarPregunta(mat)
                             }
@@ -825,8 +1060,20 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
           <div style={{position:'fixed',inset:0,zIndex:50,background:'linear-gradient(160deg,#F0EBFF 0%,#F8F7FF 50%,#EBF5FF 100%)',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'space-between',padding:'24px 20px 40px'}}>
 
             {/* Header — botón salir */}
-            <div style={{width:'100%',display:'flex',justifyContent:'flex-end'}}>
-              <button onClick={()=>{setModoConversacion(false);setEstadoChat('esperando_materia');setSugerencias([]);if(grabando){mediaRecorderRef.current?.stop();setGrabando(false)}}}
+            <div style={{width:'100%',display:'flex',justifyContent:'space-between',alignItems:'center',gap:'12px'}}>
+              <div style={{background:'rgba(255,255,255,.82)',border:'1px solid rgba(109,40,217,.1)',borderRadius:'14px',padding:'8px 14px',boxShadow:'0 4px 18px rgba(109,40,217,.08)',fontSize:'12px',fontWeight:800,color:'#1E1B4B',letterSpacing:'.2px'}}>
+                English Speaking
+              </div>
+              <button onClick={()=>{
+                setModoConversacion(false)
+                setEstadoChat('esperando_materia')
+                setSugerencias([])
+                setAudioPendiente('')
+                detenerReconocimientoVoz()
+                if (typeof window !== 'undefined' && 'speechSynthesis' in window) window.speechSynthesis.cancel()
+                if (audioRef.current) { try { audioRef.current.pause() } catch { /* */ } }
+                if(grabando){mediaRecorderRef.current?.stop();setGrabando(false)}
+              }}
                 style={{background:'rgba(220,38,38,.08)',border:'1px solid rgba(220,38,38,.2)',borderRadius:'12px',padding:'8px 16px',fontSize:'12px',fontWeight:600,color:'#DC2626',cursor:'pointer',display:'flex',alignItems:'center',gap:'6px'}}>
                 <span>✕</span><span>End</span>
               </button>
@@ -836,45 +1083,66 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
             <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:'16px',flex:1,justifyContent:'center'}}>
               
               {/* Estado label */}
-              <div style={{background:'white',borderRadius:'20px',padding:'10px 20px',boxShadow:'0 4px 20px rgba(109,40,217,.12)',border:'1px solid rgba(109,40,217,.08)',fontSize:'14px',fontWeight:600,color:grabando?'#DC2626':cargando?'#D97706':reproduciendo?'#6D28D9':'#10B981',display:'flex',alignItems:'center',gap:'8px',transition:'all .3s'}}>
-                <span style={{width:'8px',height:'8px',borderRadius:'50%',background:grabando?'#DC2626':cargando?'#D97706':reproduciendo?'#6D28D9':'#10B981',display:'inline-block',animation:'dotBlink 1s infinite'}}/>
-                {grabando ? 'Listening...' : cargando ? 'Thinking...' : reproduciendo ? 'Speaking...' : 'Tap to speak'}
+              <div style={{background:'white',borderRadius:'20px',padding:'10px 20px',boxShadow:'0 4px 20px rgba(109,40,217,.12)',border:'1px solid rgba(109,40,217,.08)',fontSize:'14px',fontWeight:600,color:grabando?'#DC2626':transcribiendo?'#0EA5E9':cargando?'#D97706':reproduciendo?'#6D28D9':'#10B981',display:'flex',alignItems:'center',gap:'8px',transition:'all .3s'}}>
+                <span style={{width:'8px',height:'8px',borderRadius:'50%',background:grabando?'#DC2626':transcribiendo?'#0EA5E9':cargando?'#D97706':reproduciendo?'#6D28D9':'#10B981',display:'inline-block',animation:'dotBlink 1s infinite'}}/>
+                {grabando ? 'Listening...' : transcribiendo ? 'Transcribing...' : cargando ? 'Coaching...' : reproduciendo ? (vozNavegadorActiva ? 'Speaking fast...' : 'Speaking...') : 'Tap to speak'}
               </div>
 
               {/* Búho con rings */}
-              <div style={{position:'relative',width:reproduciendo?'520px':'280px',height:reproduciendo?'520px':'280px',display:'flex',alignItems:'center',justifyContent:'center',transition:'all .3s ease'}}>
+              <div style={{position:'relative',width:reproduciendo?'min(86vw,620px)':'min(82vw,430px)',height:reproduciendo?'min(52vh,620px)':'min(46vh,430px)',minHeight:grabando||cargando?'360px':'320px',display:'flex',alignItems:'center',justifyContent:'center',transition:'all .3s ease'}}>
                 {/* Ring externo — activo cuando graba o habla */}
-                <div style={{position:'absolute',width:'280px',height:'280px',borderRadius:'50%',border:`2px solid ${grabando?'rgba(220,38,38,.4)':reproduciendo?'rgba(109,40,217,.4)':'rgba(109,40,217,.15)'}`,animation:`ringPulse ${grabando?'0.5s':reproduciendo?'0.8s':'2s'} ease-in-out infinite`,transition:'all .3s'}}/>
-                <div style={{position:'absolute',width:'240px',height:'240px',borderRadius:'50%',border:`2px solid ${grabando?'rgba(220,38,38,.2)':reproduciendo?'rgba(109,40,217,.2)':'rgba(109,40,217,.08)'}`,animation:`ringPulse ${grabando?'0.5s':reproduciendo?'0.8s':'2s'} ease-in-out infinite 0.2s`}}/>
+                <div style={{position:'absolute',width:'min(74vw,430px)',height:'min(74vw,430px)',borderRadius:'50%',border:`2px solid ${grabando?'rgba(220,38,38,.4)':reproduciendo?'rgba(109,40,217,.4)':'rgba(109,40,217,.15)'}`,animation:`ringPulse ${grabando?'0.5s':reproduciendo?'0.8s':'2s'} ease-in-out infinite`,transition:'all .3s'}}/>
+                <div style={{position:'absolute',width:'min(64vw,360px)',height:'min(64vw,360px)',borderRadius:'50%',border:`2px solid ${grabando?'rgba(220,38,38,.2)':reproduciendo?'rgba(109,40,217,.2)':'rgba(109,40,217,.08)'}`,animation:`ringPulse ${grabando?'0.5s':reproduciendo?'0.8s':'2s'} ease-in-out infinite 0.2s`}}/>
                 
                 {/* Búho 3D */}
                 <OwlarisOwl3D
-                  pose={reproduciendo ? 'talking' : cargando ? 'thinking' : grabando ? 'thinking' : 'waving'}
-                  size={reproduciendo ? 520 : 260}
+                  pose={reproduciendo ? 'talking' : cargando || transcribiendo ? 'thinking' : grabando ? 'thinking' : 'waving'}
+                  size={reproduciendo ? 600 : cargando || transcribiendo || grabando ? 470 : 420}
                 />
               </div>
 
+              {(transcripcionVoz || grabando) && (
+                <div style={{background:'rgba(255,255,255,.9)',borderRadius:'14px',padding:'10px 14px',width:'min(92vw,420px)',textAlign:'center',boxShadow:'0 2px 16px rgba(14,165,233,.08)',border:'1px solid rgba(14,165,233,.14)',fontSize:'12px',color:'#236184',lineHeight:'1.5',minHeight:'40px'}}>
+                  {transcripcionVoz || '...'}
+                </div>
+              )}
+
               {/* Último mensaje de Owlaris */}
               {mensajes.filter(m=>m.rol==='asistente').slice(-1).map(m=>(
-                <div key={m.id} style={{background:'white',borderRadius:'16px',padding:'12px 18px',maxWidth:'320px',textAlign:'center',boxShadow:'0 2px 16px rgba(109,40,217,.08)',border:'1px solid rgba(109,40,217,.06)',fontSize:'13px',color:'#4B4570',lineHeight:'1.6'}}>
-                  {m.contenido.substring(0,100)}{m.contenido.length>100?'...':''}
+                <div key={m.id} style={{background:'white',borderRadius:'16px',padding:'14px 18px',maxWidth:'420px',textAlign:'center',boxShadow:'0 2px 16px rgba(109,40,217,.08)',border:'1px solid rgba(109,40,217,.06)',fontSize:'13px',color:'#4B4570',lineHeight:'1.6'}}>
+                  {m.contenido.substring(0,180)}{m.contenido.length>180?'...':''}
                 </div>
               ))}
             </div>
 
             {/* Botón micrófono grande */}
             <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:'12px'}}>
+              <div style={{display:'flex',gap:'8px',flexWrap:'wrap',justifyContent:'center',maxWidth:'520px'}}>
+                <button className="o-chip" onClick={() => {
+                  const ultimo = mensajes.filter(m => m.rol === 'asistente').slice(-1)[0]?.contenido
+                  if (ultimo) reproducirTTS(ultimo)
+                  else if (audioPendiente) hablarConVozDelNavegador(audioPendiente)
+                }} disabled={cargando || grabando} style={{opacity:cargando || grabando ? 0.45 : 1}}>
+                  ↻ Repeat
+                </button>
+                <button className="o-chip" onClick={() => enviarPregunta('Give me one short pronunciation drill.', { forceConversation:true, forceEnglish:true, forceEstado:'activo', forceMateria:'Inglés' })} disabled={cargando || grabando}>
+                  Pronunciation
+                </button>
+                <button className="o-chip" onClick={() => enviarPregunta('Start a new friendly conversation topic.', { forceConversation:true, forceEnglish:true, forceEstado:'activo', forceMateria:'Inglés' })} disabled={cargando || grabando}>
+                  New topic
+                </button>
+              </div>
               <button
                 onClick={toggleGrabacion}
-                disabled={cargando}
+                disabled={cargando || transcribiendo}
                 style={{
-                  width:'80px',height:'80px',borderRadius:'50%',border:'none',cursor:(cargando||reproduciendo)?'not-allowed':'pointer',
+                  width:'86px',height:'86px',borderRadius:'50%',border:'none',cursor:(cargando||transcribiendo)?'not-allowed':'pointer',
                   background:grabando?'linear-gradient(135deg,#DC2626,#B91C1C)':'linear-gradient(135deg,#7C3AED,#5B21B6)',
                   boxShadow:grabando?'0 0 0 8px rgba(220,38,38,.2),0 8px 32px rgba(220,38,38,.4)':'0 0 0 8px rgba(109,40,217,.1),0 8px 32px rgba(109,40,217,.3)',
                   display:'flex',alignItems:'center',justifyContent:'center',
-                  transform:(cargando||reproduciendo)?'scale(0.9)':'scale(1)',
+                  transform:(cargando||transcribiendo)?'scale(0.9)':'scale(1)',
                   transition:'all .2s',
-                  opacity:(cargando||reproduciendo)?0.5:1,
+                  opacity:(cargando||transcribiendo)?0.5:1,
                   animation:grabando?'micPulse 1s ease-in-out infinite':'none',
                 }}>
                 {grabando ? (
@@ -889,8 +1157,14 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
                 )}
               </button>
               <p style={{fontSize:'11px',color:'#9490B8',fontWeight:500}}>
-                {grabando ? 'Tap to send' : 'Tap to speak'}
+                {grabando ? 'Tap to send' : transcribiendo ? 'Preparing your answer...' : 'Tap to speak'}
               </p>
+              {audioPendiente && (
+                <button onClick={() => hablarConVozDelNavegador(audioPendiente)}
+                  style={{background:'rgba(14,165,233,.08)',border:'1px solid rgba(14,165,233,.18)',borderRadius:'12px',padding:'8px 14px',fontSize:'12px',fontWeight:700,color:'#0369A1',cursor:'pointer'}}>
+                  Play audio
+                </button>
+              )}
             </div>
 
             <style suppressHydrationWarning>{`

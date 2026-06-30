@@ -475,6 +475,25 @@ function respuestaSinFuenteSuficiente(idiomaIngles: boolean) {
     : 'Con el contenido disponible para esta lección, no tengo suficiente información para responder eso con seguridad. Podemos continuar con un tema que sí esté cubierto en tu lección, o puedes pedirle a tu maestro que agregue este material.'
 }
 
+function buildEnglishConversationSystemPrompt(input: { entradaVoz: boolean; speechConfidence: number | null }) {
+  const confidenceHint = input.entradaVoz
+    ? input.speechConfidence !== null
+      ? `\nVOICE SIGNAL: The student's speech recognition confidence was ${input.speechConfidence.toFixed(2)}. If it is below 0.72, include one short pronunciation tip or ask them to repeat one useful phrase slowly.`
+      : '\nVOICE SIGNAL: The student spoke by microphone. Include pronunciation coaching when it naturally helps, but do not claim you heard sounds you cannot verify.'
+    : ''
+
+  return `You are Owlaris, a premium English conversation coach for Guatemalan students.
+ALWAYS respond in English only.
+Prioritize speed, warmth, and live speaking practice.
+Keep the reply under 45 words.
+Use this structure when useful:
+1. Model one improved phrase with "Try saying: ..."
+2. Give one tiny pronunciation or fluency tip.
+3. Ask exactly one natural follow-up question.
+Do not lecture. Do not switch to Spanish. Do not grade harshly.
+For pronunciation, be honest: correct likely stress, rhythm, clarity, or word choice from the transcript; never pretend you can measure exact phonemes.${confidenceHint}`
+}
+
 async function registrarAlertaContenido(
   _supabase: ReturnType<typeof import('@/lib/supabase/server').createClient>,
   userId: string,
@@ -712,6 +731,54 @@ export async function POST(req: NextRequest) {
     }
     // ── FIN ONBOARDING ───────────────────────────────────────────────
 
+    // ── RUTA RÁPIDA: conversación en inglés ─────────────────────────
+    // Evita búsquedas en SharePoint y protocolo matemático para reducir latencia en voz.
+    const esModoConversacion = body.modo_conversacion || false
+    if (esModoConversacion) {
+      const historialConv = (historial || [])
+        .slice(-6)
+        .map((m: {rol:string;contenido:string}) => ({
+          role: m.rol === 'usuario' ? 'user' as const : 'assistant' as const,
+          content: String(m.contenido || '').substring(0, 700),
+        }))
+      const speechConfidence = typeof body.speech_confidence === 'number' ? body.speech_confidence : null
+      const system = buildEnglishConversationSystemPrompt({
+        entradaVoz: !!body.entrada_voz,
+        speechConfidence,
+      })
+      const completion = await openai.chat.completions.create({
+        model: 'gpt-4o-mini',
+        max_tokens: 85,
+        temperature: 0.55,
+        messages: [
+          { role: 'system', content: system },
+          ...historialConv,
+          { role: 'user', content: pregunta },
+        ],
+      })
+      const respuesta = completion.choices[0].message.content?.trim() || 'Try saying: “Could you repeat that, please?” What would you like to talk about?'
+      await supabase.from('interacciones').insert({
+        usuario_id: user.id,
+        colegio_id: perfil.colegio_id,
+        grado: gradoEfectivo || perfil.grado || '',
+        tema_detectado: 'Conversación en Inglés',
+        pregunta: pregunta.substring(0, 500),
+        respuesta: respuesta.substring(0, 1000),
+        tokens_usados: completion.usage?.total_tokens || 0,
+        costo_usd: (completion.usage?.total_tokens || 0) * 0.00000015,
+        modelo_usado: 'gpt-4o-mini-conversation-fast',
+        sospecha_copia: false,
+      })
+      supabase.from('usuarios').update({ ultimo_acceso: new Date().toISOString() }).eq('id', user.id).then(() => {})
+      return NextResponse.json({
+        respuesta,
+        nuevo_estado: 'activo',
+        materia_detectada: 'Inglés',
+        activar_conversacion: true,
+        tokens: completion.usage?.total_tokens || 0,
+      })
+    }
+
     // ── PROTOCOLO ANTI-ERRORES — evaluación por backend ─────────────
     let evaluacionProtocolo: MathEvaluation | null = null
     const pendingMathId: string | null = body.pending_math_interaction_id || null
@@ -851,17 +918,6 @@ export async function POST(req: NextRequest) {
     void alerta_comprension
     void alerta_materia
     void alerta_tema
-
-    // Modo conversación inglés
-    const esModoConversacion = body.modo_conversacion || false
-    if (esModoConversacion) {
-      const historialConv = (historial || []).slice(-4).map((m: {rol:string;contenido:string}) => ({ role: m.rol === 'usuario' ? 'user' as const : 'assistant' as const, content: m.contenido }))
-      const completion = await openai.chat.completions.create({ model: 'gpt-4o-mini', max_tokens: 60, temperature: 0.8, messages: [{ role: 'system', content: 'You are Owlaris, a friendly English conversation coach for Guatemalan students. ALWAYS respond in English only. Keep responses SHORT: 1-2 sentences max. Gently correct grammar by modeling the correct form. Ask ONE follow-up question. Be warm and encouraging.' }, ...historialConv, { role: 'user', content: pregunta }] })
-      const respuesta = completion.choices[0].message.content || ''
-      await supabase.from('interacciones').insert({ usuario_id: user.id, colegio_id: perfil.colegio_id, grado: perfil.grado || '', tema_detectado: 'Conversación en Inglés', pregunta: pregunta.substring(0, 500), respuesta: respuesta.substring(0, 1000), tokens_usados: completion.usage?.total_tokens || 0, costo_usd: (completion.usage?.total_tokens || 0) * 0.00000015, modelo_usado: 'gpt-4o-mini', sospecha_copia: false })
-      supabase.from('usuarios').update({ ultimo_acceso: new Date().toISOString() }).eq('id', user.id).then(() => {})
-      return NextResponse.json({ respuesta, nuevo_estado: 'activo', tokens: completion.usage?.total_tokens || 0 })
-    }
 
     const esPadre = body.rol_usuario === 'padre'
     let promptPadre = ''
