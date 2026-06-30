@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server'
+import { createAdminClient, createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import LogoutButton from '@/components/ui/LogoutButton'
@@ -31,7 +31,28 @@ export default async function PendientesPage() {
   async function marcarResuelto(id: string) {
     'use server'
     const supabase = createClient()
-    await supabase.from('pendientes').update({ resuelto: true }).eq('id', id)
+    const admin = createAdminClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) redirect('/login')
+
+    const { data: perfilAccion } = await supabase
+      .from('usuarios')
+      .select('rol, colegio_id')
+      .eq('id', user.id)
+      .single()
+    if (!perfilAccion || !['admin', 'superadmin'].includes(perfilAccion.rol)) redirect('/login')
+
+    const { data: pendiente } = await admin
+      .from('pendientes')
+      .select('colegio_id')
+      .eq('id', id)
+      .single()
+    if (!pendiente) redirect('/admin/pendientes')
+    if (perfilAccion.rol !== 'superadmin' && pendiente.colegio_id !== perfilAccion.colegio_id) {
+      redirect('/admin/pendientes')
+    }
+
+    await admin.from('pendientes').update({ resuelto: true }).eq('id', id)
     redirect('/admin/pendientes')
   }
 

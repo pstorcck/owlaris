@@ -9,6 +9,7 @@
     "lint": "next lint",
     "test:math": "tsx scripts/math-safety-smoke.ts",
     "test:humanistic": "tsx scripts/humanistic-safety-smoke.ts",
+    "test:pedagogy": "tsx scripts/pedagogical-guard-smoke.ts",
     "test:stress": "tsx scripts/difficult-conversations-stress.ts"
   },
   "dependencies": {
