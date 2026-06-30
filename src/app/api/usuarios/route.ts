@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient, createClient } from '@/lib/supabase/server'
 import { canAccessColegio, requireRoles } from '@/lib/auth'
 
-const ROLES_PERMITIDOS = ['alumno', 'maestro', 'padre', 'admin', 'superadmin']
+const ROLES_PERMITIDOS = ['alumno', 'maestro', 'padre', 'director', 'admin', 'superadmin']
 
 // GET — listar usuarios con filtros
 export async function GET(req: NextRequest) {
@@ -30,7 +30,7 @@ export async function GET(req: NextRequest) {
 
     let query = admin
       .from('usuarios')
-      .select('*, colegio:colegios(nombre, slug)')
+      .select('*, colegio:colegios(id, nombre, slug)')
       .order('nombre_completo')
 
     // Superadmin ve todo, admin solo su colegio
@@ -110,12 +110,12 @@ export async function PATCH(req: NextRequest) {
     if (!auth.ok) return auth.response
 
     const admin = createAdminClient()
-    const { id, nombre_completo, rol, grado, activo, nueva_password } = await req.json()
+    const { id, nombre_completo, rol, grado, activo, nueva_password, colegio_id } = await req.json()
     if (!id) return NextResponse.json({ error: 'ID requerido' }, { status: 400 })
 
     const { data: objetivo } = await admin
       .from('usuarios')
-      .select('colegio_id, rol')
+      .select('colegio_id, rol, nombre_completo, activo')
       .eq('id', id)
       .single()
 
@@ -129,15 +129,26 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ error: 'Solo superadmin puede modificar superadmin' }, { status: 403 })
     }
 
+    const colegioFinal = colegio_id || objetivo.colegio_id
+    if (colegioFinal !== objetivo.colegio_id) {
+      if (auth.perfil.rol !== 'superadmin') {
+        return NextResponse.json({ error: 'Solo superadmin puede cambiar colegio' }, { status: 403 })
+      }
+      if (!canAccessColegio(auth.perfil, colegioFinal)) {
+        return NextResponse.json({ error: 'Sin permisos para el nuevo colegio' }, { status: 403 })
+      }
+    }
+
     if (nueva_password) {
       await admin.auth.admin.updateUserById(id, { password: nueva_password })
     }
 
     const { error } = await admin.from('usuarios').update({
-      nombre_completo,
+      nombre_completo: nombre_completo || objetivo.nombre_completo,
+      colegio_id: colegioFinal,
       rol: rolFinal,
       grado: grado || null,
-      activo,
+      activo: typeof activo === 'boolean' ? activo : objetivo.activo,
     }).eq('id', id)
 
     if (error) throw error

@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "next lint",
     "test:math": "tsx scripts/math-safety-smoke.ts",
-    "test:humanistic": "tsx scripts/humanistic-safety-smoke.ts"
+    "test:humanistic": "tsx scripts/humanistic-safety-smoke.ts",
+    "test:stress": "tsx scripts/difficult-conversations-stress.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.5.1",

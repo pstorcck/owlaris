@@ -1,11 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { createAdminClient, createClient } from '@/lib/supabase/server'
+import { canStaffAccessStudent } from '@/lib/guideAccess'
 
 export const dynamic = 'force-dynamic'
 
 export async function GET(req: NextRequest) {
   try {
     const supabase = createClient()
+    const admin = createAdminClient()
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
 
@@ -14,20 +16,18 @@ export async function GET(req: NextRequest) {
     if (!alumnoId) return NextResponse.json({ error: 'ID requerido' }, { status: 400 })
 
     const { data: perfil } = await supabase
-      .from('usuarios').select('rol, colegio_id').eq('id', user.id).single()
+      .from('usuarios').select('rol, colegio_id, email').eq('id', user.id).single()
     if (!perfil) return NextResponse.json({ error: 'Perfil no encontrado' }, { status: 404 })
 
-    const { data: alumno } = await supabase
+    const { data: alumno } = await admin
       .from('usuarios').select('*, colegio:colegios(nombre)').eq('id', alumnoId).single()
     if (!alumno) return NextResponse.json({ error: 'Alumno no encontrado' }, { status: 404 })
 
-    const puedeVer = perfil.rol === 'superadmin' ||
-      (perfil.rol === 'alumno' && user.id === alumnoId) ||
-      (['maestro', 'admin'].includes(perfil.rol) && perfil.colegio_id === alumno.colegio_id)
+    const puedeVer = await canStaffAccessStudent(admin, perfil, user.id, alumnoId)
 
     if (!puedeVer) return NextResponse.json({ error: 'Sin permisos para este alumno' }, { status: 403 })
 
-    const { data: interacciones } = await supabase
+    const { data: interacciones } = await admin
       .from('interacciones').select('*')
       .eq('usuario_id', alumnoId)
       .order('creado_en', { ascending: false })

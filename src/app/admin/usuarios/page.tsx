@@ -11,7 +11,7 @@ const GRADOS = [
 
 const ROL_COLOR: Record<string,string> = {
   superadmin: '#DC2626', admin: '#D97706', maestro: '#2563EB',
-  alumno: '#7C3AED', padre: '#0D9488', guia: '#059669'
+  director: '#0F766E', alumno: '#7C3AED', padre: '#0D9488', guia: '#059669'
 }
 
 interface Usuario {
@@ -62,7 +62,13 @@ export default function UsuariosPage() {
     })
   }, [])
 
-  useEffect(() => { if (colegioId) { cargarUsuarios(); cargarGuias(); cargarAsignaciones() } }, [buscar, filtroRol, filtroGrado, colegioId])
+  useEffect(() => {
+    if (colegioId || esSuperAdmin) {
+      cargarUsuarios()
+      cargarGuias()
+      cargarAsignaciones()
+    }
+  }, [buscar, filtroRol, filtroGrado, colegioId, esSuperAdmin])
 
   async function cargarUsuarios() {
     setCargando(true)
@@ -78,41 +84,50 @@ export default function UsuariosPage() {
   }
 
   async function cargarGuias() {
-    const supabase = createClient()
-    const { data } = await supabase.from('usuarios')
-      .select('id, nombre_completo, email, rol, grado, activo, ultimo_acceso, colegio:colegios(nombre, id)')
-      .eq('colegio_id', colegioId).in('rol', ['maestro', 'admin', 'superadmin']).eq('activo', true).order('nombre_completo')
-    setGuias((data as unknown as Usuario[]) || [])
+    const params = new URLSearchParams()
+    if (colegioId) params.set('colegio_id', colegioId)
+    const res = await fetch(`/api/guia-asignaciones?${params}`)
+    const data = await res.json()
+    setGuias((data.guias as unknown as Usuario[]) || [])
   }
 
   async function cargarAsignaciones() {
-    const supabase = createClient()
-    const { data } = await supabase.from('guia_asignaciones')
-      .select('id, guia_id, tipo, alumno_id, grado, guia:guia_id(nombre_completo), alumno:alumno_id(nombre_completo)')
-      .eq('colegio_id', colegioId).eq('activo', true).order('creado_en', { ascending: false })
-    setAsignaciones((data as unknown as Asignacion[]) || [])
+    const params = new URLSearchParams()
+    if (colegioId) params.set('colegio_id', colegioId)
+    const res = await fetch(`/api/guia-asignaciones?${params}`)
+    const data = await res.json()
+    setAsignaciones((data.asignaciones as unknown as Asignacion[]) || [])
   }
 
   async function crearAsignacion() {
     setProcesandoGuia(true)
-    const supabase = createClient()
-    const { error } = await supabase.from('guia_asignaciones').insert({
+    const res = await fetch('/api/guia-asignaciones', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
       guia_id: formGuia.guia_id,
       colegio_id: formGuia.tipo === 'grado' ? (formGuia.colegio_id || colegioId) : colegioId,
       tipo: formGuia.tipo,
       grado: formGuia.tipo === 'grado' ? formGuia.grado : null,
       alumno_id: formGuia.tipo === 'alumno' ? formGuia.alumno_id : null,
+      })
     })
+    const data = await res.json()
     setProcesandoGuia(false)
-    if (error) { setMensaje('❌ Error: ' + error.message); return }
+    if (!res.ok) { setMensaje('❌ Error: ' + (data.error || 'No se pudo crear la asignación')); return }
     setModalGuia(false)
     setFormGuia({ guia_id: '', tipo: 'grado', grado: '', alumno_id: '', colegio_id: '' })
-    cargarAsignaciones(); setMensaje('✅ Guía asignado correctamente')
+    cargarAsignaciones(); setMensaje(data.duplicada ? '✅ Esa asignación ya existía' : '✅ Guía asignado correctamente')
   }
 
   async function eliminarAsignacion(id: string) {
-    const supabase = createClient()
-    await supabase.from('guia_asignaciones').update({ activo: false }).eq('id', id)
+    const res = await fetch('/api/guia-asignaciones', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, activo: false })
+    })
+    const data = await res.json()
+    if (!res.ok) { setMensaje('❌ Error: ' + (data.error || 'No se pudo eliminar la asignación')); return }
     cargarAsignaciones(); setMensaje('✅ Asignación eliminada')
   }
 
@@ -144,9 +159,22 @@ export default function UsuariosPage() {
   async function guardarEdicion() {
     if (!modalEditar) return
     setProcesando(true)
-    const supabase = createClient()
-    await supabase.from('usuarios').update({ rol: modalEditar.rol, colegio_id: modalEditar.colegio_id || colegioId, grado: modalEditar.grado }).eq('id', modalEditar.id)
-    setMensaje('✅ Usuario actualizado'); setModalEditar(null); setProcesando(false); cargarUsuarios()
+    const res = await fetch('/api/usuarios', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        id: modalEditar.id,
+        nombre_completo: modalEditar.nombre_completo,
+        rol: modalEditar.rol,
+        grado: modalEditar.grado,
+        activo: modalEditar.activo,
+        colegio_id: modalEditar.colegio_id || colegioId,
+      })
+    })
+    const data = await res.json()
+    setProcesando(false)
+    if (!res.ok) { setMensaje('❌ ' + (data.error || 'No se pudo actualizar')); return }
+    setMensaje('✅ Usuario actualizado'); setModalEditar(null); cargarUsuarios()
   }
 
   async function crearUsuario() {
@@ -276,6 +304,7 @@ export default function UsuariosPage() {
                 <option value="">Todos los roles</option>
                 <option value="alumno">Alumnos</option>
                 <option value="maestro">Maestros</option>
+                <option value="director">Directores</option>
                 <option value="admin">Admins</option>
                 <option value="padre">Padres</option>
               </select>
@@ -409,6 +438,7 @@ export default function UsuariosPage() {
                 style={{ width: '100%', padding: '9px 12px', border: '1px solid #E2E8F0', borderRadius: '8px', fontSize: '13px' }}>
                 <option value="alumno">Alumno</option>
                 <option value="maestro">Maestro / Guía</option>
+                <option value="director">Director</option>
                 <option value="padre">Padre de familia</option>
                 <option value="admin">Admin</option>
               </select>
@@ -451,6 +481,7 @@ export default function UsuariosPage() {
                 style={{ width: '100%', padding: '9px 12px', border: '1px solid #E2E8F0', borderRadius: '8px', fontSize: '13px' }}>
                 <option value="alumno">Alumno</option>
                 <option value="maestro">Maestro / Guía</option>
+                <option value="director">Director</option>
                 <option value="padre">Padre de familia</option>
                 <option value="admin">Admin</option>
                 <option value="superadmin">Superadmin</option>
@@ -527,8 +558,8 @@ export default function UsuariosPage() {
                 </select>
               </div>
             )}
-            <button onClick={crearAsignacion} disabled={procesandoGuia || !formGuia.guia_id}
-              style={{ ...S.btn(), width: '100%', padding: '11px', marginTop: '4px', opacity: (procesandoGuia || !formGuia.guia_id) ? 0.5 : 1 }}>
+            <button onClick={crearAsignacion} disabled={procesandoGuia || !formGuia.guia_id || (formGuia.tipo === 'grado' && (!formGuia.grado || !(formGuia.colegio_id || colegioId))) || (formGuia.tipo === 'alumno' && !formGuia.alumno_id)}
+              style={{ ...S.btn(), width: '100%', padding: '11px', marginTop: '4px', opacity: (procesandoGuia || !formGuia.guia_id || (formGuia.tipo === 'grado' && (!formGuia.grado || !(formGuia.colegio_id || colegioId))) || (formGuia.tipo === 'alumno' && !formGuia.alumno_id)) ? 0.5 : 1 }}>
               {procesandoGuia ? 'Asignando...' : 'Crear asignación'}
             </button>
           </div>

@@ -7,6 +7,15 @@ export async function POST(req: NextRequest) {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
 
+    const { data: perfil } = await supabase
+      .from('usuarios')
+      .select('rol')
+      .eq('id', user.id)
+      .single()
+    if (!perfil || !['maestro', 'director', 'admin', 'superadmin'].includes(perfil.rol)) {
+      return NextResponse.json({ error: 'Sin permiso' }, { status: 403 })
+    }
+
     const { pregunta, contexto } = await req.json()
 
     const OpenAI = (await import('openai')).default

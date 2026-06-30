@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/server'
 export type AuthPerfil = {
   rol: string
   colegio_id: string | null
+  email?: string | null
 }
 
 export async function requireRoles(roles: string[]): Promise<
@@ -20,7 +21,7 @@ export async function requireRoles(roles: string[]): Promise<
 
   const { data: perfil } = await supabase
     .from('usuarios')
-    .select('rol, colegio_id')
+    .select('rol, colegio_id, email')
     .eq('id', user.id)
     .single()
 

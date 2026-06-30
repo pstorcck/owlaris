@@ -1,34 +1,59 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { createAdminClient, createClient } from '@/lib/supabase/server'
 import { Resend } from 'resend'
 import { canAccessColegio, requireRoles } from '@/lib/auth'
+import { canStaffAccessStudent, getAssignedStudentIds } from '@/lib/guideAccess'
+import { mismaSedePorEmail } from '@/lib/sedes'
 
 export async function GET(req: NextRequest) {
   const supabase = createClient()
+  const admin = createAdminClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
 
-  const { data: perfil } = await supabase.from('usuarios').select('rol, colegio_id').eq('id', user.id).single()
-  if (!perfil || !['maestro', 'admin', 'superadmin'].includes(perfil.rol)) {
+  const { data: perfil } = await supabase.from('usuarios').select('rol, colegio_id, email').eq('id', user.id).single()
+  if (!perfil || !['maestro', 'director', 'admin', 'superadmin'].includes(perfil.rol)) {
     return NextResponse.json({ error: 'Sin permiso' }, { status: 403 })
   }
 
-  const { data: alertas } = await supabase
+  let query = admin
     .from('alertas')
     .select('*, alumno:alumno_id(nombre_completo, email, grado), guia:guia_id(nombre_completo)')
-    .eq('colegio_id', perfil.colegio_id)
     .eq('resuelta', false)
     .order('creado_en', { ascending: false })
     .limit(50)
+
+  if (perfil.rol === 'superadmin') {
+    // superadmin ve todas
+  } else if (perfil.rol === 'admin') {
+    query = query.eq('colegio_id', perfil.colegio_id)
+  } else if (perfil.rol === 'director') {
+    const { data: alumnosSede } = await admin
+      .from('usuarios')
+      .select('id, email')
+      .eq('colegio_id', perfil.colegio_id)
+      .eq('rol', 'alumno')
+    const ids = (alumnosSede || [])
+      .filter((alumno) => mismaSedePorEmail(perfil.email, alumno.email))
+      .map((alumno) => alumno.id)
+    if (ids.length === 0) return NextResponse.json({ alertas: [] })
+    query = query.eq('colegio_id', perfil.colegio_id).in('alumno_id', ids)
+  } else {
+    const assignedIds = await getAssignedStudentIds(admin, user.id)
+    if (assignedIds.length === 0) return NextResponse.json({ alertas: [] })
+    query = query.in('alumno_id', assignedIds)
+  }
+
+  const { data: alertas } = await query
 
   return NextResponse.json({ alertas })
 }
 
 export async function POST(req: NextRequest) {
-  const auth = await requireRoles(['maestro', 'admin', 'superadmin'])
+  const auth = await requireRoles(['maestro', 'director', 'admin', 'superadmin'])
   if (!auth.ok) return auth.response
 
-  const supabase = auth.supabase
+  const admin = createAdminClient()
   const body = await req.json()
   const { alumno_id, tipo, descripcion, contexto, colegio_id } = body
   if (!alumno_id || !tipo) {
@@ -37,7 +62,7 @@ export async function POST(req: NextRequest) {
 
   // Evitar alertas duplicadas recientes (última hora)
   const unaHoraAtras = new Date(Date.now() - 3600000).toISOString()
-  const { data: existente } = await supabase
+  const { data: existente } = await admin
     .from('alertas')
     .select('id')
     .eq('alumno_id', alumno_id)
@@ -49,9 +74,9 @@ export async function POST(req: NextRequest) {
   if (existente) return NextResponse.json({ ok: true, duplicada: true })
 
   // Buscar guía asignado
-  const { data: alumno } = await supabase
+  const { data: alumno } = await admin
     .from('usuarios')
-    .select('nombre_completo, grado, colegio_id')
+    .select('id, nombre_completo, grado, colegio_id')
     .eq('id', alumno_id)
     .single()
 
@@ -59,13 +84,17 @@ export async function POST(req: NextRequest) {
   if (!canAccessColegio(auth.perfil, colegioIdFinal) || (alumno?.colegio_id && alumno.colegio_id !== colegioIdFinal)) {
     return NextResponse.json({ error: 'Sin permisos para este colegio' }, { status: 403 })
   }
+  if (auth.perfil.rol === 'maestro' || auth.perfil.rol === 'director') {
+    const puedeVerAlumno = await canStaffAccessStudent(admin, auth.perfil, auth.user.id, alumno_id)
+    if (!puedeVerAlumno) return NextResponse.json({ error: 'Sin permisos para este alumno' }, { status: 403 })
+  }
 
   let guiaId = null
   let guiaEmail = null
   let guiaNombre = null
 
   // Buscar por alumno específico primero, luego por grado
-  const { data: asignacionAlumno } = await supabase
+  const { data: asignacionAlumno } = await admin
     .from('guia_asignaciones')
     .select('guia_id, guia:guia_id(email, nombre_completo)')
     .eq('alumno_id', alumno_id)
@@ -78,7 +107,7 @@ export async function POST(req: NextRequest) {
     guiaEmail = (asignacionAlumno.guia as unknown as {email:string, nombre_completo:string}).email
     guiaNombre = (asignacionAlumno.guia as unknown as {email:string, nombre_completo:string}).nombre_completo
   } else if (alumno?.grado) {
-    const { data: asignacionGrado } = await supabase
+    const { data: asignacionGrado } = await admin
       .from('guia_asignaciones')
       .select('guia_id, guia:guia_id(email, nombre_completo)')
       .eq('grado', alumno.grado)
@@ -95,7 +124,7 @@ export async function POST(req: NextRequest) {
   }
 
   // Crear alerta
-  await supabase.from('alertas').insert({
+  await admin.from('alertas').insert({
     colegio_id: colegioIdFinal, alumno_id, guia_id: guiaId, tipo, descripcion, contexto
   })
 
@@ -105,7 +134,8 @@ export async function POST(req: NextRequest) {
     const tipoLabel: Record<string,string> = {
       baja_comprension: '⚠️ Baja comprensión',
       bloqueo_recurrente: '🔄 Bloqueo recurrente',
-      riesgo_copia: '🚨 Riesgo de copia'
+      riesgo_copia: '🚨 Riesgo de copia',
+      seguridad_contenido: '🚨 Seguridad del estudiante'
     }
     await resend.emails.send({
       from: 'Owlaris <noreply@owlaris.app>',
@@ -136,19 +166,23 @@ export async function POST(req: NextRequest) {
 }
 
 export async function PATCH(req: NextRequest) {
-  const auth = await requireRoles(['maestro', 'admin', 'superadmin'])
+  const auth = await requireRoles(['maestro', 'director', 'admin', 'superadmin'])
   if (!auth.ok) return auth.response
 
-  const supabase = auth.supabase
+  const admin = createAdminClient()
   const { id } = await req.json()
   if (!id) return NextResponse.json({ error: 'ID requerido' }, { status: 400 })
 
-  const { data: alerta } = await supabase.from('alertas').select('colegio_id').eq('id', id).single()
+  const { data: alerta } = await admin.from('alertas').select('colegio_id, alumno_id').eq('id', id).single()
   if (!alerta) return NextResponse.json({ error: 'Alerta no encontrada' }, { status: 404 })
   if (!canAccessColegio(auth.perfil, alerta.colegio_id)) {
     return NextResponse.json({ error: 'Sin permisos para esta alerta' }, { status: 403 })
   }
+  if (auth.perfil.rol === 'maestro' || auth.perfil.rol === 'director') {
+    const puedeResolver = await canStaffAccessStudent(admin, auth.perfil, auth.user.id, alerta.alumno_id)
+    if (!puedeResolver) return NextResponse.json({ error: 'Sin permisos para este alumno' }, { status: 403 })
+  }
 
-  await supabase.from('alertas').update({ resuelta: true, resuelta_en: new Date().toISOString() }).eq('id', id)
+  await admin.from('alertas').update({ resuelta: true, resuelta_en: new Date().toISOString() }).eq('id', id)
   return NextResponse.json({ ok: true })
 }
