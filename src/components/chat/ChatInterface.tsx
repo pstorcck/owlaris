@@ -190,7 +190,10 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
     }).then(r => r.json()).then(data => {
       if (data.materias_disponibles) {
         materiasDisponiblesRef.current = data.materias_disponibles
-        setChipsMateria(data.materias_disponibles)
+        materiasBaseRef.current = data.materias_disponibles
+        setChipsMateria(traducirChips(data.materias_disponibles, idiomaIngles))
+        setGradoAlumno(gradoGuardado)
+        setNombreAlumno(usuario.nombre_completo.split(' ')[0])
       }
     }).catch(() => {})
   }, [gradoGuardado, idiomaIngles])
