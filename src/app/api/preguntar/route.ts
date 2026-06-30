@@ -357,10 +357,12 @@ async function buscarContenido(colegio_slug: string, grado: string, materia: str
       if (match) idx = await construirIndice(driveId, token, raiz, gradoB, match)
       return idx
     }
-    // Buscar primero en carpeta propia del colegio, luego en compartida
-    indice = await buscarEnGrado('Owlaris/' + colegioSP, grado, materia)
-    if (indice.length === 0 && colegioSP !== CARPETA_COMPARTIDA) {
+    // eScholaris tiene carpeta propia; demás colegios usan CARPETA_COMPARTIDA
+    if (colegioSP === 'eScholaris') {
+      indice = await buscarEnGrado('Owlaris/' + colegioSP, grado, materia)
+    } else {
       indice = await buscarEnGrado('Owlaris/' + CARPETA_COMPARTIDA, grado, materia)
+      if (indice.length === 0) indice = await buscarEnGrado('Owlaris/' + colegioSP, grado, materia)
     }
     if (indice.length === 0) indice = await construirIndice(driveId, token, 'Owlaris', CARPETA_COMPARTIDA, 'Preparación pruebas nacionales', 'Mineduc', grado, materia)
     if (indice.length === 0) indice = await construirIndice(driveId, token, 'Owlaris', CARPETA_COMPARTIDA, 'Preparación pruebas nacionales', 'Mineduc', materia)
