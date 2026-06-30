@@ -53,6 +53,8 @@ export default function OwlarisOwl3D({ pose = 'thinking', size = 280 }: Props) {
       style={{
         width: `${size}px`,
         height: `${size}px`,
+        maxWidth: '100%',
+        maxHeight: '100%',
         background: 'transparent',
       } as React.CSSProperties}
     />
