@@ -13,7 +13,7 @@ export async function GET() {
 
     const { data: perfil } = await supabase
       .from('usuarios').select('colegio_id, rol').eq('id', user.id).single()
-    if (!perfil || !['maestro','director','admin','superadmin'].includes(perfil.rol)) {
+    if (!perfil || !['maestro','admin','superadmin'].includes(perfil.rol)) {
       return NextResponse.json({ error: 'Sin acceso' }, { status: 403 })
     }
 

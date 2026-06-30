@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
-import DashboardDocente from '@/components/docente/DashboardDocente'
+import DirectorDashboard from '@/components/director/DirectorDashboard'
 
 export default async function DirectorPage() {
   const supabase = createClient()
@@ -17,5 +17,5 @@ export default async function DirectorPage() {
     redirect('/')
   }
 
-  return <DashboardDocente perfil={perfil} esDirector />
+  return <DirectorDashboard />
 }

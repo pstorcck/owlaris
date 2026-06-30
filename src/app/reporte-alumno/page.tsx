@@ -14,7 +14,7 @@ export default async function ReporteAlumnoPage({ searchParams }: { searchParams
   if (!alumnoId) redirect('/guia')
 
   const { data: perfil } = await supabase
-    .from('usuarios').select('rol, colegio_id').eq('id', user.id).single()
+    .from('usuarios').select('rol, colegio_id, email').eq('id', user.id).single()
   if (!perfil) redirect('/login')
 
   const { data: alumno } = await admin

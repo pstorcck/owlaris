@@ -3,6 +3,7 @@ import { createAdminClient, createClient } from '@/lib/supabase/server'
 import { Resend } from 'resend'
 import { canAccessColegio, requireRoles } from '@/lib/auth'
 import { canStaffAccessStudent, getAssignedStudentIds } from '@/lib/guideAccess'
+import { mismaSedePorEmail } from '@/lib/sedes'
 
 export async function GET(req: NextRequest) {
   const supabase = createClient()
@@ -10,7 +11,7 @@ export async function GET(req: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
 
-  const { data: perfil } = await supabase.from('usuarios').select('rol, colegio_id').eq('id', user.id).single()
+  const { data: perfil } = await supabase.from('usuarios').select('rol, colegio_id, email').eq('id', user.id).single()
   if (!perfil || !['maestro', 'director', 'admin', 'superadmin'].includes(perfil.rol)) {
     return NextResponse.json({ error: 'Sin permiso' }, { status: 403 })
   }
@@ -24,8 +25,19 @@ export async function GET(req: NextRequest) {
 
   if (perfil.rol === 'superadmin') {
     // superadmin ve todas
-  } else if (perfil.rol === 'admin' || perfil.rol === 'director') {
+  } else if (perfil.rol === 'admin') {
     query = query.eq('colegio_id', perfil.colegio_id)
+  } else if (perfil.rol === 'director') {
+    const { data: alumnosSede } = await admin
+      .from('usuarios')
+      .select('id, email')
+      .eq('colegio_id', perfil.colegio_id)
+      .eq('rol', 'alumno')
+    const ids = (alumnosSede || [])
+      .filter((alumno) => mismaSedePorEmail(perfil.email, alumno.email))
+      .map((alumno) => alumno.id)
+    if (ids.length === 0) return NextResponse.json({ alertas: [] })
+    query = query.eq('colegio_id', perfil.colegio_id).in('alumno_id', ids)
   } else {
     const assignedIds = await getAssignedStudentIds(admin, user.id)
     if (assignedIds.length === 0) return NextResponse.json({ alertas: [] })
@@ -72,7 +84,7 @@ export async function POST(req: NextRequest) {
   if (!canAccessColegio(auth.perfil, colegioIdFinal) || (alumno?.colegio_id && alumno.colegio_id !== colegioIdFinal)) {
     return NextResponse.json({ error: 'Sin permisos para este colegio' }, { status: 403 })
   }
-  if (auth.perfil.rol === 'maestro') {
+  if (auth.perfil.rol === 'maestro' || auth.perfil.rol === 'director') {
     const puedeVerAlumno = await canStaffAccessStudent(admin, auth.perfil, auth.user.id, alumno_id)
     if (!puedeVerAlumno) return NextResponse.json({ error: 'Sin permisos para este alumno' }, { status: 403 })
   }
@@ -166,7 +178,7 @@ export async function PATCH(req: NextRequest) {
   if (!canAccessColegio(auth.perfil, alerta.colegio_id)) {
     return NextResponse.json({ error: 'Sin permisos para esta alerta' }, { status: 403 })
   }
-  if (auth.perfil.rol === 'maestro') {
+  if (auth.perfil.rol === 'maestro' || auth.perfil.rol === 'director') {
     const puedeResolver = await canStaffAccessStudent(admin, auth.perfil, auth.user.id, alerta.alumno_id)
     if (!puedeResolver) return NextResponse.json({ error: 'Sin permisos para este alumno' }, { status: 403 })
   }

@@ -16,7 +16,7 @@ export async function GET(req: NextRequest) {
     if (!alumnoId) return NextResponse.json({ error: 'ID requerido' }, { status: 400 })
 
     const { data: perfil } = await supabase
-      .from('usuarios').select('rol, colegio_id').eq('id', user.id).single()
+      .from('usuarios').select('rol, colegio_id, email').eq('id', user.id).single()
     if (!perfil) return NextResponse.json({ error: 'Perfil no encontrado' }, { status: 404 })
 
     const { data: alumno } = await admin

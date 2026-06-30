@@ -1,5 +1,6 @@
 import type { AuthPerfil } from '@/lib/auth'
 import type { createAdminClient } from '@/lib/supabase/server'
+import { mismaSedePorEmail } from '@/lib/sedes'
 
 type AdminClient = ReturnType<typeof createAdminClient>
 
@@ -93,14 +94,17 @@ export async function canStaffAccessStudent(
 ) {
   const { data: alumno } = await admin
     .from('usuarios')
-    .select('id, colegio_id, rol')
+    .select('id, colegio_id, rol, email')
     .eq('id', alumnoId)
     .single()
 
   if (!alumno || alumno.rol !== 'alumno') return false
   if (perfil.rol === 'superadmin') return true
   if (perfil.rol === 'alumno') return viewerId === alumnoId
-  if (perfil.rol === 'admin' || perfil.rol === 'director') return alumno.colegio_id === perfil.colegio_id
+  if (perfil.rol === 'admin') return alumno.colegio_id === perfil.colegio_id
+  if (perfil.rol === 'director') {
+    return alumno.colegio_id === perfil.colegio_id && mismaSedePorEmail(perfil.email, alumno.email)
+  }
   if (perfil.rol !== 'maestro' || alumno.colegio_id !== perfil.colegio_id) return false
 
   const assignedIds = await getAssignedStudentIds(admin, viewerId)
