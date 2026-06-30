@@ -407,13 +407,13 @@ async function leerConfig(): Promise<string> {
   return contenido
 }
 
-async function leerCarpetasGrado(grado: string, idiomaIngles: boolean): Promise<string[]> {
+async function leerCarpetasGrado(grado: string, idiomaIngles: boolean, carpetaColegio = CARPETA_COMPARTIDA): Promise<string[]> {
   const token = await getToken()
   if (!token) return []
   const driveId = process.env.SHAREPOINT_DRIVE_ID!
   const carpetas: string[] = []
   try {
-    const ruta = encodeURIComponent('Owlaris') + '/' + encodeURIComponent(CARPETA_COMPARTIDA) + '/' + encodeURIComponent(grado)
+    const ruta = encodeURIComponent('Owlaris') + '/' + encodeURIComponent(carpetaColegio) + '/' + encodeURIComponent(grado)
     const url = 'https://graph.microsoft.com/v1.0/drives/' + driveId + '/root:/' + ruta + ':/children'
     const res = await fetch(url, { headers: { Authorization: 'Bearer ' + token } })
     if (res.ok) {
@@ -630,7 +630,7 @@ export async function POST(req: NextRequest) {
     if (pregunta === '__CARGAR_MATERIAS__' || (estado === 'esperando_materia' && gradoAlumno && !pregunta.trim())) {
       const grado = gradoAlumno || grado_override || perfil.grado || ''
       if (grado) {
-        const carpetas = await leerCarpetasGrado(grado, idiomaIngles)
+        const carpetas = await leerCarpetasGrado(grado, idiomaIngles, colegioSlug)
         return NextResponse.json({ materias_disponibles: carpetas, respuesta: '', tokens: 0 })
       }
     }
@@ -644,7 +644,7 @@ export async function POST(req: NextRequest) {
       const gradoDetectado = normalizarGradoPorColegio(pregunta, colegioSlug)
       if (!gradoDetectado) return NextResponse.json({ respuesta: 'No reconocí ese grado. ¿Puedes decirme tu grado? Por ejemplo: "4to Primaria", "3ero Básico", "5to Bachillerato"...', nuevo_estado: 'esperando_grado', nombre_alumno: nombreAlumno, tokens: 0 })
       if (userId) await supabase.from('usuarios').update({ grado: gradoDetectado }).eq('id', userId)
-      const carpetasG = await leerCarpetasGrado(gradoDetectado, idiomaIngles)
+      const carpetasG = await leerCarpetasGrado(gradoDetectado, idiomaIngles, colegioSlug)
       return NextResponse.json({ respuesta: idiomaIngles ? `Perfect, ${nombreAlumno}! What would you like to study?` : `Perfecto, ${nombreAlumno}. ¿Qué quieres estudiar hoy?`, nuevo_estado: 'esperando_materia', nombre_alumno: nombreAlumno, grado_detectado: gradoDetectado, materias_disponibles: carpetasG, tokens: 0 })
     }
 
