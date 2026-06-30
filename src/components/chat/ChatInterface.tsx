@@ -152,7 +152,7 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
   const estadoInicial: EstadoChat = gradoGuardado ? 'esperando_materia' : 'esperando_nombre'
   const [estadoChat, setEstadoChat]       = useState<EstadoChat>(estadoInicial)
   const [nombreAlumno, setNombreAlumno]   = useState('')
-  const [gradoAlumno, setGradoAlumno]     = useState(gradoGuardado)
+  const [gradoAlumno, setGradoAlumno]     = useState('')
   const [materiaAlumno, setMateriaAlumno] = useState('')
 
   const finalRef = useRef<HTMLDivElement>(null)
