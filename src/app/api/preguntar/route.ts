@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient, createClient } from '@/lib/supabase/server'
 import { checkContentSafety, type ContentSafetyResult } from '@/lib/contentSafety'
 import { guardHumanisticResponse } from '@/lib/humanisticSafety'
+import { guardNoFinalAnswer } from '@/lib/pedagogicalGuard'
 import {
   extractAndCleanOperation,
   handleMathEvaluation,
@@ -37,6 +38,14 @@ MÉTODO DE ENSEÑANZA OBLIGATORIO:
 REGLA ANTI-COPIA:
 Si el alumno pide "dame la respuesta", "hazme la tarea" o "solo dime qué va", responde con negativa pedagógica y guía paso a paso.
 
+REGLA ESTRICTA — NO ENTREGAR RESPUESTAS FINALES:
+En la vista alumno, no entregues directamente la respuesta final de un problema, ejercicio, tarea, repaso o pregunta de práctica cuando el estudiante todavía puede razonarla.
+Tu función es guiar para que el estudiante llegue a la respuesta por sí mismo.
+Si el estudiante responde incorrectamente, puedes decir que todavía no llegó a la respuesta correcta, pero NO reveles de inmediato el resultado correcto. Ayúdalo a detectar el error y avanzar paso a paso.
+Usa pistas, preguntas guiadas, ejemplos parciales, recordatorios de conceptos y verificación paso a paso.
+Solo confirma la respuesta final cuando el estudiante ya la propuso correctamente o completó correctamente el razonamiento.
+Si insiste en que quiere solo la respuesta, responde: "Mi objetivo es ayudarte a entender, no darte una respuesta para copiar. Hagámoslo juntos paso a paso."
+
 PRÁCTICA — PROTOCOLO ESTRICTO:
 Cuando el alumno quiera practicar, genera UNA sola pregunta a la vez.
 REGLA CRÍTICA PARA PREGUNTAS MATEMÁTICAS O DE CIENCIAS EXACTAS:
@@ -61,7 +70,7 @@ Reglas para [OP]:
 Después de cada respuesta del alumno, el backend verifica automáticamente. TÚ solo recibirás el estado: CORRECTO, INCORRECTO, o NO_EVALUABLE.
 
 Si recibes CORRECTO: di "Correcto." inmediatamente. Pide el proceso si solo dio número. Da siguiente pregunta.
-Si recibes INCORRECTO: di "Incorrecto." inmediatamente. Explica una sola idea. Pide nuevo intento.
+Si recibes INCORRECTO: di que todavía no llegó a la respuesta correcta. NO digas el resultado correcto. Explica una sola pista o paso y pide nuevo intento.
 Si recibes NO_EVALUABLE: no digas correcto ni incorrecto. Pide que escriban la operación.
 
 EVALUACIÓN DE RESPUESTAS — HUMANÍSTICAS:
@@ -87,7 +96,7 @@ Cuando el alumno responda con una letra (A, B, C o D):
 1. Busca el VALOR de esa letra en tu pregunta anterior.
 2. Compara ese valor con el resultado de [OP].
 3. Si el valor ES correcto → di "Correcto" de inmediato.
-4. Si el valor NO ES correcto → di "Incorrecto" y explica.
+4. Si el valor NO ES correcto → di que todavía no llegó a la respuesta correcta, NO reveles el valor correcto, explica una pista y pide nuevo intento.
 
 FORMATO: Sin LaTeX. Ecuaciones en texto plano. Sin emoticones.
 
@@ -864,6 +873,7 @@ ${contextoContenido}`
     // CONTRADICTION GUARD FINAL — última línea de defensa
     // Aunque el modelo no usó [OP:], si dice incorrecto=correcto, lo bloqueamos
     const studentN = normalizeStudentAnswer(pregunta)
+    let respuestaVerificadaCorrecta = false
     if (studentN !== null) {
       const respuestaLow = respuesta.toLowerCase()
       const dijoIncorrecto = respuestaLow.includes('incorrecto') || respuestaLow.includes('incorrect')
@@ -871,7 +881,8 @@ ${contextoContenido}`
         ? (inferCanonicalOperationFromText(ultimoMensajeAsistente(historial)) || inferCanonicalOperationFromText(respuesta))
         : null
       const respuestaCorrectaCalculada = opDeContexto ? solveOperation(opDeContexto) : null
-      if (dijoIncorrecto && respuestaCorrectaCalculada !== null && Math.abs(studentN - respuestaCorrectaCalculada) < 0.001) {
+      respuestaVerificadaCorrecta = respuestaCorrectaCalculada !== null && Math.abs(studentN - respuestaCorrectaCalculada) < 0.001
+      if (dijoIncorrecto && respuestaVerificadaCorrecta) {
         respuesta = idiomaIngles
           ? `Correct. ${studentN} is the right answer. Can you explain how you solved it?`
           : `¡Correcto! ${studentN} es la respuesta correcta. Bien hecho. ¿Puedes explicarme cómo llegaste a ese resultado?`
@@ -890,6 +901,15 @@ ${contextoContenido}`
         }
       }
     }
+
+    const pedagogicalGuard = guardNoFinalAnswer(respuesta, {
+      pregunta,
+      tipoPregunta,
+      materiaNumerica,
+      respuestaVerificadaCorrecta,
+      idiomaIngles,
+    })
+    respuesta = pedagogicalGuard.text
 
     if (tipoPregunta === 'formativa') {
       respuesta += '\n\nTe comparto este recurso de Eduardo Montano que puede ayudarte: https://www.youtube.com/c/EduardoMontano'
@@ -924,7 +944,7 @@ ${contextoContenido}`
       operacion_canonica: opValidaEnRespuesta || null,
       op_estado: opValidaEnRespuesta ? 'pendiente' : null,
       estado_evaluacion: evaluacionProtocolo?.estado || null,
-      guard_activado: evaluacionProtocolo?.guardActivado || guardiaHumanistica.guardActivado || false,
+      guard_activado: evaluacionProtocolo?.guardActivado || pedagogicalGuard.guardActivado || guardiaHumanistica.guardActivado || false,
     }).select('id').single()
     const insertedId = insertedRow?.id || null
     if (insertErr) console.error('INSERT interaccion ERROR:', insertErr.message)

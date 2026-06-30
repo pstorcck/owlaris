@@ -20,7 +20,9 @@ async function main() {
 
   const wrong = await handleMathEvaluation(tutorPrompt, '17', false)
   assert.equal(wrong?.estado, 'incorrecto')
-  assert.match(wrong?.feedback || '', /16/)
+  assert.equal(wrong?.correctAnswer, 16)
+  assert.match(wrong?.feedback || '', /Todavía no llegamos|No te voy/i)
+  assert.doesNotMatch(wrong?.feedback || '', /16/)
 
   const explicit = await handleMathEvaluation('¿Cuánto es 25 - 9? [OP: 25-9]', '16', false)
   assert.equal(explicit?.estado, 'correcto')
@@ -42,6 +44,7 @@ Vamos a practicar con otra pregunta:
   const combinedWrong = await handleMathEvaluation(combinedTutorMessage, '6', false)
   assert.equal(combinedWrong?.estado, 'incorrecto')
   assert.equal(combinedWrong?.correctAnswer, 13)
+  assert.doesNotMatch(combinedWrong?.feedback || '', /\b13\b/)
 
   const explainedAnswer = await handleMathEvaluation(
     combinedTutorMessage,
@@ -85,6 +88,7 @@ D) 10
   const multipleChoiceWrong = await handleMathEvaluation(multipleChoicePrompt, 'opción A', false)
   assert.equal(multipleChoiceWrong?.estado, 'incorrecto')
   assert.equal(multipleChoiceWrong?.correctAnswer, 12)
+  assert.doesNotMatch(multipleChoiceWrong?.feedback || '', /\b12\b/)
 
   console.log('math-safety smoke passed')
 }

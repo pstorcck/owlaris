@@ -168,7 +168,8 @@ async function main() {
       const result = await handleMathEvaluation(prompt, numericAnswer(wrong), false)
       assert.equal(result?.estado, 'incorrecto')
       assert.ok(result?.correctAnswer !== null && Math.abs((result?.correctAnswer || 0) - correct!) < 0.001)
-      assert.match(result?.feedback || '', /Incorrecto/i)
+      assert.match(result?.feedback || '', /Todavía no llegamos|No te voy|Not yet|guide/i)
+      assert.doesNotMatch(result?.feedback || '', /(?:resultado|respuesta) correcto\s+(?:es|ser[ií]a)|correct (?:result|answer)\s+(?:is|would be)/i)
     })
   }
 

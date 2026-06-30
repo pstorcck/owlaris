@@ -181,9 +181,11 @@ function contradictionGuard(
 function generatePedagogicalFeedback(
   estado: string,
   studentAnswer: string,
-  correctAnswer: number | null,
-  idiomaIngles: boolean
+  _correctAnswer: number | null,
+  idiomaIngles: boolean,
+  op?: string | null
 ): string {
+  const hint = buildGuidedMathHint(op, idiomaIngles)
   switch (estado) {
     case 'correcto':
     case 'equivalente':
@@ -192,8 +194,8 @@ function generatePedagogicalFeedback(
         : `¡Correcto! ${studentAnswer} es la respuesta correcta. ¿Puedes explicarme cómo llegaste a ese resultado?`
     case 'incorrecto':
       return idiomaIngles
-        ? `Incorrect. The correct result is ${correctAnswer}. Try again step by step.`
-        : `Incorrecto. El resultado correcto es ${correctAnswer}. Intenta de nuevo paso a paso.`
+        ? `Not yet. I will not give you the final answer directly, but I will guide you. ${hint} Try again with that step.`
+        : `Todavía no llegamos a la respuesta correcta. No te voy a dar la respuesta directamente, pero sí te voy a guiar. ${hint} Intenta de nuevo con ese paso.`
     case 'no_evaluable':
       return idiomaIngles
         ? "To check properly, first write the operation. What operation represents the problem?"
@@ -203,6 +205,38 @@ function generatePedagogicalFeedback(
         ? "I couldn't verify that right now. Let's review the process step by step."
         : 'No pude verificarlo en este momento. Revisemos el procedimiento paso a paso.'
   }
+}
+
+function buildGuidedMathHint(op: string | null | undefined, idiomaIngles: boolean): string {
+  const clean = normalizeOperation(op || '')
+  if (clean.includes('=') && /x/i.test(clean)) {
+    return idiomaIngles
+      ? 'First identify what operation is affecting x, then use the inverse operation to isolate it.'
+      : 'Primero identifica qué operación afecta a x y luego usa la operación inversa para dejarla sola.'
+  }
+  if ((clean.includes('*') || clean.includes('/')) && (clean.includes('+') || clean.includes('-'))) {
+    return idiomaIngles
+      ? 'Remember the order of operations: solve multiplication or division before addition or subtraction.'
+      : 'Recuerda el orden de operaciones: resuelve multiplicación o división antes de sumar o restar.'
+  }
+  if (clean.includes('/')) {
+    return idiomaIngles
+      ? 'Think of division as sharing into equal groups. What is the first smaller operation you can solve?'
+      : 'Piensa la división como repartir en grupos iguales. ¿Cuál es la primera operación pequeña que puedes resolver?'
+  }
+  if (clean.includes('-')) {
+    return idiomaIngles
+      ? 'For subtraction, try breaking apart the number you subtract and remove it in two easier steps.'
+      : 'Para restar, prueba separar el número que quitas y hacerlo en dos pasos más fáciles.'
+  }
+  if (clean.includes('*')) {
+    return idiomaIngles
+      ? 'Think of multiplication as equal groups. How many groups are there, and how many are in each group?'
+      : 'Piensa la multiplicación como grupos iguales. ¿Cuántos grupos hay y cuántos hay en cada grupo?'
+  }
+  return idiomaIngles
+    ? 'First write the operation clearly, then solve only the first step.'
+    : 'Primero escribe la operación con claridad y resuelve solo el primer paso.'
 }
 
 function logEvaluation(data: Record<string, unknown>) {
@@ -258,7 +292,7 @@ export async function handleMathEvaluation(
   const studentN = normalizeStudentAnswer(studentAnswer) ?? extractMultipleChoiceValue(tutorQuestion, studentAnswer)
   const comparison = compareAnswers(studentN, correctAnswer)
   const estado = buildEvaluationState(comparison, correctAnswer !== null)
-  const feedbackBase = generatePedagogicalFeedback(estado, studentAnswer, correctAnswer, idiomaIngles)
+  const feedbackBase = generatePedagogicalFeedback(estado, studentAnswer, correctAnswer, idiomaIngles, op)
   const { feedback, guardActivado } = contradictionGuard(feedbackBase, estado, studentN, correctAnswer, idiomaIngles)
 
   logEvaluation({ op, correctAnswer, studentAnswer, studentN, estado, guardActivado })

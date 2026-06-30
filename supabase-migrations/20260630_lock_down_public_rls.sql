@@ -139,6 +139,10 @@ begin
   end loop;
 end $$;
 
+alter table if exists public.usuarios enable row level security;
+alter table if exists public.guia_asignaciones enable row level security;
+alter table if exists public.alertas enable row level security;
+
 revoke all on all tables in schema public from anon;
 revoke insert, update, delete on public.colegios from authenticated;
 revoke insert, update, delete on public.materias from authenticated;
