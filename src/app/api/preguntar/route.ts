@@ -120,6 +120,8 @@ const CACHE_TTL      = 1000 * 60 * 1
 const COLEGIOS_SP: Record<string, string> = {
   'escolaris':       'Escolaris',
   'colegio-montano': 'Colegio Montano',
+  'eScholaris':      'eScholaris',
+  'escholaris':      'eScholaris',
 }
 const CARPETA_COMPARTIDA = 'Colegio Montano y Escolaris'
 
@@ -355,8 +357,11 @@ async function buscarContenido(colegio_slug: string, grado: string, materia: str
       if (match) idx = await construirIndice(driveId, token, raiz, gradoB, match)
       return idx
     }
-    indice = await buscarEnGrado('Owlaris/' + CARPETA_COMPARTIDA, grado, materia)
-    if (indice.length === 0) indice = await buscarEnGrado('Owlaris/' + colegioSP, grado, materia)
+    // Buscar primero en carpeta propia del colegio, luego en compartida
+    indice = await buscarEnGrado('Owlaris/' + colegioSP, grado, materia)
+    if (indice.length === 0 && colegioSP !== CARPETA_COMPARTIDA) {
+      indice = await buscarEnGrado('Owlaris/' + CARPETA_COMPARTIDA, grado, materia)
+    }
     if (indice.length === 0) indice = await construirIndice(driveId, token, 'Owlaris', CARPETA_COMPARTIDA, 'Preparación pruebas nacionales', 'Mineduc', grado, materia)
     if (indice.length === 0) indice = await construirIndice(driveId, token, 'Owlaris', CARPETA_COMPARTIDA, 'Preparación pruebas nacionales', 'Mineduc', materia)
   }
