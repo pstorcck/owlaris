@@ -778,6 +778,7 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
                       if (data.materias_disponibles) {
                         materiasBaseRef.current = data.materias_disponibles
                         setChipsMateria(traducirChips(data.materias_disponibles, idiomaIngles))
+                        setEstadoChat('esperando_materia')
                       }
                     }}
                     style={{
