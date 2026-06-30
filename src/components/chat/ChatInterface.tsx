@@ -512,13 +512,13 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
           <div style={{position:'fixed',inset:0,zIndex:100,background:'rgba(30,27,75,.6)',backdropFilter:'blur(12px)',display:'flex',alignItems:'center',justifyContent:'center',padding:'20px'}}
             onClick={e => { if(e.target===e.currentTarget) setMostrandoGrados(false) }}>
             <div style={{background:'white',borderRadius:'28px',padding:'32px',width:'100%',maxWidth:'440px',boxShadow:'0 32px 80px rgba(30,27,75,.25)'}}>
-              <p style={{fontSize:'20px',fontWeight:800,color:'#1E1B4B',marginBottom:'6px',fontFamily:"'Syne',sans-serif"}}>
+              <p style={{fontSize:'22px',fontWeight:800,color:'#1E1B4B',marginBottom:'6px',fontFamily:"'Syne',sans-serif",letterSpacing:'-0.5px'}}>
                 {idiomaIngles ? 'Select your grade' : 'Selecciona tu grado'}
               </p>
               <p style={{fontSize:'12px',color:'#9490B8',marginBottom:'24px',fontWeight:500}}>
                 {idiomaIngles ? 'Tap your current grade' : 'Toca tu grado actual'}
               </p>
-              <div style={{display:'flex',flexWrap:'wrap',gap:'10px',marginBottom:'24px'}}>
+              <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(88px,1fr))',gap:'12px',marginBottom:'28px'}}>
                 {gradosDisponibles.map(grado => (
                   <button key={grado}
                     onClick={async () => {
@@ -547,13 +547,41 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
                       }
                     }}
                     style={{
-                      background: grado === gradoAlumno ? 'linear-gradient(135deg,#7C3AED,#5B21B6)' : '#F8F7FF',
-                      color: grado === gradoAlumno ? 'white' : '#6D28D9',
-                      border: grado === gradoAlumno ? 'none' : '1px solid rgba(109,40,217,.12)',
-                      borderRadius:'14px',padding:'12px 18px',fontSize:'14px',fontWeight:600,
-                      cursor:'pointer',transition:'all .2s',
+                      background: grado === gradoAlumno 
+                        ? 'linear-gradient(135deg,#7C3AED,#5B21B6)' 
+                        : 'white',
+                      color: grado === gradoAlumno ? 'white' : '#1E1B4B',
+                      border: grado === gradoAlumno 
+                        ? 'none' 
+                        : '1.5px solid rgba(109,40,217,.12)',
+                      borderRadius:'20px',
+                      padding:'18px 16px',
+                      fontSize:'15px',
+                      fontWeight:700,
+                      cursor:'pointer',
+                      transition:'all .25s',
+                      boxShadow: grado === gradoAlumno 
+                        ? '0 8px 24px rgba(109,40,217,.35)' 
+                        : '0 2px 12px rgba(109,40,217,.06)',
+                      display:'flex',
+                      flexDirection:'column',
+                      alignItems:'center',
+                      gap:'6px',
+                      minWidth:'88px',
+                      transform: grado === gradoAlumno ? 'translateY(-2px) scale(1.04)' : 'none',
                     }}>
-                    {grado}
+                    <span style={{
+                        fontSize:'28px',
+                        fontWeight:800,
+                        fontFamily:"'Syne',sans-serif",
+                        lineHeight:1,
+                        color: grado === gradoAlumno ? 'rgba(255,255,255,.9)' : '#7C3AED',
+                      }}>
+                        {grado.replace(/[^0-9]/g,'') || grado.substring(0,2)}
+                      </span>
+                      <span style={{fontSize:'10px',fontWeight:600,opacity:.75,letterSpacing:'.5px',textTransform:'uppercase'}}>
+                        {grado.includes('Grado') ? 'Grade' : grado.replace(/[0-9]/g,'').trim() || 'Grade'}
+                      </span>
                   </button>
                 ))}
               </div>
