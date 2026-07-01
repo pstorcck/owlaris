@@ -952,7 +952,7 @@ export async function POST(req: NextRequest) {
 
     // ── RUTA RÁPIDA: conversación en inglés ─────────────────────────
     // Evita búsquedas en SharePoint y protocolo matemático para reducir latencia en voz.
-    const esModoConversacion = body.modo_conversacion || false
+    const esModoConversacion = body.modo_conversacion === true && body.modo_conversacion_explicito === true
     if (esModoConversacion) {
       const historialConv = (historial || [])
         .slice(-6)
