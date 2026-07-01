@@ -355,6 +355,13 @@ export function inferCanonicalOperationFromText(text: string): string | null {
     if (/[xX]/.test(op) && isSafeCanonicalOperation(op)) return op
   }
 
+  const parenthesizedExpressions = Array.from(normalized.matchAll(/\(-?\d+(?:\.\d+)?(?:\s*(?:[+\-*/^])\s*-?\d+(?:\.\d+)?){1,4}\)\s*(?:[*/^]\s*-?\d+(?:\.\d+)?){1,3}/g))
+  const parenthesizedExpression = parenthesizedExpressions.length > 0 ? parenthesizedExpressions[parenthesizedExpressions.length - 1] : null
+  if (parenthesizedExpression) {
+    const op = normalizeOperation(parenthesizedExpression[0])
+    if (isSafeCanonicalOperation(op)) return op
+  }
+
   const expressions = Array.from(normalized.matchAll(/-?\d+(?:\.\d+)?(?:\s*(?:[+\-*/^])\s*-?\d+(?:\.\d+)?){1,4}/g))
   const expression = expressions.length > 0 ? expressions[expressions.length - 1] : null
   if (!expression) return null
