@@ -41,6 +41,12 @@ PROTOCOLO ANTES DE RESPONDER:
 3. Verificar si tienes base suficiente para responder. Si no, dilo claramente.
 4. Responder con utilidad pedagógica real.
 
+ALCANCE DE CONSULTAS ACADÉMICAS:
+El alumno entra a Owlaris para resolver dudas, estudiar, practicar, repasar, entender temas o trabajar ejercicios dentro de una materia.
+No asumas que solo puede preguntar sobre la lección actual. Puede preguntar sobre cualquier tema de la materia seleccionada siempre que esté respaldado por el contenido académico disponible.
+El contenido no tendrá números de lección asociados. Busca y relaciona la pregunta por tema, concepto, habilidad, competencia, tipo de ejercicio o contenido equivalente dentro de la materia, no por número de lección.
+Si el alumno dice que no entiende una lección por número, pero no indica el tema, pregúntale qué tema, concepto o ejercicio quiere trabajar antes de avanzar.
+
 REGLA DE PROFUNDIDAD:
 No respondas demasiado corto cuando el alumno necesite entender. Desarrolla la explicación. Usa ejemplos breves. Busca que la respuesta no solo conteste, sino que enseñe.
 
@@ -95,7 +101,7 @@ NO uses "Correcto" o "Incorrecto" como veredicto absoluto.
 Usa en cambio: "Bien argumentado", "Falta evidencia", "¿Puedes sustentar eso con el texto?", "Esa idea va bien encaminada, ¿puedes ampliarla?"
 Esto evita errores de evaluación subjetiva.
 
-DIFICULTAD PROGRESIVA:
+DIFICULTAD ADAPTATIVA:
 Nivel 1: Operaciones directas (7+5, 48-19, 72/8)
 Nivel 2: Orden de operaciones (8+3*2, (10+6)/2)
 Nivel 3: Porcentajes (25% de 200)
@@ -104,7 +110,11 @@ Nivel 5: Ecuaciones con coeficiente (2x-4=10)
 Nivel 6: Ecuaciones con paréntesis (2(x+3)=18)
 Nivel 7: Ecuaciones con x en ambos lados (5x+3=2x+15)
 Nivel 8: Ecuaciones combinadas (4(x-2)+3=2(x+1)+9)
-Sube nivel con 3 aciertos consecutivos. Baja con 2 errores consecutivos.
+Si el estudiante acumula 3 respuestas incorrectas seguidas, baja la dificultad como diagnóstico, nunca como castigo.
+Al bajar, busca qué concepto previo, definición, procedimiento o habilidad elemental no está comprendiendo, aunque sea muy básico.
+Cuando entienda esa base, vuelve gradualmente al tema original.
+Si el estudiante tiene más de 3 respuestas correctas seguidas, puedes subir gradualmente la dificultad con ejercicios un poco más complejos, menos pistas, más pasos o preguntas de razonamiento.
+Antes de subir demasiado, confirma que entiende el proceso y no solo acertó por memoria o azar.
 
 OPCIÓN MÚLTIPLE — REGLA CRÍTICA:
 Cuando plantees opción múltiple, SIEMPRE incluye [OP:] con la operación correcta.
@@ -642,8 +652,102 @@ async function registrarPendiente(_supabase: ReturnType<typeof import('@/lib/sup
 
 function respuestaSinFuenteSuficiente(idiomaIngles: boolean) {
   return idiomaIngles
-    ? 'With the content available for this lesson, I do not have enough information to answer that safely. We can continue with a topic that is covered in your lesson, or you can ask your teacher to add this material.'
-    : 'Con el contenido disponible para esta lección, no tengo suficiente información para responder eso con seguridad. Podemos continuar con un tema que sí esté cubierto en tu lección, o puedes pedirle a tu maestro que agregue este material.'
+    ? 'With the content available for this subject, I do not have enough information to answer that safely. We can continue with a topic that is covered in your subject material, or you can ask your teacher to add this material.'
+    : 'Con el contenido disponible para esta materia, no tengo suficiente información para responder eso con seguridad. Podemos continuar con un tema que sí esté cubierto en el material, o puedes pedirle a tu maestro que agregue este contenido.'
+}
+
+function normalizarTextoBase(texto: string) {
+  return texto
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+}
+
+function pideLeccionSinTema(pregunta: string) {
+  const texto = normalizarTextoBase(pregunta)
+  const match = texto.match(/\b(?:leccion|lesson)\s*(?:numero|no\.?|#)?\s*\d+\b/)
+  if (!match) return false
+  const despues = texto.slice((match.index || 0) + match[0].length)
+  const mencionaTemaDespues = /\b(?:de|sobre|about|tema|concepto|habilidad|competencia|ejercicio)\s+[a-z]{4,}/.test(despues)
+  return !mencionaTemaDespues
+}
+
+function respuestaPedirTemaLeccion(idiomaIngles: boolean) {
+  return idiomaIngles
+    ? 'I can help you with that, but Owlaris does not work by lesson number. Tell me the topic, concept, skill, or exercise you want to review, and we will work through it step by step.'
+    : 'Sí puedo ayudarte con eso, pero Owlaris no trabaja por número de lección. Dime el tema, concepto, habilidad o ejercicio que quieres revisar, y lo trabajamos paso a paso.'
+}
+
+type TipoRacha = 'correcta' | 'incorrecta'
+
+function clasificarInteraccionAprendizaje(row: { respuesta?: string | null; estado_evaluacion?: string | null }): TipoRacha | null {
+  const estado = row.estado_evaluacion || ''
+  if (estado === 'correcto' || estado === 'equivalente') return 'correcta'
+  if (estado === 'incorrecto') return 'incorrecta'
+  const respuesta = normalizarTextoBase(row.respuesta || '')
+  if (respuesta.includes('incorrecto') || respuesta.includes('no es correcto') || respuesta.includes('todavia no llegamos') || respuesta.includes('todavía no llegamos') || respuesta.includes('incorrect')) return 'incorrecta'
+  if (respuesta.startsWith('correcto') || respuesta.startsWith('correct.') || respuesta.includes('¡correcto!')) return 'correcta'
+  return null
+}
+
+async function obtenerRachaAprendizaje(
+  admin: ReturnType<typeof createAdminClient>,
+  userId: string,
+  materiaUuid: string | null
+) {
+  try {
+    let query = admin
+      .from('interacciones')
+      .select('respuesta, estado_evaluacion')
+      .eq('usuario_id', userId)
+      .order('creado_en', { ascending: false })
+      .limit(12)
+    if (materiaUuid) query = query.eq('materia_id', materiaUuid)
+    const { data } = await query
+
+    let tipo: TipoRacha | null = null
+    let total = 0
+    for (const row of data || []) {
+      const clasificacion = clasificarInteraccionAprendizaje(row)
+      if (!clasificacion) continue
+      if (!tipo) tipo = clasificacion
+      if (clasificacion !== tipo) break
+      total += 1
+    }
+    return {
+      correctas: tipo === 'correcta' ? total : 0,
+      incorrectas: tipo === 'incorrecta' ? total : 0,
+    }
+  } catch (e) {
+    console.error('No se pudo calcular racha de aprendizaje:', e)
+    return { correctas: 0, incorrectas: 0 }
+  }
+}
+
+function construirContextoAdaptativo(input: { correctas: number; incorrectas: number; nivel: number; idiomaIngles: boolean }) {
+  const nivel = Math.min(8, Math.max(1, Number.isFinite(input.nivel) ? input.nivel : 1))
+  if (input.incorrectas >= 3) {
+    return input.idiomaIngles
+      ? `\n\nADAPTIVE DIFFICULTY: The student has ${input.incorrectas} incorrect answers in a row. Lower the difficulty from level ${nivel} as a diagnosis. Find the missing prerequisite concept, explain one basic step, and then return gradually to the original topic. Do not frame this as failure or punishment.`
+      : `\n\nDIFICULTAD ADAPTATIVA: El estudiante acumula ${input.incorrectas} respuestas incorrectas seguidas. Baja la dificultad desde el nivel ${nivel} como diagnóstico. Busca el concepto previo que falta, explica una base concreta y vuelve gradualmente al tema original. No lo presentes como castigo ni fracaso.`
+  }
+  if (input.correctas > 3) {
+    return input.idiomaIngles
+      ? `\n\nADAPTIVE DIFFICULTY: The student has ${input.correctas} correct answers in a row. You may raise the difficulty gradually from level ${nivel}, but first confirm they understand the process and are not guessing.`
+      : `\n\nDIFICULTAD ADAPTATIVA: El estudiante lleva ${input.correctas} respuestas correctas seguidas. Puedes subir gradualmente la dificultad desde el nivel ${nivel}, pero confirma que entiende el proceso y no está adivinando.`
+  }
+  return input.idiomaIngles
+    ? `\n\nADAPTIVE DIFFICULTY: Current working level ${nivel}. Keep the exercise appropriate to the student's grade and the selected subject.`
+    : `\n\nDIFICULTAD ADAPTATIVA: Nivel de trabajo actual ${nivel}. Mantén el ejercicio adecuado al grado y a la materia seleccionada.`
+}
+
+function reforzarDiagnosticoPorFallos(respuesta: string, idiomaIngles: boolean, fallosConsecutivos: number) {
+  if (fallosConsecutivos < 3) return respuesta
+  const refuerzo = idiomaIngles
+    ? 'Let us lower the difficulty for a moment, not as a punishment, but to find the missing base. First, let us review the simplest step involved here.'
+    : 'Vamos a bajar la dificultad por un momento, no como castigo, sino para encontrar la base que falta. Primero revisemos el paso más simple de este procedimiento.'
+  return `${respuesta}\n\n${refuerzo}`
 }
 
 function buildEnglishConversationSystemPrompt(input: { entradaVoz: boolean; speechConfidence: number | null }) {
@@ -998,6 +1102,39 @@ export async function POST(req: NextRequest) {
       })
     }
 
+    const tipoPregunta = detectarTipoPregunta(pregunta)
+    const esBienvenida = esSaludo(pregunta) && (!historial || historial.length === 0)
+    const nivelDificultadActual = Math.min(8, Math.max(1, parseInt(String(body.nivel_dificultad || '1'), 10) || 1))
+    const rachaAprendizaje = await obtenerRachaAprendizaje(admin, user.id, materia_uuid)
+
+    if (tipoPregunta === 'academica' && pideLeccionSinTema(pregunta)) {
+      const respuesta = respuestaPedirTemaLeccion(idiomaIngles)
+      const { data: insertedRow } = await supabase.from('interacciones').insert({
+        usuario_id: user.id,
+        colegio_id: perfil.colegio_id,
+        materia_id: materia_uuid,
+        grado: gradoEfectivo,
+        tema_detectado: 'Leccion sin tema',
+        pregunta,
+        respuesta,
+        tokens_usados: 0,
+        costo_usd: 0,
+        modelo_usado: 'lesson_topic_clarifier',
+        documento_fuente: null,
+        sospecha_copia: false,
+        guard_activado: true,
+      }).select('id').single()
+      supabase.from('usuarios').update({ ultimo_acceso: new Date().toISOString() }).eq('id', user.id).then(() => {})
+      return NextResponse.json({
+        respuesta,
+        source: 'lesson_topic_clarifier',
+        tokens: 0,
+        documento_fuente: null,
+        interaction_id: insertedRow?.id || null,
+        pending_math_interaction_id: null,
+      })
+    }
+
     // ── PROTOCOLO ANTI-ERRORES — evaluación por backend ─────────────
     let evaluacionProtocolo: MathEvaluation | null = null
     const pendingMathId: string | null = body.pending_math_interaction_id || null
@@ -1045,7 +1182,18 @@ export async function POST(req: NextRequest) {
 
     // Si el protocolo evaluó y tiene resultado definitivo, responder directo
     if (evaluacionProtocolo && evaluacionProtocolo.estado !== 'no_evaluable') {
-      const respuesta = evaluacionProtocolo.feedback
+      const aciertosConsecutivos = evaluacionProtocolo.estado === 'correcto' || evaluacionProtocolo.estado === 'equivalente'
+        ? rachaAprendizaje.correctas + 1
+        : 0
+      const fallosConsecutivos = evaluacionProtocolo.estado === 'incorrecto'
+        ? rachaAprendizaje.incorrectas + 1
+        : 0
+      const nivelSiguiente = fallosConsecutivos >= 3
+        ? Math.max(1, nivelDificultadActual - 1)
+        : aciertosConsecutivos > 3
+          ? Math.min(8, nivelDificultadActual + 1)
+          : nivelDificultadActual
+      const respuesta = reforzarDiagnosticoPorFallos(evaluacionProtocolo.feedback, idiomaIngles, fallosConsecutivos)
       const { data: evaluacionInsertada } = await supabase.from('interacciones').insert({
         usuario_id: user.id, colegio_id: perfil.colegio_id, materia_id: materia_uuid,
         grado: gradoEfectivo, tema_detectado: pregunta.substring(0, 100),
@@ -1065,7 +1213,14 @@ export async function POST(req: NextRequest) {
       
       // Si incorrecto conservar pendingMathId para reintento; si correcto ya fue marcado evaluada
       const returnPendingId = (evaluacionProtocolo?.estado === 'incorrecto') ? (pendingMathId || evaluacionInsertada?.id || null) : null
-      return NextResponse.json({ respuesta, tokens: 0, pending_math_interaction_id: returnPendingId })
+      return NextResponse.json({
+        respuesta,
+        tokens: 0,
+        pending_math_interaction_id: returnPendingId,
+        nivel_dificultad: nivelSiguiente,
+        aciertos_consecutivos: aciertosConsecutivos,
+        fallos_consecutivos: fallosConsecutivos,
+      })
     }
 
     // Inyectar contexto de evaluación al prompt si hay resultado no_evaluable o sin OP
@@ -1073,9 +1228,6 @@ export async function POST(req: NextRequest) {
       ? '\n\nINSTRUCCIÓN BACKEND: Esta respuesta no tiene operación verificable. NO digas Correcto ni Incorrecto. Pide al alumno que escriba la operación matemática.'
       : ''
     // ── FIN PROTOCOLO ANTI-ERRORES ───────────────────────────────────
-
-    const tipoPregunta = detectarTipoPregunta(pregunta)
-    const esBienvenida = esSaludo(pregunta) && (!historial || historial.length === 0)
 
     let contenidoCurricular = ''
     let documentoFuente: string | null = null
@@ -1125,11 +1277,18 @@ export async function POST(req: NextRequest) {
 
     const docsConfig = await leerConfig()
     const promptPersonalizado = cfg.prompt_personalizado?.trim()
+    const contextoAdaptativo = construirContextoAdaptativo({
+      correctas: rachaAprendizaje.correctas,
+      incorrectas: rachaAprendizaje.incorrectas,
+      nivel: nivelDificultadActual,
+      idiomaIngles,
+    })
     const promptBase = PROMPT_BASE +
       (promptPersonalizado
         ? '\n\nINSTRUCCIONES ADICIONALES DEL COLEGIO (no reemplazan el protocolo anti-error anterior):\n' + promptPersonalizado
         : '') +
       (idiomaIngles ? '\n\nIDIOMA: El alumno está en modo inglés. Responde SIEMPRE en inglés.' : '') +
+      contextoAdaptativo +
       contextoEvaluacion
 
     // Baja comprension se verifica en servidor despues de registrar cada interaccion.
@@ -1157,7 +1316,7 @@ export async function POST(req: NextRequest) {
     } else if (contenidoCurricular) {
       contextoContenido = `CONTENIDO ACADEMICO (fuente principal):\n---\n${contenidoCurricular.substring(0, 3000)}\n---`
     } else {
-      contextoContenido = `No se encontro documento especifico en SharePoint. No inventes contenido academico. Indica que no hay suficiente informacion en la leccion disponible.`
+      contextoContenido = `No se encontro documento especifico en SharePoint. No inventes contenido academico. Indica que no hay suficiente informacion en el material disponible de la materia.`
     }
 
     const systemPrompt = `${promptBase}${promptPadre}${contextoIdioma}
