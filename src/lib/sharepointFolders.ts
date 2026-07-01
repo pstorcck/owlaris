@@ -149,11 +149,18 @@ export function getSharePointFolderCandidates(
   const ownFolders: string[] = []
   const sharedFolders: string[] = []
   const pushOwn = (value?: string | null) => pushUnique(ownFolders, value)
+  const pushOwnFirst = (value?: string | null) => {
+    const clean = (value || '').trim()
+    if (!clean) return
+    const idx = ownFolders.indexOf(clean)
+    if (idx >= 0) ownFolders.splice(idx, 1)
+    ownFolders.unshift(clean)
+  }
   const pushShared = (value?: string | null) => pushUnique(sharedFolders, value)
 
   rawValues.forEach(value => {
+    pushOwn(value)
     if (isSharedOwlarisFolderName(value)) pushShared(value)
-    else pushOwn(value)
   })
 
   if (isEScholarisSchool(input)) {
@@ -164,6 +171,14 @@ export function getSharePointFolderCandidates(
   }
 
   if (isMontanoEscolarisSchool(input)) {
+    ;[
+      'Montano Escolaris',
+      'Montano y Escolaris',
+      'Colegio Montano - Colegio Escolaris',
+      'Colegio Montano y Colegio Escolaris',
+      CARPETA_COMPARTIDA_OWLARIS,
+    ].forEach(pushOwnFirst)
+
     rawValues.map(normalizeSharePointKey).forEach(value => {
       if ((value.includes('escolaris') || value.includes('colegio escolaris')) && !value.includes('montano')) {
         pushOwn('Colegio Escolaris')
@@ -197,12 +212,12 @@ export function getSharePointFolderCandidates(
     pushShared('Montano Escolaris')
 
     if (options.sharedOnly) return sharedFolders
-    return includeShared ? [...ownFolders, ...sharedFolders] : ownFolders
+    return includeShared ? Array.from(new Set([...ownFolders, ...sharedFolders])) : ownFolders
   }
 
   pushShared(CARPETA_COMPARTIDA_OWLARIS)
   if (options.sharedOnly) return sharedFolders
-  return includeShared ? [...ownFolders, ...sharedFolders] : ownFolders
+  return includeShared ? Array.from(new Set([...ownFolders, ...sharedFolders])) : ownFolders
 }
 
 export function includeSharedPrograms(input: ColegioSharePointInput) {
