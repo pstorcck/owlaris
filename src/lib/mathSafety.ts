@@ -142,6 +142,20 @@ export function compareAnswers(studentN: number | null, correctN: number | null)
   return 'incorrecto'
 }
 
+function normalizeSubjectForMathProtocol(subject: string): string {
+  return String(subject || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+}
+
+export function isLikelyNumericSubject(subject: string): boolean {
+  const s = normalizeSubjectForMathProtocol(subject)
+  return /\b(mathematics?|math|algebra|geometry|geometria|aritmetica|estadistica|statistics|physics?|fisica|chemistry|quimica|biology|biologia|natural sciences?|ciencias naturales|olimpiadas?)\b/.test(s) ||
+    s.includes('matematica') ||
+    s.includes('mineduc - matematica')
+}
+
 function buildEvaluationState(comparison: string, hasVerifiedOp: boolean): string {
   if (!hasVerifiedOp) return 'no_evaluable'
   return comparison

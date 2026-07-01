@@ -23,6 +23,7 @@ import {
   extractAndCleanOperation,
   handleMathEvaluation,
   inferCanonicalOperationFromText,
+  isLikelyNumericSubject,
   isSafeCanonicalOperation,
   looksLikeMathPracticePrompt,
   normalizeStudentAnswer,
@@ -219,13 +220,8 @@ function normalizarMateria(texto: string, esOlimpiadas = false): string {
   return texto.trim()
 }
 
-// Materias numéricas — usan protocolo [OP:]
-const MATERIAS_NUMERICAS = ['Matemática', 'Física', 'Química', 'Biología', 'Ciencias Naturales', 'Estadística',
-  'Olimpiadas - Matemática', 'Olimpiadas - Biología', 'Olimpiadas - Física', 'Olimpiadas - Química',
-  'Olimpiadas - Ciencias Naturales', 'Mineduc - Matemática']
-
 function esMateriaNumerica(materia: string): boolean {
-  return MATERIAS_NUMERICAS.some(m => materia.includes(m.split(' ')[0]))
+  return isLikelyNumericSubject(materia)
 }
 
 const GRADOS_OLIMPIADAS: Record<string, string> = {
@@ -1139,7 +1135,7 @@ export async function POST(req: NextRequest) {
     let evaluacionProtocolo: MathEvaluation | null = null
     const pendingMathId: string | null = body.pending_math_interaction_id || null
 
-    if (pendingMathId && materiaNumerica) {
+    if (pendingMathId) {
       try {
         const { data: preguntaPendiente } = await supabase
           .from('interacciones')
@@ -1167,10 +1163,10 @@ export async function POST(req: NextRequest) {
       } catch (e) { console.error('Error recuperando OP pendiente:', e) }
     }
 
-    if (!evaluacionProtocolo && materiaNumerica && normalizeStudentAnswer(pregunta) !== null) {
+    if (!evaluacionProtocolo && normalizeStudentAnswer(pregunta) !== null) {
       const ultimaPregunta = ultimoMensajeAsistente(historial)
       const opInferida = inferCanonicalOperationFromText(ultimaPregunta)
-      if (opInferida && isSafeCanonicalOperation(opInferida)) {
+      if (opInferida && isSafeCanonicalOperation(opInferida) && solveOperation(opInferida) !== null) {
         evaluacionProtocolo = await handleMathEvaluation(
           ultimaPregunta + '\n[OP: ' + opInferida + ']',
           pregunta,
@@ -1237,7 +1233,7 @@ export async function POST(req: NextRequest) {
       documentoFuente = result.archivo
     }
 
-    const operacionDirecta = materiaNumerica ? inferCanonicalOperationFromText(pregunta) : null
+    const operacionDirecta = inferCanonicalOperationFromText(pregunta)
     const tieneOperacionDirectaSegura = !!operacionDirecta && isSafeCanonicalOperation(operacionDirecta) && solveOperation(operacionDirecta) !== null
 
     if (
@@ -1345,9 +1341,7 @@ ${contextoContenido}`
     if (studentN !== null) {
       const respuestaLow = respuesta.toLowerCase()
       const dijoIncorrecto = respuestaLow.includes('incorrecto') || respuestaLow.includes('incorrect')
-      const opDeContexto = materiaNumerica
-        ? (inferCanonicalOperationFromText(ultimoMensajeAsistente(historial)) || inferCanonicalOperationFromText(respuesta))
-        : null
+      const opDeContexto = inferCanonicalOperationFromText(ultimoMensajeAsistente(historial)) || inferCanonicalOperationFromText(respuesta)
       const respuestaCorrectaCalculada = opDeContexto ? solveOperation(opDeContexto) : null
       respuestaVerificadaCorrecta = respuestaCorrectaCalculada !== null && Math.abs(studentN - respuestaCorrectaCalculada) < 0.001
       if (dijoIncorrecto && respuestaVerificadaCorrecta) {
@@ -1389,7 +1383,7 @@ ${contextoContenido}`
     // Extraer OP de la respuesta del tutor y limpiar texto visible
     const { visibleText: _respLimpia, operation: _opExtraida } = extractAndCleanOperation(respuesta)
     respuesta = _respLimpia
-    const opInferida = !_opExtraida && materiaNumerica && looksLikeMathPracticePrompt(respuesta)
+    const opInferida = !_opExtraida && looksLikeMathPracticePrompt(respuesta)
       ? inferCanonicalOperationFromText(respuesta)
       : null
     const opFinalRespuesta = _opExtraida || opInferida
