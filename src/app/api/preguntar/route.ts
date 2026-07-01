@@ -393,10 +393,29 @@ async function buscarContenido(colegio: ColegioSharePointInput, grado: string, m
     }
   } else {
     const buscarEnGrado = async (raizSegs: string[], gradoB: string, materiaB: string) => {
+      const buscarPorBusqueda = async () => {
+        for (const termino of [materiaB, ...getGradeFolderCandidates(gradoB)]) {
+          const archivosBusqueda = await buscarArchivosPorBusqueda(driveId, token, termino, ...raizSegs)
+          const matches = archivosBusqueda.filter((archivo: ArchivoSharePoint) => {
+            const textoUbicacion = `${archivo.name} ${archivo.parentReference?.path || ''}`
+            return sharePointNameMatchesSubject(textoUbicacion, materiaB) &&
+              sharePointTextMatchesGrade(textoUbicacion, gradoB)
+          })
+          if (matches.length > 0) {
+            return construirIndiceDesdeArchivos(
+              'idx/' + [...raizSegs, gradoB, 'search', normalizeSharePointKey(materiaB)].join('/'),
+              [...raizSegs, gradoB].join('/') + ' [search:' + materiaB + ']',
+              matches
+            )
+          }
+        }
+        return []
+      }
+
       let idx = await construirIndice(driveId, token, ...raizSegs, gradoB, materiaB)
       if (idx.length > 0) return idx
       const hijos = await listarHijos(driveId, token, ...raizSegs, gradoB)
-      if (hijos.length === 0) return []
+      if (hijos.length === 0) return buscarPorBusqueda()
       const carpetas: string[] = hijos.filter((i: ArchivoSharePoint) => i.folder).map((i: ArchivoSharePoint) => i.name)
       const mLower = normalizeSharePointKey(materiaB)
       const match = carpetas.find(cp => {
@@ -418,23 +437,7 @@ async function buscarContenido(colegio: ColegioSharePointInput, grado: string, m
       }
       if (idx.length > 0) return idx
 
-      for (const termino of [materiaB, ...getGradeFolderCandidates(gradoB)]) {
-        const archivosBusqueda = await buscarArchivosPorBusqueda(driveId, token, termino, ...raizSegs)
-        const matches = archivosBusqueda.filter((archivo: ArchivoSharePoint) => {
-          const textoUbicacion = `${archivo.name} ${archivo.parentReference?.path || ''}`
-          return sharePointNameMatchesSubject(textoUbicacion, materiaB) &&
-            sharePointTextMatchesGrade(textoUbicacion, gradoB)
-        })
-        if (matches.length > 0) {
-          idx = await construirIndiceDesdeArchivos(
-            'idx/' + [...raizSegs, gradoB, 'search', normalizeSharePointKey(materiaB)].join('/'),
-            [...raizSegs, gradoB].join('/') + ' [search:' + materiaB + ']',
-            matches
-          )
-          break
-        }
-      }
-      return idx
+      return buscarPorBusqueda()
     }
     for (const carpetaColegio of colegiosSP) {
       for (const gradoCarpeta of getGradeFolderCandidates(grado)) {
@@ -552,7 +555,16 @@ async function leerCarpetasGrado(
 }
 
 function tieneMateriasCurriculares(materias: string[]) {
-  return materias.some(m => !m.includes('Olimpiadas') && !m.includes('Conversar') && !m.includes('Conversation'))
+  return materias.some(m => !esAccesoEspecial(m))
+}
+
+function esAccesoEspecial(materia: string) {
+  return /olimpiadas|mineduc|conversar|conversation/i.test(materia)
+}
+
+function accesosCompartidos(materias: string[], incluirCompartidas: boolean) {
+  if (!incluirCompartidas) return []
+  return materias.filter(materia => /olimpiadas|mineduc/i.test(materia))
 }
 
 function combinarConAccesosEspeciales(materias: string[], idiomaIngles: boolean, incluirOlimpiadas = true) {
@@ -833,7 +845,11 @@ export async function POST(req: NextRequest) {
         const materiasBase = tieneMateriasCurriculares(materiasSupabase)
           ? materiasSupabase
           : getDefaultSubjectsForSchool(colegioSharePoint)
-        carpetas = combinarConAccesosEspeciales(materiasBase, idiomaIngles, incluirOlimpiadas)
+        carpetas = combinarConAccesosEspeciales(
+          [...materiasBase, ...accesosCompartidos(materiasSupabase, incluirOlimpiadas)],
+          idiomaIngles,
+          incluirOlimpiadas
+        )
       }
       return carpetas
     }
@@ -1103,11 +1119,11 @@ export async function POST(req: NextRequest) {
       tipoPregunta === 'academica' &&
       !esBienvenida &&
       !contenidoCurricular &&
-      materia &&
+      (materia || materia_id) &&
       !tieneOperacionDirectaSegura
     ) {
       const respuesta = respuestaSinFuenteSuficiente(idiomaIngles)
-      await registrarPendiente(supabase, perfil, materia, pregunta)
+      if (materia) await registrarPendiente(supabase, perfil, materia, pregunta)
       const { data: insertedRow } = await supabase.from('interacciones').insert({
         usuario_id: user.id,
         colegio_id: perfil.colegio_id,

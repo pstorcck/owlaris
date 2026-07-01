@@ -100,7 +100,16 @@ async function leerCarpetasGrado(grado: string, carpetasColegio: string[], inclu
 }
 
 function tieneMateriasCurriculares(materias: string[]) {
-  return materias.some(m => !m.includes('Olimpiadas') && !m.includes('Conversar') && !m.includes('Conversation'))
+  return materias.some(m => !esAccesoEspecial(m))
+}
+
+function esAccesoEspecial(materia: string) {
+  return /olimpiadas|mineduc|conversar|conversation/i.test(materia)
+}
+
+function accesosCompartidos(materias: string[], incluirCompartidas: boolean) {
+  if (!incluirCompartidas) return []
+  return materias.filter(materia => /olimpiadas|mineduc/i.test(materia))
 }
 
 function combinarConAccesosEspeciales(materias: string[], incluirOlimpiadas: boolean) {
@@ -142,9 +151,13 @@ export default async function ChatPage() {
   const materiasFallback = tieneMateriasCurriculares(materiasSupabase)
     ? materiasSupabase
     : getDefaultSubjectsForSchool(perfil?.colegio)
-  const materiasDisponibles = tieneMateriasCurriculares(materiasSharePoint)
+  const materiasBase = tieneMateriasCurriculares(materiasSharePoint)
     ? materiasSharePoint
-    : combinarConAccesosEspeciales(materiasFallback, incluirOlimpiadas)
+    : materiasFallback
+  const materiasDisponibles = combinarConAccesosEspeciales(
+    [...materiasBase, ...accesosCompartidos(materiasSupabase, incluirOlimpiadas)],
+    incluirOlimpiadas
+  )
 
   return (
     <ChatInterface
