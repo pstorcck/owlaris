@@ -24,13 +24,6 @@ export const GRADOS_ESCHOLARIS = [
   'Grado 11',
   'Grado 12',
 ]
-export const MATERIAS_BASE_MONTANO_ESCOLARIS = [
-  'Matemática',
-  'Español',
-  'Ciencias Naturales',
-  'Ciencias Sociales',
-  'Inglés',
-]
 
 function normalizeKey(value: string) {
   return value
@@ -58,6 +51,23 @@ export function isSharePointDocx(name: string) {
   return clean.toLowerCase().endsWith('.docx') && !clean.startsWith('~$')
 }
 
+export function isSharePointPlainTextContent(name: string) {
+  const clean = (name || '').trim().toLowerCase()
+  return !clean.startsWith('~$') && (
+    clean.endsWith('.md') ||
+    clean.endsWith('.markdown') ||
+    clean.endsWith('.txt')
+  )
+}
+
+export function isSupportedSharePointContentFile(name: string) {
+  return isSharePointDocx(name) || isSharePointPlainTextContent(name)
+}
+
+export function stripSharePointContentExtension(name: string) {
+  return (name || '').replace(/\.(docx|md|markdown|txt)$/i, ' ')
+}
+
 const SUBJECT_PATTERNS: Array<{ subject: string; patterns: RegExp[] }> = [
   { subject: 'Matemática', patterns: [/\bmatematica\b/, /\bmatematicas\b/, /\bmath\b/, /\bmathematics\b/, /\balgebra\b/, /\bgeometria\b/, /\bgeometry\b/] },
   { subject: 'Español', patterns: [/\bespanol\b/, /\blenguaje\b/, /\bliteratura\b/, /\bcomunicacion\b/, /\blectura\b/, /\bspanish\b/] },
@@ -73,7 +83,7 @@ const SUBJECT_PATTERNS: Array<{ subject: string; patterns: RegExp[] }> = [
 ]
 
 export function inferSubjectFromSharePointName(name: string) {
-  const normalized = normalizeSharePointKey(name.replace(/\.docx$/i, ' '))
+  const normalized = normalizeSharePointKey(stripSharePointContentExtension(name))
   for (const { subject, patterns } of SUBJECT_PATTERNS) {
     if (patterns.some(pattern => pattern.test(normalized))) return subject
   }
@@ -158,10 +168,6 @@ export function includeSharedPrograms(input: ColegioSharePointInput) {
 
 export function getExpectedGradeFallbacks(input: ColegioSharePointInput) {
   return isEScholarisSchool(input) ? GRADOS_ESCHOLARIS : GRADOS_MONTANO_ESCOLARIS
-}
-
-export function getDefaultSubjectsForSchool(input: ColegioSharePointInput) {
-  return isMontanoEscolarisSchool(input) ? MATERIAS_BASE_MONTANO_ESCOLARIS : []
 }
 
 export function isLikelyGradeFolder(name: string, input?: ColegioSharePointInput) {

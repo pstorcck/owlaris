@@ -5,13 +5,13 @@ import { guardHumanisticResponse } from '@/lib/humanisticSafety'
 import { guardNoFinalAnswer } from '@/lib/pedagogicalGuard'
 import {
   CARPETA_COMPARTIDA_OWLARIS,
-  getDefaultSubjectsForSchool,
   getGradeFolderCandidates,
   getSharePointFolderCandidates,
   includeSharedPrograms,
   inferSubjectFromSharePointName,
   isEScholarisSchool,
-  isSharePointDocx,
+  isSharePointPlainTextContent,
+  isSupportedSharePointContentFile,
   normalizeSharePointKey,
   pushUniqueSharePointName,
   sharePointNameMatchesSubject,
@@ -316,7 +316,7 @@ async function listarHijos(driveId: string, token: string, ...segs: string[]): P
 
 async function listarArchivos(driveId: string, token: string, ...segs: string[]) {
   const hijos = await listarHijos(driveId, token, ...segs)
-  return hijos.filter((a: ArchivoSharePoint) => a.file && isSharePointDocx(a.name))
+  return hijos.filter((a: ArchivoSharePoint) => a.file && isSupportedSharePointContentFile(a.name))
 }
 
 async function buscarArchivosPorBusqueda(driveId: string, token: string, query: string, ...segs: string[]) {
@@ -326,11 +326,15 @@ async function buscarArchivosPorBusqueda(driveId: string, token: string, query: 
   const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } })
   if (!res.ok) return []
   const data = await res.json()
-  return (data.value || []).filter((a: ArchivoSharePoint) => a.file && isSharePointDocx(a.name))
+  return (data.value || []).filter((a: ArchivoSharePoint) => a.file && isSupportedSharePointContentFile(a.name))
 }
 
-async function extraerTexto(url: string): Promise<string> {
+async function extraerTexto(url: string, nombreArchivo = ''): Promise<string> {
   const r = await fetch(url)
+  if (!r.ok) return ''
+  if (isSharePointPlainTextContent(nombreArchivo)) {
+    return (await r.text()).replace(/\r\n/g, '\n').trim()
+  }
   const buf = await r.arrayBuffer()
   const m = await import('mammoth')
   const { value } = await m.extractRawText({ buffer: Buffer.from(buf) })
@@ -349,10 +353,7 @@ async function construirIndiceDesdeArchivos(idxKey: string, logLabel: string, ar
     const downloadUrl = archivo['@microsoft.graph.downloadUrl']
     if (!downloadUrl) return
     try {
-      const r = await fetch(downloadUrl)
-      const buf = await r.arrayBuffer()
-      const m = await import('mammoth')
-      const { value } = await m.extractRawText({ buffer: Buffer.from(buf) })
+      const value = await extraerTexto(downloadUrl, archivo.name)
       indice.push({ nombre: archivo.name, tema: value.substring(0, 300).trim(), downloadUrl })
     } catch {
       indice.push({ nombre: archivo.name, tema: archivo.name, downloadUrl })
@@ -426,7 +427,7 @@ async function buscarContenido(colegio: ColegioSharePointInput, grado: string, m
       if (idx.length > 0) return idx
 
       const archivosDirectos = hijos
-        .filter((i: ArchivoSharePoint) => i.file && isSharePointDocx(i.name))
+        .filter((i: ArchivoSharePoint) => i.file && isSupportedSharePointContentFile(i.name))
         .filter((archivo: ArchivoSharePoint) => sharePointNameMatchesSubject(archivo.name, materiaB))
       if (archivosDirectos.length > 0) {
         idx = await construirIndiceDesdeArchivos(
@@ -466,7 +467,7 @@ async function buscarContenido(colegio: ColegioSharePointInput, grado: string, m
   const cacheKey = `${colegiosSP.join('|')}/${grado}/${materia}/${mejorDoc.nombre}`
   const cached = cacheContenido.get(cacheKey)
   if (cached && Date.now() - cached.timestamp < CACHE_TTL) return { contenido: cached.contenido, archivo: cached.archivo }
-  const contenido = await extraerTexto(mejorDoc.downloadUrl)
+  const contenido = await extraerTexto(mejorDoc.downloadUrl, mejorDoc.nombre)
   cacheContenido.set(cacheKey, { contenido, archivo: mejorDoc.nombre, timestamp: Date.now() })
   return { contenido, archivo: mejorDoc.nombre }
 }
@@ -487,7 +488,7 @@ async function leerConfig(): Promise<string> {
       if (!res.ok) { console.log(`Config no encontrada: ${doc}`); continue }
       const data = await res.json()
       if (!data['@microsoft.graph.downloadUrl']) continue
-      const texto = await extraerTexto(data['@microsoft.graph.downloadUrl'])
+      const texto = await extraerTexto(data['@microsoft.graph.downloadUrl'], doc)
       contenido += `\n\n=== ${doc} ===\n${texto.substring(0, 2000)}`
       console.log(`✅ Config: ${doc}`)
     } catch (e) { console.log(`Error config ${doc}:`, e) }
@@ -499,8 +500,7 @@ async function leerConfig(): Promise<string> {
 async function leerCarpetasGrado(
   grado: string,
   idiomaIngles: boolean,
-  carpetasColegio: string[] = [CARPETA_COMPARTIDA],
-  incluirOlimpiadas = true
+  carpetasColegio: string[] = [CARPETA_COMPARTIDA]
 ): Promise<string[]> {
   const token = await getToken()
   if (!token) return []
@@ -533,7 +533,7 @@ async function leerCarpetasGrado(
             .filter((i: {folder?:unknown}) => i.folder)
             .map((i: {name:string}) => i.name)
           const materiasDesdeDocumentos = value
-            .filter((i: {file?:unknown; name:string}) => i.file && isSharePointDocx(i.name))
+            .filter((i: {file?:unknown; name:string}) => i.file && isSupportedSharePointContentFile(i.name))
             .map((i: {name:string}) => inferSubjectFromSharePointName(i.name))
             .filter((materia: string | null): materia is string => Boolean(materia))
           ;[...carpetasMateria, ...materiasDesdeDocumentos].forEach(materia => {
@@ -549,27 +549,12 @@ async function leerCarpetasGrado(
     }
     if (carpetas.length > 0) break
   }
-  if (incluirOlimpiadas && !carpetas.includes('Olimpiadas de Ciencias')) carpetas.push('Olimpiadas de Ciencias')
   carpetas.push(idiomaIngles ? '» English Conversation' : '» Conversar en Inglés')
   return carpetas
 }
 
-function tieneMateriasCurriculares(materias: string[]) {
-  return materias.some(m => !esAccesoEspecial(m))
-}
-
-function esAccesoEspecial(materia: string) {
-  return /olimpiadas|mineduc|conversar|conversation/i.test(materia)
-}
-
-function accesosCompartidos(materias: string[], incluirCompartidas: boolean) {
-  if (!incluirCompartidas) return []
-  return materias.filter(materia => /olimpiadas|mineduc/i.test(materia))
-}
-
-function combinarConAccesosEspeciales(materias: string[], idiomaIngles: boolean, incluirOlimpiadas = true) {
+function combinarConAccesosEspeciales(materias: string[], idiomaIngles: boolean) {
   const out = Array.from(new Set(materias.filter(Boolean)))
-  if (incluirOlimpiadas && !out.includes('Olimpiadas de Ciencias')) out.push('Olimpiadas de Ciencias')
   const conversacion = idiomaIngles ? '» English Conversation' : '» Conversar en Inglés'
   if (!out.includes(conversacion)) out.push(conversacion)
   return out
@@ -833,24 +818,8 @@ export async function POST(req: NextRequest) {
       if (error) console.error('No se pudo guardar grado:', error.message)
     }
     const cargarMateriasDisponibles = async (grado: string) => {
-      let carpetas = await leerCarpetasGrado(grado, idiomaIngles, carpetasColegio, incluirOlimpiadas)
-      if (!tieneMateriasCurriculares(carpetas)) {
-        const { data: materiasFallback } = await supabase
-          .from('materias')
-          .select('nombre')
-          .eq('colegio_id', perfil.colegio_id)
-          .eq('activa', true)
-          .order('nombre')
-        const materiasSupabase = (materiasFallback || []).map(m => m.nombre)
-        const materiasBase = tieneMateriasCurriculares(materiasSupabase)
-          ? materiasSupabase
-          : getDefaultSubjectsForSchool(colegioSharePoint)
-        carpetas = combinarConAccesosEspeciales(
-          [...materiasBase, ...accesosCompartidos(materiasSupabase, incluirOlimpiadas)],
-          idiomaIngles,
-          incluirOlimpiadas
-        )
-      }
+      let carpetas = await leerCarpetasGrado(grado, idiomaIngles, carpetasColegio)
+      carpetas = combinarConAccesosEspeciales(carpetas, idiomaIngles)
       return carpetas
     }
 
@@ -883,10 +852,7 @@ export async function POST(req: NextRequest) {
 
     if (estado === 'esperando_materia') {
       const gradoMostrar = gradoAlumno || body.grado_detectado || ''
-      const disponiblesBody = Array.isArray(body.materias_disponibles) ? body.materias_disponibles.filter(Boolean) : []
-      const disponibles = disponiblesBody.length > 0
-        ? disponiblesBody
-        : await cargarMateriasDisponibles(gradoMostrar || perfil.grado || '')
+      const disponibles = await cargarMateriasDisponibles(gradoMostrar || perfil.grado || '')
       const materiaSeleccionada = resolverMateriaSeleccionada(pregunta, disponibles, incluirOlimpiadas)
       if (materiaSeleccionada === '__OLIMPIADAS__') {
         return NextResponse.json({ respuesta: 'Olimpiadas, perfecto. ¿De cuál materia? Matemática, Biología, Física, Química o Ciencias Naturales.', nuevo_estado: 'esperando_materia_olimpiadas', nombre_alumno: nombreAlumno, grado_detectado: gradoMostrar, materias_disponibles: disponibles, tokens: 0 })

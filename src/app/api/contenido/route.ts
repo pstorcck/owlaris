@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import {
   getGradeFolderCandidates,
   getSharePointFolderCandidates,
-  isSharePointDocx,
+  isSharePointPlainTextContent,
+  isSupportedSharePointContentFile,
   sharePointNameMatchesSubject,
   sharePointTextMatchesGrade,
 } from '@/lib/sharepointFolders'
@@ -29,7 +30,7 @@ async function listarArchivos(driveId: string, token: string, ...segmentos: stri
     return []
   }
   const data = await res.json()
-  return (data.value || []).filter((a: SharePointItem) => a.file && isSharePointDocx(a.name))
+  return (data.value || []).filter((a: SharePointItem) => a.file && isSupportedSharePointContentFile(a.name))
 }
 
 async function buscarArchivos(driveId: string, token: string, query: string, ...segmentos: string[]) {
@@ -39,11 +40,15 @@ async function buscarArchivos(driveId: string, token: string, query: string, ...
   const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } })
   if (!res.ok) return []
   const data = await res.json()
-  return (data.value || []).filter((a: SharePointItem) => a.file && isSharePointDocx(a.name))
+  return (data.value || []).filter((a: SharePointItem) => a.file && isSupportedSharePointContentFile(a.name))
 }
 
-async function extraerTexto(downloadUrl: string): Promise<string> {
+async function extraerTexto(downloadUrl: string, nombreArchivo = ''): Promise<string> {
   const r   = await fetch(downloadUrl)
+  if (!r.ok) return ''
+  if (isSharePointPlainTextContent(nombreArchivo)) {
+    return (await r.text()).replace(/\r\n/g, '\n').trim()
+  }
   const buf = await r.arrayBuffer()
   const mammoth = await import('mammoth')
   const { value } = await mammoth.extractRawText({ buffer: Buffer.from(buf) })
@@ -76,7 +81,7 @@ export async function POST(req: NextRequest) {
         const archivos = await listarArchivos(driveId, token, 'Owlaris', carpetaColegio, gradoCarpeta, materia)
         const elegido  = encontrarArchivoRelevante(archivos, pregunta)
         if (elegido) {
-          contenido = await extraerTexto(elegido['@microsoft.graph.downloadUrl'])
+          contenido = await extraerTexto(elegido['@microsoft.graph.downloadUrl'], elegido.name)
           archivo   = elegido.name
           console.log(`✅ Encontrado: ${elegido.name}`)
           break
@@ -96,7 +101,7 @@ export async function POST(req: NextRequest) {
           })
           const elegido = encontrarArchivoRelevante(filtrados, pregunta)
           if (elegido) {
-            contenido = await extraerTexto(elegido['@microsoft.graph.downloadUrl'])
+            contenido = await extraerTexto(elegido['@microsoft.graph.downloadUrl'], elegido.name)
             archivo = elegido.name
             console.log(`✅ Encontrado por búsqueda: ${elegido.name}`)
             break
@@ -115,7 +120,7 @@ export async function POST(req: NextRequest) {
           const archivosM = await listarArchivos(driveId, token, 'Owlaris', carpetaColegio, gradoCarpeta, materia)
           const elegidoM  = encontrarArchivoRelevante(archivosM, pregunta)
           if (elegidoM) {
-            const textoM = await extraerTexto(elegidoM['@microsoft.graph.downloadUrl'])
+            const textoM = await extraerTexto(elegidoM['@microsoft.graph.downloadUrl'], elegidoM.name)
             contenido   += `\n\n--- Contenido Mineduc ---\n${textoM}`
             archivo      = archivo || elegidoM.name
             console.log(`✅ Mineduc: ${elegidoM.name}`)

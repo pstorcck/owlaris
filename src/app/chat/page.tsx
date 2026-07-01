@@ -2,12 +2,10 @@ import { createClient } from '@/lib/supabase/server'
 import ChatInterface from '@/components/chat/ChatInterface'
 import { redirect } from 'next/navigation'
 import {
-  getDefaultSubjectsForSchool,
   getGradeFolderCandidates,
   getSharePointFolderCandidates,
-  includeSharedPrograms,
   inferSubjectFromSharePointName,
-  isSharePointDocx,
+  isSupportedSharePointContentFile,
   pushUniqueSharePointName,
   sharePointTextMatchesGrade,
 } from '@/lib/sharepointFolders'
@@ -39,7 +37,7 @@ async function getToken(): Promise<string | null> {
   } catch { return null }
 }
 
-async function leerCarpetasGrado(grado: string, carpetasColegio: string[], incluirOlimpiadas: boolean): Promise<string[]> {
+async function leerCarpetasGrado(grado: string, carpetasColegio: string[]): Promise<string[]> {
   if (!grado || carpetasColegio.length === 0) return []
   const token = await getToken()
   if (!token) return []
@@ -55,7 +53,7 @@ async function leerCarpetasGrado(grado: string, carpetasColegio: string[], inclu
       if (!res.ok) continue
       const data = await res.json()
       ;(data.value || [])
-        .filter((i: SharePointItem) => i.file && isSharePointDocx(i.name))
+        .filter((i: SharePointItem) => i.file && isSupportedSharePointContentFile(i.name))
         .filter((i: SharePointItem) => sharePointTextMatchesGrade(`${i.name} ${i.parentReference?.path || ''}`, grado))
         .map((i: SharePointItem) => inferSubjectFromSharePointName(i.name))
         .filter((materia: string | null): materia is string => Boolean(materia))
@@ -78,7 +76,7 @@ async function leerCarpetasGrado(grado: string, carpetasColegio: string[], inclu
             .filter((i: {folder?:unknown}) => i.folder)
             .map((i: {name:string}) => i.name)
           const materiasDesdeDocumentos: string[] = value
-            .filter((i: {file?:unknown; name:string}) => i.file && isSharePointDocx(i.name))
+            .filter((i: {file?:unknown; name:string}) => i.file && isSupportedSharePointContentFile(i.name))
             .map((i: {name:string}) => inferSubjectFromSharePointName(i.name))
             .filter((materia: string | null): materia is string => Boolean(materia))
           ;[...carpetasMateria, ...materiasDesdeDocumentos].forEach(materia => {
@@ -94,27 +92,12 @@ async function leerCarpetasGrado(grado: string, carpetasColegio: string[], inclu
     }
     if (carpetas.length > 0) break
   }
-  if (incluirOlimpiadas && !carpetas.includes('Olimpiadas de Ciencias')) carpetas.push('Olimpiadas de Ciencias')
   carpetas.push('» Conversar en Inglés')
   return carpetas
 }
 
-function tieneMateriasCurriculares(materias: string[]) {
-  return materias.some(m => !esAccesoEspecial(m))
-}
-
-function esAccesoEspecial(materia: string) {
-  return /olimpiadas|mineduc|conversar|conversation/i.test(materia)
-}
-
-function accesosCompartidos(materias: string[], incluirCompartidas: boolean) {
-  if (!incluirCompartidas) return []
-  return materias.filter(materia => /olimpiadas|mineduc/i.test(materia))
-}
-
-function combinarConAccesosEspeciales(materias: string[], incluirOlimpiadas: boolean) {
+function combinarConAccesosEspeciales(materias: string[]) {
   const out = Array.from(new Set(materias.filter(Boolean)))
-  if (incluirOlimpiadas && !out.includes('Olimpiadas de Ciencias')) out.push('Olimpiadas de Ciencias')
   if (!out.includes('» Conversar en Inglés')) out.push('» Conversar en Inglés')
   return out
 }
@@ -145,19 +128,8 @@ export default async function ChatPage() {
   // Cargar materias disponibles desde SharePoint
   const grado = perfil?.grado || ''
   const carpetasColegio = getSharePointFolderCandidates(perfil?.colegio)
-  const incluirOlimpiadas = includeSharedPrograms(perfil?.colegio)
-  const materiasSharePoint = perfil?.rol === 'maestro' ? [] : await leerCarpetasGrado(grado, carpetasColegio, incluirOlimpiadas)
-  const materiasSupabase = (materias || []).map(m => m.nombre)
-  const materiasFallback = tieneMateriasCurriculares(materiasSupabase)
-    ? materiasSupabase
-    : getDefaultSubjectsForSchool(perfil?.colegio)
-  const materiasBase = tieneMateriasCurriculares(materiasSharePoint)
-    ? materiasSharePoint
-    : materiasFallback
-  const materiasDisponibles = combinarConAccesosEspeciales(
-    [...materiasBase, ...accesosCompartidos(materiasSupabase, incluirOlimpiadas)],
-    incluirOlimpiadas
-  )
+  const materiasSharePoint = perfil?.rol === 'maestro' ? [] : await leerCarpetasGrado(grado, carpetasColegio)
+  const materiasDisponibles = combinarConAccesosEspeciales(materiasSharePoint)
 
   return (
     <ChatInterface
