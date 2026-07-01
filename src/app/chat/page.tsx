@@ -22,14 +22,14 @@ async function getToken(): Promise<string | null> {
   } catch { return null }
 }
 
-async function leerCarpetasGrado(grado: string): Promise<string[]> {
-  if (!grado) return []
+async function leerCarpetasGrado(grado: string, carpetaColegio: string): Promise<string[]> {
+  if (!grado || !carpetaColegio) return []
   const token = await getToken()
   if (!token) return []
   const driveId = process.env.SHAREPOINT_DRIVE_ID!
   const carpetas: string[] = []
   try {
-    const ruta = encodeURIComponent('Owlaris') + '/' + encodeURIComponent('Colegio Montano y Escolaris') + '/' + encodeURIComponent(grado)
+    const ruta = encodeURIComponent('Owlaris') + '/' + encodeURIComponent(carpetaColegio) + '/' + encodeURIComponent(grado)
     const url = `https://graph.microsoft.com/v1.0/drives/${driveId}/root:/${ruta}:/children`
     const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` }, next: { revalidate: 300 } })
     if (res.ok) {
@@ -70,7 +70,8 @@ export default async function ChatPage() {
 
   // Cargar materias disponibles desde SharePoint
   const grado = perfil?.grado || ''
-  const materiasDisponibles = perfil?.rol === 'maestro' ? [] : await leerCarpetasGrado(grado)
+  const carpetaColegio = perfil?.colegio?.sharepoint_folder || perfil?.colegio?.slug || ''
+  const materiasDisponibles = perfil?.rol === 'maestro' ? [] : await leerCarpetasGrado(grado, carpetaColegio)
 
   return (
     <ChatInterface

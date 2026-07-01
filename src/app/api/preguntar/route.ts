@@ -119,6 +119,7 @@ const CACHE_TTL      = 1000 * 60 * 1
 
 const COLEGIOS_SP: Record<string, string> = {
   'escolaris':       'Escolaris',
+  'Escolaris':       'Escolaris',
   'colegio-montano': 'Colegio Montano',
   'eScholaris':      'eScholaris',
   'escholaris':      'eScholaris',
@@ -162,8 +163,9 @@ function normalizarGradoEscholaris(texto: string): string {
 }
 
 // Wrapper que decide qué sistema de grados usar según el colegio
-function normalizarGradoPorColegio(texto: string, colegioSlug: string): string {
-  if (colegioSlug.toLowerCase() === 'escholaris') {
+function normalizarGradoPorColegio(texto: string, colegioSlug?: string | null): string {
+  const colegio = (colegioSlug || '').toLowerCase()
+  if (colegio === 'escholaris' || colegio === 'escolaris') {
     return normalizarGradoEscholaris(texto)
   }
   return normalizarGrado(texto)
@@ -357,13 +359,9 @@ async function buscarContenido(colegio_slug: string, grado: string, materia: str
       if (match) idx = await construirIndice(driveId, token, raiz, gradoB, match)
       return idx
     }
-    // eScholaris tiene carpeta propia; demás colegios usan CARPETA_COMPARTIDA
-    if (colegioSP === 'eScholaris') {
-      indice = await buscarEnGrado('Owlaris/' + colegioSP, grado, materia)
-    } else {
-      indice = await buscarEnGrado('Owlaris/' + CARPETA_COMPARTIDA, grado, materia)
-      if (indice.length === 0) indice = await buscarEnGrado('Owlaris/' + colegioSP, grado, materia)
-    }
+    // Prioriza la carpeta del colegio del alumno; la compartida queda como respaldo.
+    indice = await buscarEnGrado('Owlaris/' + colegioSP, grado, materia)
+    if (indice.length === 0) indice = await buscarEnGrado('Owlaris/' + CARPETA_COMPARTIDA, grado, materia)
     if (indice.length === 0) indice = await construirIndice(driveId, token, 'Owlaris', CARPETA_COMPARTIDA, 'Preparación pruebas nacionales', 'Mineduc', grado, materia)
     if (indice.length === 0) indice = await construirIndice(driveId, token, 'Owlaris', CARPETA_COMPARTIDA, 'Preparación pruebas nacionales', 'Mineduc', materia)
   }

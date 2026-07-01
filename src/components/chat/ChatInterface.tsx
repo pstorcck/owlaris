@@ -149,10 +149,11 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
 
   // Estado onboarding
   const gradoGuardado = usuario.grado || ''
+  const nombreInicial = usuario.nombre_completo.split(' ')[0]
   const estadoInicial: EstadoChat = gradoGuardado ? 'esperando_materia' : 'esperando_nombre'
   const [estadoChat, setEstadoChat]       = useState<EstadoChat>(estadoInicial)
-  const [nombreAlumno, setNombreAlumno]   = useState('')
-  const [gradoAlumno, setGradoAlumno]     = useState('')
+  const [nombreAlumno, setNombreAlumno]   = useState(gradoGuardado ? nombreInicial : '')
+  const [gradoAlumno, setGradoAlumno]     = useState(gradoGuardado)
   const [materiaAlumno, setMateriaAlumno] = useState('')
 
   const finalRef = useRef<HTMLDivElement>(null)
@@ -176,6 +177,9 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
   // Cargar materias desde API al iniciar si hay grado guardado
   useEffect(() => {
     if (!gradoGuardado) return
+    setNombreAlumno(nombreInicial)
+    setGradoAlumno(gradoGuardado)
+    setMostrandoGrados(false)
     fetch('/api/preguntar', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -193,10 +197,10 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
         materiasBaseRef.current = data.materias_disponibles
         setChipsMateria(traducirChips(data.materias_disponibles, idiomaIngles))
         setGradoAlumno(gradoGuardado)
-        setNombreAlumno(usuario.nombre_completo.split(' ')[0])
+        setNombreAlumno(nombreInicial)
       }
     }).catch(() => {})
-  }, [gradoGuardado, idiomaIngles])
+  }, [gradoGuardado, idiomaIngles, nombreInicial, usuario.id])
 
   useEffect(() => {
     const nombre = usuario.nombre_completo.split(' ')[0]
@@ -384,7 +388,7 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
       // Actualizar estado onboarding
       if (data.nuevo_estado) setEstadoChat(data.nuevo_estado)
       if (data.nombre_alumno) setNombreAlumno(data.nombre_alumno)
-      if (data.nuevo_estado === 'esperando_grado' && gradosDisponibles.length > 0) {
+      if (data.nuevo_estado === 'esperando_grado' && !gradoGuardado && !gradoAlumno && gradosDisponibles.length > 0) {
         setMostrandoGrados(true)
       }
       if (data.grado_detectado) {
