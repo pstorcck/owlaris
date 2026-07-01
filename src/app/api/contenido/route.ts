@@ -60,7 +60,8 @@ export async function POST(req: NextRequest) {
     const { colegio_slug, grado, materia, pregunta } = await req.json()
     if (!colegio_slug || !grado || !materia) return NextResponse.json({ contenido: '', archivo: null })
 
-    const carpetasColegio = getSharePointFolderCandidates(colegio_slug)
+    const carpetasColegio = getSharePointFolderCandidates(colegio_slug, { includeShared: false })
+    const carpetasCompartidas = getSharePointFolderCandidates(colegio_slug, { sharedOnly: true })
     const cacheKey  = `${carpetasColegio.join('|')}/${grado}/${materia}`
     const cached    = cache.get(cacheKey)
     if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
@@ -114,7 +115,7 @@ export async function POST(req: NextRequest) {
     // Mineduc solo para 3ero Básico y 5to Bachillerato
     if (GRADOS_CON_MINEDUC.includes(grado) && materia.startsWith('Mineduc')) {
       let encontroMineduc = false
-      for (const carpetaColegio of carpetasColegio) {
+      for (const carpetaColegio of carpetasCompartidas) {
         for (const gradoCarpeta of getGradeFolderCandidates(grado)) {
           console.log(`Buscando Mineduc: ${carpetaColegio}/${gradoCarpeta}/${materia}`)
           const archivosM = await listarArchivos(driveId, token, 'Owlaris', carpetaColegio, gradoCarpeta, materia)

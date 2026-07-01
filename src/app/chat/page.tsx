@@ -3,7 +3,9 @@ import ChatInterface from '@/components/chat/ChatInterface'
 import { redirect } from 'next/navigation'
 import {
   getGradeFolderCandidates,
+  getSharedSubjectChipsForGrade,
   getSharePointFolderCandidates,
+  includeSharedPrograms,
   inferSubjectFromSharePointName,
   isSupportedSharePointContentFile,
   pushUniqueSharePointName,
@@ -96,8 +98,13 @@ async function leerCarpetasGrado(grado: string, carpetasColegio: string[]): Prom
   return carpetas
 }
 
-function combinarConAccesosEspeciales(materias: string[]) {
+function combinarConAccesosEspeciales(materias: string[], grado: string, incluirCompartidas: boolean) {
   const out = Array.from(new Set(materias.filter(Boolean)))
+  if (incluirCompartidas) {
+    getSharedSubjectChipsForGrade(grado).forEach(materia => {
+      if (!out.includes(materia)) out.push(materia)
+    })
+  }
   if (!out.includes('» Conversar en Inglés')) out.push('» Conversar en Inglés')
   return out
 }
@@ -127,9 +134,10 @@ export default async function ChatPage() {
 
   // Cargar materias disponibles desde SharePoint
   const grado = perfil?.grado || ''
-  const carpetasColegio = getSharePointFolderCandidates(perfil?.colegio)
+  const carpetasColegio = getSharePointFolderCandidates(perfil?.colegio, { includeShared: false })
+  const incluirCompartidas = includeSharedPrograms(perfil?.colegio)
   const materiasSharePoint = perfil?.rol === 'maestro' ? [] : await leerCarpetasGrado(grado, carpetasColegio)
-  const materiasDisponibles = combinarConAccesosEspeciales(materiasSharePoint)
+  const materiasDisponibles = combinarConAccesosEspeciales(materiasSharePoint, grado, incluirCompartidas)
 
   return (
     <ChatInterface

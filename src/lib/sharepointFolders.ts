@@ -24,6 +24,7 @@ export const GRADOS_ESCHOLARIS = [
   'Grado 11',
   'Grado 12',
 ]
+const MINEDUC_GRADES = ['3ero Básico', '5to Bachillerato']
 
 function normalizeKey(value: string) {
   return value
@@ -116,6 +117,15 @@ function normalizedInput(input: ColegioSharePointInput) {
   return getRawValues(input).map(normalizeKey).join(' ')
 }
 
+function isSharedOwlarisFolderName(value: string) {
+  const normalized = normalizeSharePointKey(value)
+  return normalized === normalizeSharePointKey(CARPETA_COMPARTIDA_OWLARIS) ||
+    normalized === 'colegio montano y colegio escolaris' ||
+    normalized === 'colegio montano colegio escolaris' ||
+    normalized === 'montano y escolaris' ||
+    normalized === 'montano escolaris'
+}
+
 export function isEScholarisSchool(input: ColegioSharePointInput) {
   return normalizedInput(input).includes('escholaris')
 }
@@ -129,37 +139,70 @@ export function isMontanoEscolarisSchool(input: ColegioSharePointInput) {
   )
 }
 
-export function getSharePointFolderCandidates(input: ColegioSharePointInput): string[] {
+export function getSharePointFolderCandidates(
+  input: ColegioSharePointInput,
+  options: { includeShared?: boolean; sharedOnly?: boolean } = {}
+): string[] {
+  const includeShared = options.includeShared ?? true
   const rawValues = getRawValues(input)
 
-  const folders: string[] = []
-  rawValues.forEach(value => pushUnique(folders, value))
+  const ownFolders: string[] = []
+  const sharedFolders: string[] = []
+  const pushOwn = (value?: string | null) => pushUnique(ownFolders, value)
+  const pushShared = (value?: string | null) => pushUnique(sharedFolders, value)
+
+  rawValues.forEach(value => {
+    if (isSharedOwlarisFolderName(value)) pushShared(value)
+    else pushOwn(value)
+  })
 
   if (isEScholarisSchool(input)) {
-    pushUnique(folders, 'eScholaris')
-    pushUnique(folders, 'Escholaris')
-    pushUnique(folders, 'e-scholaris')
-    return folders
+    pushOwn('eScholaris')
+    pushOwn('Escholaris')
+    pushOwn('e-scholaris')
+    return options.sharedOnly ? [] : ownFolders
   }
 
   if (isMontanoEscolarisSchool(input)) {
-    pushUnique(folders, CARPETA_COMPARTIDA_OWLARIS)
-    pushUnique(folders, 'Colegio Montano y Colegio Escolaris')
-    pushUnique(folders, 'Colegio Montano - Colegio Escolaris')
-    pushUnique(folders, 'Montano y Escolaris')
-    pushUnique(folders, 'Montano Escolaris')
-    pushUnique(folders, 'Colegio Montano')
-    pushUnique(folders, 'Colegio Montano Portal Los Álamos')
-    pushUnique(folders, 'Colegio Montano Portal Los Alamos')
-    pushUnique(folders, 'Colegio Montano Cortijo')
-    pushUnique(folders, 'Colegio Escolaris')
-    pushUnique(folders, 'Escolaris')
-    pushUnique(folders, 'colegio-escolaris')
-    return folders
+    rawValues.map(normalizeSharePointKey).forEach(value => {
+      if ((value.includes('escolaris') || value.includes('colegio escolaris')) && !value.includes('montano')) {
+        pushOwn('Colegio Escolaris')
+        pushOwn('Escolaris')
+        pushOwn('colegio-escolaris')
+      }
+      if (value.includes('montano') && !value.includes('escolaris')) {
+        pushOwn('Colegio Montano')
+        if (value.includes('alamos')) {
+          pushOwn('Colegio Montano Portal Los Álamos')
+          pushOwn('Colegio Montano Portal Los Alamos')
+        }
+        if (value.includes('cortijo')) pushOwn('Colegio Montano Cortijo')
+      }
+    })
+
+    if (ownFolders.length === 0) {
+      pushOwn('Colegio Montano')
+      pushOwn('Colegio Montano Portal Los Álamos')
+      pushOwn('Colegio Montano Portal Los Alamos')
+      pushOwn('Colegio Montano Cortijo')
+      pushOwn('Colegio Escolaris')
+      pushOwn('Escolaris')
+      pushOwn('colegio-escolaris')
+    }
+
+    pushShared(CARPETA_COMPARTIDA_OWLARIS)
+    pushShared('Colegio Montano y Colegio Escolaris')
+    pushShared('Colegio Montano - Colegio Escolaris')
+    pushShared('Montano y Escolaris')
+    pushShared('Montano Escolaris')
+
+    if (options.sharedOnly) return sharedFolders
+    return includeShared ? [...ownFolders, ...sharedFolders] : ownFolders
   }
 
-  pushUnique(folders, CARPETA_COMPARTIDA_OWLARIS)
-  return folders
+  pushShared(CARPETA_COMPARTIDA_OWLARIS)
+  if (options.sharedOnly) return sharedFolders
+  return includeShared ? [...ownFolders, ...sharedFolders] : ownFolders
 }
 
 export function includeSharedPrograms(input: ColegioSharePointInput) {
@@ -168,6 +211,18 @@ export function includeSharedPrograms(input: ColegioSharePointInput) {
 
 export function getExpectedGradeFallbacks(input: ColegioSharePointInput) {
   return isEScholarisSchool(input) ? GRADOS_ESCHOLARIS : GRADOS_MONTANO_ESCOLARIS
+}
+
+export function getSharedSubjectChipsForGrade(grado?: string | null) {
+  const chips: string[] = []
+  const normalizedGrade = normalizeSharePointKey(grado || '')
+  const hasMineduc = MINEDUC_GRADES.some(g => normalizeSharePointKey(g) === normalizedGrade)
+  if (hasMineduc) {
+    chips.push('Mineduc - Lenguaje')
+    chips.push('Mineduc - Matemática')
+  }
+  if (normalizedGrade) chips.push('Olimpiadas de Ciencias')
+  return chips
 }
 
 export function isLikelyGradeFolder(name: string, input?: ColegioSharePointInput) {

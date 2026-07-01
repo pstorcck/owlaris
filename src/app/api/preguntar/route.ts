@@ -6,6 +6,7 @@ import { guardNoFinalAnswer } from '@/lib/pedagogicalGuard'
 import {
   CARPETA_COMPARTIDA_OWLARIS,
   getGradeFolderCandidates,
+  getSharedSubjectChipsForGrade,
   getSharePointFolderCandidates,
   includeSharedPrograms,
   inferSubjectFromSharePointName,
@@ -377,13 +378,14 @@ async function buscarContenido(colegio: ColegioSharePointInput, grado: string, m
   const token = await getToken()
   if (!token) return { contenido: '', archivo: null }
   const driveId = process.env.SHAREPOINT_DRIVE_ID!
-  const colegiosSP = getSharePointFolderCandidates(colegio)
+  const colegiosSP = getSharePointFolderCandidates(colegio, { includeShared: false })
+  const carpetasCompartidas = getSharePointFolderCandidates(colegio, { sharedOnly: true })
   const permitirCompartidas = includeSharedPrograms(colegio)
   let indice: { nombre: string; tema: string; downloadUrl: string }[] = []
   if (materia.startsWith('Olimpiadas') && permitirCompartidas) {
     const carpetaMateria = MATERIAS_OLIMPIADAS[materia] || materia.replace('Olimpiadas - ', '')
     const carpetaGrado = GRADOS_OLIMPIADAS[grado] || grado
-    for (const carpetaColegio of colegiosSP) {
+    for (const carpetaColegio of carpetasCompartidas.length > 0 ? carpetasCompartidas : [CARPETA_COMPARTIDA]) {
       for (const gradoCarpeta of getGradeFolderCandidates(carpetaGrado)) {
         indice = await construirIndice(driveId, token, 'Owlaris', carpetaColegio, 'Olimpiadas de Ciencias', carpetaMateria, gradoCarpeta)
         if (indice.length > 0) break
@@ -553,8 +555,13 @@ async function leerCarpetasGrado(
   return carpetas
 }
 
-function combinarConAccesosEspeciales(materias: string[], idiomaIngles: boolean) {
+function combinarConAccesosEspeciales(materias: string[], idiomaIngles: boolean, grado: string, incluirCompartidas: boolean) {
   const out = Array.from(new Set(materias.filter(Boolean)))
+  if (incluirCompartidas) {
+    getSharedSubjectChipsForGrade(grado).forEach(materia => {
+      if (!out.includes(materia)) out.push(materia)
+    })
+  }
   const conversacion = idiomaIngles ? '» English Conversation' : '» Conversar en Inglés'
   if (!out.includes(conversacion)) out.push(conversacion)
   return out
@@ -809,7 +816,7 @@ export async function POST(req: NextRequest) {
     const materia_uuid = materia?.id || null
     const gradoEfectivo = grado_override || perfil.grado
     const colegioSharePoint = perfil.colegio || null
-    const carpetasColegio = getSharePointFolderCandidates(perfil.colegio)
+    const carpetasColegio = getSharePointFolderCandidates(perfil.colegio, { includeShared: false })
     const incluirOlimpiadas = includeSharedPrograms(colegioSharePoint)
     const materiaNumerica = esMateriaNumerica(materia?.nombre || materia_id || '')
     const guardarGradoAlumno = async (grado: string) => {
@@ -819,7 +826,7 @@ export async function POST(req: NextRequest) {
     }
     const cargarMateriasDisponibles = async (grado: string) => {
       let carpetas = await leerCarpetasGrado(grado, idiomaIngles, carpetasColegio)
-      carpetas = combinarConAccesosEspeciales(carpetas, idiomaIngles)
+      carpetas = combinarConAccesosEspeciales(carpetas, idiomaIngles, grado, incluirOlimpiadas)
       return carpetas
     }
 

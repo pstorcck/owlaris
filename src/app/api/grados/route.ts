@@ -43,7 +43,7 @@ export async function GET() {
       .maybeSingle()
 
     const colegio = perfil?.colegio as {nombre?: string; sharepoint_folder?: string; slug?: string} | null
-    const carpetasColegio = getSharePointFolderCandidates(colegio)
+    const carpetasColegio = getSharePointFolderCandidates(colegio, { includeShared: false })
     if (carpetasColegio.length === 0) return NextResponse.json({ grados: [] })
     const fallback = getExpectedGradeFallbacks(colegio)
 
