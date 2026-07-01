@@ -1,6 +1,11 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { getSharePointFolderCandidates } from '@/lib/sharepointFolders'
+import {
+  getExpectedGradeFallbacks,
+  getSharePointFolderCandidates,
+  isLikelyGradeFolder,
+  sortGradesForSchool,
+} from '@/lib/sharepointFolders'
 
 const NO_GRADOS = ['Olimpiadas de Ciencias', 'Preparación pruebas nacionales']
 
@@ -30,9 +35,6 @@ export async function GET() {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
 
-    const token = await getToken()
-    if (!token) return NextResponse.json({ grados: [] })
-
     // Obtener colegio del usuario para usar su carpeta de SharePoint correcta
     const { data: perfil } = await supabase
       .from('usuarios')
@@ -40,10 +42,13 @@ export async function GET() {
       .eq('id', user.id)
       .maybeSingle()
 
-    const carpetasColegio = getSharePointFolderCandidates(
-      perfil?.colegio as {nombre?: string; sharepoint_folder?: string; slug?: string} | null
-    )
+    const colegio = perfil?.colegio as {nombre?: string; sharepoint_folder?: string; slug?: string} | null
+    const carpetasColegio = getSharePointFolderCandidates(colegio)
     if (carpetasColegio.length === 0) return NextResponse.json({ grados: [] })
+    const fallback = getExpectedGradeFallbacks(colegio)
+
+    const token = await getToken()
+    if (!token) return NextResponse.json({ grados: fallback })
 
     const driveId = process.env.SHAREPOINT_DRIVE_ID!
     let grados: string[] = []
@@ -55,13 +60,15 @@ export async function GET() {
 
       const data = await res.json()
       grados = (data.value || [])
-        .filter((i: {folder?: unknown; name: string}) => i.folder && !NO_GRADOS.includes(i.name))
+        .filter((i: {folder?: unknown; name: string}) =>
+          i.folder && !NO_GRADOS.includes(i.name) && isLikelyGradeFolder(i.name, colegio)
+        )
         .map((i: {name: string}) => i.name)
-        .sort()
+      grados = sortGradesForSchool(grados, colegio)
       if (grados.length > 0) break
     }
 
-    return NextResponse.json({ grados })
+    return NextResponse.json({ grados: grados.length > 0 ? grados : fallback })
   } catch {
     return NextResponse.json({ grados: [] })
   }

@@ -167,6 +167,12 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
   useEffect(() => { finalRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [mensajes, cargando])
 
   useEffect(() => {
+    if (estadoChat === 'esperando_grado' && !gradoGuardado && !gradoAlumno && gradosDisponibles.length > 0) {
+      setMostrandoGrados(true)
+    }
+  }, [estadoChat, gradoAlumno, gradoGuardado, gradosDisponibles.length])
+
+  useEffect(() => {
     if (typeof window === 'undefined' || !('speechSynthesis' in window)) return
     window.speechSynthesis.getVoices()
     const cargarVoces = () => window.speechSynthesis.getVoices()

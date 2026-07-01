@@ -3,7 +3,13 @@ import { createAdminClient, createClient } from '@/lib/supabase/server'
 import { checkContentSafety, type ContentSafetyResult } from '@/lib/contentSafety'
 import { guardHumanisticResponse } from '@/lib/humanisticSafety'
 import { guardNoFinalAnswer } from '@/lib/pedagogicalGuard'
-import { CARPETA_COMPARTIDA_OWLARIS, getGradeFolderCandidates, getSharePointFolderCandidates, isEscolarisFolder } from '@/lib/sharepointFolders'
+import {
+  CARPETA_COMPARTIDA_OWLARIS,
+  getGradeFolderCandidates,
+  getSharePointFolderCandidates,
+  isEScholarisSchool,
+  type ColegioSharePointInput,
+} from '@/lib/sharepointFolders'
 import {
   extractAndCleanOperation,
   handleMathEvaluation,
@@ -157,8 +163,8 @@ function normalizarGradoEscholaris(texto: string): string {
 }
 
 // Wrapper que decide qué sistema de grados usar según el colegio
-function normalizarGradoPorColegio(texto: string, colegioSlug?: string | null): string {
-  if (isEscolarisFolder(colegioSlug)) {
+function normalizarGradoPorColegio(texto: string, colegio?: ColegioSharePointInput): string {
+  if (isEScholarisSchool(colegio)) {
     return normalizarGradoEscholaris(texto)
   }
   return normalizarGrado(texto)
@@ -327,12 +333,11 @@ async function construirIndice(driveId: string, token: string, ...segs: string[]
   return indice
 }
 
-async function buscarContenido(colegio_slug: string, grado: string, materia: string, pregunta: string) {
+async function buscarContenido(colegio: ColegioSharePointInput, grado: string, materia: string, pregunta: string) {
   const token = await getToken()
   if (!token) return { contenido: '', archivo: null }
   const driveId = process.env.SHAREPOINT_DRIVE_ID!
-  const colegiosSP = getSharePointFolderCandidates(colegio_slug)
-  const colegioSP = colegiosSP[0] || colegio_slug
+  const colegiosSP = getSharePointFolderCandidates(colegio)
   let indice: { nombre: string; tema: string; downloadUrl: string }[] = []
   if (materia.startsWith('Olimpiadas')) {
     const carpetaMateria = MATERIAS_OLIMPIADAS[materia] || materia.replace('Olimpiadas - ', '')
@@ -384,7 +389,7 @@ async function buscarContenido(colegio_slug: string, grado: string, materia: str
     if (puntaje > mejorPuntaje) { mejorPuntaje = puntaje; mejorDoc = doc }
   }
   console.log(`✅ Elegido: ${mejorDoc.nombre} (puntaje: ${mejorPuntaje})`)
-  const cacheKey = `${colegioSP}/${grado}/${materia}/${mejorDoc.nombre}`
+  const cacheKey = `${colegiosSP.join('|')}/${grado}/${materia}/${mejorDoc.nombre}`
   const cached = cacheContenido.get(cacheKey)
   if (cached && Date.now() - cached.timestamp < CACHE_TTL) return { contenido: cached.contenido, archivo: cached.archivo }
   const contenido = await extraerTexto(mejorDoc.downloadUrl)
@@ -669,7 +674,7 @@ export async function POST(req: NextRequest) {
     const materia = materiaPorId || materiaPorNombre
     const materia_uuid = materia?.id || null
     const gradoEfectivo = grado_override || perfil.grado
-    const colegioSlug = perfil.colegio?.sharepoint_folder || perfil.colegio?.slug
+    const colegioSharePoint = perfil.colegio || null
     const carpetasColegio = getSharePointFolderCandidates(perfil.colegio)
     const materiaNumerica = esMateriaNumerica(materia?.nombre || materia_id || '')
 
@@ -701,7 +706,7 @@ export async function POST(req: NextRequest) {
     }
 
     if (estado === 'esperando_grado') {
-      const gradoDetectado = normalizarGradoPorColegio(pregunta, colegioSlug)
+      const gradoDetectado = normalizarGradoPorColegio(pregunta, colegioSharePoint)
       if (!gradoDetectado) return NextResponse.json({ respuesta: 'No reconocí ese grado. ¿Puedes decirme tu grado? Por ejemplo: "4to Primaria", "3ero Básico", "5to Bachillerato"...', nuevo_estado: 'esperando_grado', nombre_alumno: nombreAlumno, tokens: 0 })
       if (userId) await supabase.from('usuarios').update({ grado: gradoDetectado }).eq('id', userId)
       let carpetasG = await leerCarpetasGrado(gradoDetectado, idiomaIngles, carpetasColegio)
@@ -767,7 +772,7 @@ export async function POST(req: NextRequest) {
       const cambioGradoMatch = cambioGradoRegex.exec(pregunta)
       if (cambioGradoMatch) {
         const textoGrado = cambioGradoMatch[2] || cambioGradoMatch[4] || cambioGradoMatch[5] || ''
-        const nuevoGrado = normalizarGradoPorColegio(textoGrado.trim(), colegioSlug)
+        const nuevoGrado = normalizarGradoPorColegio(textoGrado.trim(), colegioSharePoint)
         if (nuevoGrado) {
           if (userId) await supabase.from('usuarios').update({ grado: nuevoGrado }).eq('id', userId)
           return NextResponse.json({ respuesta: 'Perfecto, actualicé tu grado a ' + nuevoGrado + '. ¿Qué materia quieres estudiar?', nuevo_estado: 'esperando_materia', grado_detectado: nuevoGrado, tokens: 0 })
@@ -906,7 +911,7 @@ export async function POST(req: NextRequest) {
     let contenidoCurricular = ''
     let documentoFuente: string | null = null
       if (tipoPregunta === 'academica' && !esBienvenida) {
-      const result = await buscarContenido(colegioSlug, gradoEfectivo, materia_id || '', pregunta)
+      const result = await buscarContenido(colegioSharePoint, gradoEfectivo, materia_id || '', pregunta)
       contenidoCurricular = result.contenido
       documentoFuente = result.archivo
     }

@@ -1,16 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { getGradeFolderCandidates, getSharePointFolderCandidates } from '@/lib/sharepointFolders'
 
 const cache = new Map<string, { contenido: string; archivo: string; timestamp: number }>()
 const CACHE_TTL = 1000 * 60 * 30
 
 const GRADOS_CON_MINEDUC = ['3ero Básico', '5to Bachillerato']
-
-const COLEGIOS_SHAREPOINT: Record<string, string> = {
-  'escolaris':       'Escolaris',
-  'colegio-montano': 'Colegio Montano',
-  'Escolaris':       'Escolaris',
-  'Colegio Montano': 'Colegio Montano',
-}
 
 async function listarArchivos(driveId: string, token: string, ...segmentos: string[]) {
   const ruta = segmentos.map(s => encodeURIComponent(s)).join('/')
@@ -40,8 +34,8 @@ export async function POST(req: NextRequest) {
     const { colegio_slug, grado, materia, pregunta } = await req.json()
     if (!colegio_slug || !grado || !materia) return NextResponse.json({ contenido: '', archivo: null })
 
-    const colegioSP = COLEGIOS_SHAREPOINT[colegio_slug] || colegio_slug
-    const cacheKey  = `${colegioSP}/${grado}/${materia}`
+    const carpetasColegio = getSharePointFolderCandidates(colegio_slug)
+    const cacheKey  = `${carpetasColegio.join('|')}/${grado}/${materia}`
     const cached    = cache.get(cacheKey)
     if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
       return NextResponse.json({ contenido: cached.contenido, archivo: cached.archivo })
@@ -55,27 +49,39 @@ export async function POST(req: NextRequest) {
     let archivo   = null
 
     // Estructura real: Owlaris/[Colegio]/[Grado]/[Materia]/
-    console.log(`Buscando: Owlaris/${colegioSP}/${grado}/${materia}`)
-
-    const archivos = await listarArchivos(driveId, token, 'Owlaris', colegioSP, grado, materia)
-    const elegido  = encontrarArchivoRelevante(archivos, pregunta)
-
-    if (elegido) {
-      contenido = await extraerTexto(elegido['@microsoft.graph.downloadUrl'])
-      archivo   = elegido.name
-      console.log(`✅ Encontrado: ${elegido.name}`)
+    for (const carpetaColegio of carpetasColegio) {
+      for (const gradoCarpeta of getGradeFolderCandidates(grado)) {
+        console.log(`Buscando: Owlaris/${carpetaColegio}/${gradoCarpeta}/${materia}`)
+        const archivos = await listarArchivos(driveId, token, 'Owlaris', carpetaColegio, gradoCarpeta, materia)
+        const elegido  = encontrarArchivoRelevante(archivos, pregunta)
+        if (elegido) {
+          contenido = await extraerTexto(elegido['@microsoft.graph.downloadUrl'])
+          archivo   = elegido.name
+          console.log(`✅ Encontrado: ${elegido.name}`)
+          break
+        }
+      }
+      if (contenido) break
     }
 
     // Mineduc solo para 3ero Básico y 5to Bachillerato
     if (GRADOS_CON_MINEDUC.includes(grado) && materia.startsWith('Mineduc')) {
-      console.log(`Buscando Mineduc: ${grado}/${materia}`)
-      const archivosM = await listarArchivos(driveId, token, 'Owlaris', colegioSP, grado, materia)
-      const elegidoM  = encontrarArchivoRelevante(archivosM, pregunta)
-      if (elegidoM) {
-        const textoM = await extraerTexto(elegidoM['@microsoft.graph.downloadUrl'])
-        contenido   += `\n\n--- Contenido Mineduc ---\n${textoM}`
-        archivo      = archivo || elegidoM.name
-        console.log(`✅ Mineduc: ${elegidoM.name}`)
+      let encontroMineduc = false
+      for (const carpetaColegio of carpetasColegio) {
+        for (const gradoCarpeta of getGradeFolderCandidates(grado)) {
+          console.log(`Buscando Mineduc: ${carpetaColegio}/${gradoCarpeta}/${materia}`)
+          const archivosM = await listarArchivos(driveId, token, 'Owlaris', carpetaColegio, gradoCarpeta, materia)
+          const elegidoM  = encontrarArchivoRelevante(archivosM, pregunta)
+          if (elegidoM) {
+            const textoM = await extraerTexto(elegidoM['@microsoft.graph.downloadUrl'])
+            contenido   += `\n\n--- Contenido Mineduc ---\n${textoM}`
+            archivo      = archivo || elegidoM.name
+            console.log(`✅ Mineduc: ${elegidoM.name}`)
+            encontroMineduc = true
+            break
+          }
+        }
+        if (encontroMineduc) break
       }
     }
 

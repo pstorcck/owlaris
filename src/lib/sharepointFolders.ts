@@ -1,10 +1,29 @@
-type ColegioSharePointInput = {
+export type ColegioSharePointInput = {
   nombre?: string | null
   slug?: string | null
   sharepoint_folder?: string | null
 } | string | null | undefined
 
 export const CARPETA_COMPARTIDA_OWLARIS = 'Colegio Montano y Escolaris'
+export const GRADOS_MONTANO_ESCOLARIS = [
+  '4to Primaria',
+  '5to Primaria',
+  '6to Primaria',
+  '1ero Básico',
+  '2do Básico',
+  '3ero Básico',
+  '4to Bachillerato',
+  '5to Bachillerato',
+]
+export const GRADOS_ESCHOLARIS = [
+  'Grado 6',
+  'Grado 7',
+  'Grado 8',
+  'Grado 9',
+  'Grado 10',
+  'Grado 11',
+  'Grado 12',
+]
 
 function normalizeKey(value: string) {
   return value
@@ -19,43 +38,81 @@ function pushUnique(target: string[], value?: string | null) {
   if (clean && !target.includes(clean)) target.push(clean)
 }
 
-export function getSharePointFolderCandidates(input: ColegioSharePointInput): string[] {
+function getRawValues(input: ColegioSharePointInput) {
   const rawValues: string[] = []
   if (typeof input === 'string') {
     rawValues.push(input)
   } else if (input) {
     rawValues.push(input.sharepoint_folder || '', input.slug || '', input.nombre || '')
   }
+  return rawValues.filter(Boolean)
+}
+
+function normalizedInput(input: ColegioSharePointInput) {
+  return getRawValues(input).map(normalizeKey).join(' ')
+}
+
+export function isEScholarisSchool(input: ColegioSharePointInput) {
+  return normalizedInput(input).includes('escholaris')
+}
+
+export function isMontanoEscolarisSchool(input: ColegioSharePointInput) {
+  const normalized = normalizedInput(input)
+  return !isEScholarisSchool(input) && (
+    normalized.includes('montano') ||
+    normalized.includes('escolaris') ||
+    normalized.includes('colegio-escolaris')
+  )
+}
+
+export function getSharePointFolderCandidates(input: ColegioSharePointInput): string[] {
+  const rawValues = getRawValues(input)
 
   const folders: string[] = []
   rawValues.forEach(value => pushUnique(folders, value))
 
-  const normalized = rawValues.map(normalizeKey).join(' ')
-
-  if (normalized.includes('montano') || normalized.includes('colegio-montano')) {
-    pushUnique(folders, 'Colegio Montano')
+  if (isEScholarisSchool(input)) {
+    pushUnique(folders, 'eScholaris')
+    pushUnique(folders, 'Escholaris')
+    pushUnique(folders, 'e-scholaris')
     pushUnique(folders, CARPETA_COMPARTIDA_OWLARIS)
+    return folders
   }
 
-  if (
-    normalized.includes('escolaris') ||
-    normalized.includes('escholaris') ||
-    normalized.includes('colegio-escolaris')
-  ) {
-    pushUnique(folders, 'Escolaris')
-    pushUnique(folders, 'eScholaris')
-    pushUnique(folders, 'colegio-escolaris')
+  if (isMontanoEscolarisSchool(input)) {
     pushUnique(folders, CARPETA_COMPARTIDA_OWLARIS)
+    pushUnique(folders, 'Colegio Montano')
+    pushUnique(folders, 'Colegio Escolaris')
+    pushUnique(folders, 'Escolaris')
+    pushUnique(folders, 'colegio-escolaris')
+    return folders
   }
 
   pushUnique(folders, CARPETA_COMPARTIDA_OWLARIS)
   return folders
 }
 
-export function isEscolarisFolder(input: ColegioSharePointInput) {
-  return getSharePointFolderCandidates(input).some(folder => {
-    const key = normalizeKey(folder)
-    return key.includes('escolaris') || key.includes('escholaris')
+export function getExpectedGradeFallbacks(input: ColegioSharePointInput) {
+  return isEScholarisSchool(input) ? GRADOS_ESCHOLARIS : GRADOS_MONTANO_ESCOLARIS
+}
+
+export function isLikelyGradeFolder(name: string, input?: ColegioSharePointInput) {
+  const normalized = normalizeKey(name)
+  const expected = (input ? getExpectedGradeFallbacks(input) : [...GRADOS_MONTANO_ESCOLARIS, ...GRADOS_ESCHOLARIS])
+    .map(normalizeKey)
+  if (expected.includes(normalized)) return true
+  if (/^grado\s*(6|7|8|9|10|11|12)$/.test(normalized)) return true
+  if (/^(6|7|8|9|10|11|12)(st|nd|rd|th)?\s*grade$/.test(normalized)) return true
+  return /(primaria|basico|bachillerato)$/.test(normalized)
+}
+
+export function sortGradesForSchool(grades: string[], input?: ColegioSharePointInput) {
+  const expected = getExpectedGradeFallbacks(input).map(normalizeKey)
+  return [...grades].sort((a, b) => {
+    const ia = expected.indexOf(normalizeKey(a))
+    const ib = expected.indexOf(normalizeKey(b))
+    if (ia !== -1 || ib !== -1) return (ia === -1 ? 999 : ia) - (ib === -1 ? 999 : ib)
+    return a.localeCompare(b, 'es')
   })
 }
 
