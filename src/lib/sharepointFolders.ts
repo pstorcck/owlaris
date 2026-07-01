@@ -75,7 +75,6 @@ export function getSharePointFolderCandidates(input: ColegioSharePointInput): st
     pushUnique(folders, 'eScholaris')
     pushUnique(folders, 'Escholaris')
     pushUnique(folders, 'e-scholaris')
-    pushUnique(folders, CARPETA_COMPARTIDA_OWLARIS)
     return folders
   }
 
@@ -90,6 +89,10 @@ export function getSharePointFolderCandidates(input: ColegioSharePointInput): st
 
   pushUnique(folders, CARPETA_COMPARTIDA_OWLARIS)
   return folders
+}
+
+export function includeSharedPrograms(input: ColegioSharePointInput) {
+  return isMontanoEscolarisSchool(input)
 }
 
 export function getExpectedGradeFallbacks(input: ColegioSharePointInput) {

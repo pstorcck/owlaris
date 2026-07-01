@@ -400,7 +400,7 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
       if (data.grado_detectado) {
         setGradoAlumno(data.grado_detectado)
         // Guardar grado desde el frontend donde sí hay sesión activa
-        supabase.from('usuarios').update({ grado: data.grado_detectado }).eq('id', usuario.id)
+        await supabase.from('usuarios').update({ grado: data.grado_detectado }).eq('id', usuario.id)
       }
       if (data.materia_detectada) setMateriaAlumno(data.materia_detectada)
       if (data.activar_conversacion) { setModoConversacion(true); setIdiomaIngles(true) }
@@ -774,7 +774,7 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
                       setMateriaAlumno('')
                       setSugerencias([])
                       setEstadoChat('esperando_materia')
-                      supabase.from('usuarios').update({ grado }).eq('id', usuario.id)
+                      await supabase.from('usuarios').update({ grado }).eq('id', usuario.id)
                       const res: Response = await fetch('/api/preguntar', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
