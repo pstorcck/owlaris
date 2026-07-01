@@ -157,7 +157,7 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
   const [materiaAlumno, setMateriaAlumno] = useState('')
 
   const finalRef = useRef<HTMLDivElement>(null)
-  const materiasDisponiblesRef = useRef<string[]>([])
+  const materiasDisponiblesRef = useRef<string[]>(materiasIniciales)
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const router   = useRouter()
   const supabase = createClient()
@@ -783,6 +783,7 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
                       })
                       const data = await res.json()
                       if (data.materias_disponibles) {
+                        materiasDisponiblesRef.current = data.materias_disponibles
                         materiasBaseRef.current = data.materias_disponibles
                         setChipsMateria(traducirChips(data.materias_disponibles, idiomaIngles))
                         setEstadoChat('esperando_materia')

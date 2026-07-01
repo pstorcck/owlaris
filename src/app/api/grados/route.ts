@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { getSharePointFolderCandidates } from '@/lib/sharepointFolders'
 
 const NO_GRADOS = ['Olimpiadas de Ciencias', 'Preparación pruebas nacionales']
 
@@ -35,24 +36,30 @@ export async function GET() {
     // Obtener colegio del usuario para usar su carpeta de SharePoint correcta
     const { data: perfil } = await supabase
       .from('usuarios')
-      .select('colegio:colegios(sharepoint_folder, slug)')
+      .select('colegio:colegios(nombre, sharepoint_folder, slug)')
       .eq('id', user.id)
       .maybeSingle()
 
-    const carpetaColegio = (perfil?.colegio as {sharepoint_folder?: string; slug?: string} | null)?.sharepoint_folder
-    if (!carpetaColegio) return NextResponse.json({ grados: [] })
+    const carpetasColegio = getSharePointFolderCandidates(
+      perfil?.colegio as {nombre?: string; sharepoint_folder?: string; slug?: string} | null
+    )
+    if (carpetasColegio.length === 0) return NextResponse.json({ grados: [] })
 
     const driveId = process.env.SHAREPOINT_DRIVE_ID!
-    const ruta = encodeURIComponent('Owlaris') + '/' + encodeURIComponent(carpetaColegio)
-    const url = `https://graph.microsoft.com/v1.0/drives/${driveId}/root:/${ruta}:/children`
-    const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } })
-    if (!res.ok) return NextResponse.json({ grados: [] })
+    let grados: string[] = []
+    for (const carpetaColegio of carpetasColegio) {
+      const ruta = encodeURIComponent('Owlaris') + '/' + encodeURIComponent(carpetaColegio)
+      const url = `https://graph.microsoft.com/v1.0/drives/${driveId}/root:/${ruta}:/children`
+      const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } })
+      if (!res.ok) continue
 
-    const data = await res.json()
-    const grados = (data.value || [])
-      .filter((i: {folder?: unknown; name: string}) => i.folder && !NO_GRADOS.includes(i.name))
-      .map((i: {name: string}) => i.name)
-      .sort()
+      const data = await res.json()
+      grados = (data.value || [])
+        .filter((i: {folder?: unknown; name: string}) => i.folder && !NO_GRADOS.includes(i.name))
+        .map((i: {name: string}) => i.name)
+        .sort()
+      if (grados.length > 0) break
+    }
 
     return NextResponse.json({ grados })
   } catch {

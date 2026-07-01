@@ -3,6 +3,7 @@ import { createAdminClient, createClient } from '@/lib/supabase/server'
 import { checkContentSafety, type ContentSafetyResult } from '@/lib/contentSafety'
 import { guardHumanisticResponse } from '@/lib/humanisticSafety'
 import { guardNoFinalAnswer } from '@/lib/pedagogicalGuard'
+import { CARPETA_COMPARTIDA_OWLARIS, getGradeFolderCandidates, getSharePointFolderCandidates, isEscolarisFolder } from '@/lib/sharepointFolders'
 import {
   extractAndCleanOperation,
   handleMathEvaluation,
@@ -117,14 +118,7 @@ const cacheContenido = new Map<string, { contenido: string; archivo: string; tim
 const cacheConfig    = new Map<string, { contenido: string; timestamp: number }>()
 const CACHE_TTL      = 1000 * 60 * 1
 
-const COLEGIOS_SP: Record<string, string> = {
-  'escolaris':       'Escolaris',
-  'Escolaris':       'Escolaris',
-  'colegio-montano': 'Colegio Montano',
-  'eScholaris':      'eScholaris',
-  'escholaris':      'eScholaris',
-}
-const CARPETA_COMPARTIDA = 'Colegio Montano y Escolaris'
+const CARPETA_COMPARTIDA = CARPETA_COMPARTIDA_OWLARIS
 
 function normalizarGrado(texto: string): string {
   const t = texto.toLowerCase()
@@ -164,8 +158,7 @@ function normalizarGradoEscholaris(texto: string): string {
 
 // Wrapper que decide qué sistema de grados usar según el colegio
 function normalizarGradoPorColegio(texto: string, colegioSlug?: string | null): string {
-  const colegio = (colegioSlug || '').toLowerCase()
-  if (colegio === 'escholaris' || colegio === 'escolaris') {
+  if (isEscolarisFolder(colegioSlug)) {
     return normalizarGradoEscholaris(texto)
   }
   return normalizarGrado(texto)
@@ -338,13 +331,21 @@ async function buscarContenido(colegio_slug: string, grado: string, materia: str
   const token = await getToken()
   if (!token) return { contenido: '', archivo: null }
   const driveId = process.env.SHAREPOINT_DRIVE_ID!
-  const colegioSP = COLEGIOS_SP[colegio_slug] || colegio_slug
+  const colegiosSP = getSharePointFolderCandidates(colegio_slug)
+  const colegioSP = colegiosSP[0] || colegio_slug
   let indice: { nombre: string; tema: string; downloadUrl: string }[] = []
   if (materia.startsWith('Olimpiadas')) {
     const carpetaMateria = MATERIAS_OLIMPIADAS[materia] || materia.replace('Olimpiadas - ', '')
     const carpetaGrado = GRADOS_OLIMPIADAS[grado] || grado
-    indice = await construirIndice(driveId, token, 'Owlaris', CARPETA_COMPARTIDA, 'Olimpiadas de Ciencias', carpetaMateria, carpetaGrado)
-    if (indice.length === 0) indice = await construirIndice(driveId, token, 'Owlaris', CARPETA_COMPARTIDA, 'Olimpiadas de Ciencias', carpetaMateria)
+    for (const carpetaColegio of colegiosSP) {
+      for (const gradoCarpeta of getGradeFolderCandidates(carpetaGrado)) {
+        indice = await construirIndice(driveId, token, 'Owlaris', carpetaColegio, 'Olimpiadas de Ciencias', carpetaMateria, gradoCarpeta)
+        if (indice.length > 0) break
+      }
+      if (indice.length > 0) break
+      indice = await construirIndice(driveId, token, 'Owlaris', carpetaColegio, 'Olimpiadas de Ciencias', carpetaMateria)
+      if (indice.length > 0) break
+    }
   } else {
     const buscarEnGrado = async (raiz: string, gradoB: string, materiaB: string) => {
       let idx = await construirIndice(driveId, token, raiz, gradoB, materiaB)
@@ -359,9 +360,13 @@ async function buscarContenido(colegio_slug: string, grado: string, materia: str
       if (match) idx = await construirIndice(driveId, token, raiz, gradoB, match)
       return idx
     }
-    // Prioriza la carpeta del colegio del alumno; la compartida queda como respaldo.
-    indice = await buscarEnGrado('Owlaris/' + colegioSP, grado, materia)
-    if (indice.length === 0) indice = await buscarEnGrado('Owlaris/' + CARPETA_COMPARTIDA, grado, materia)
+    for (const carpetaColegio of colegiosSP) {
+      for (const gradoCarpeta of getGradeFolderCandidates(grado)) {
+        indice = await buscarEnGrado('Owlaris/' + carpetaColegio, gradoCarpeta, materia)
+        if (indice.length > 0) break
+      }
+      if (indice.length > 0) break
+    }
     if (indice.length === 0) indice = await construirIndice(driveId, token, 'Owlaris', CARPETA_COMPARTIDA, 'Preparación pruebas nacionales', 'Mineduc', grado, materia)
     if (indice.length === 0) indice = await construirIndice(driveId, token, 'Owlaris', CARPETA_COMPARTIDA, 'Preparación pruebas nacionales', 'Mineduc', materia)
   }
@@ -412,23 +417,44 @@ async function leerConfig(): Promise<string> {
   return contenido
 }
 
-async function leerCarpetasGrado(grado: string, idiomaIngles: boolean, carpetaColegio = CARPETA_COMPARTIDA): Promise<string[]> {
+async function leerCarpetasGrado(grado: string, idiomaIngles: boolean, carpetasColegio: string[] = [CARPETA_COMPARTIDA]): Promise<string[]> {
   const token = await getToken()
   if (!token) return []
   const driveId = process.env.SHAREPOINT_DRIVE_ID!
   const carpetas: string[] = []
-  try {
-    const ruta = encodeURIComponent('Owlaris') + '/' + encodeURIComponent(carpetaColegio) + '/' + encodeURIComponent(grado)
-    const url = 'https://graph.microsoft.com/v1.0/drives/' + driveId + '/root:/' + ruta + ':/children'
-    const res = await fetch(url, { headers: { Authorization: 'Bearer ' + token } })
-    if (res.ok) {
-      const data = await res.json()
-      carpetas.push(...(data.value || []).filter((i: {folder?:unknown}) => i.folder).map((i: {name:string}) => i.name))
+  for (const carpetaColegio of carpetasColegio) {
+    for (const gradoCarpeta of getGradeFolderCandidates(grado)) {
+      try {
+        const ruta = encodeURIComponent('Owlaris') + '/' + encodeURIComponent(carpetaColegio) + '/' + encodeURIComponent(gradoCarpeta)
+        const url = 'https://graph.microsoft.com/v1.0/drives/' + driveId + '/root:/' + ruta + ':/children'
+        const res = await fetch(url, { headers: { Authorization: 'Bearer ' + token } })
+        if (res.ok) {
+          const data = await res.json()
+          const items = (data.value || [])
+            .filter((i: {folder?:unknown}) => i.folder)
+            .map((i: {name:string}) => i.name)
+          carpetas.push(...items)
+          if (items.length > 0) break
+        }
+      } catch { /* silencioso */ }
     }
-  } catch { /* silencioso */ }
+    if (carpetas.length > 0) break
+  }
   if (!carpetas.includes('Olimpiadas de Ciencias')) carpetas.push('Olimpiadas de Ciencias')
   carpetas.push(idiomaIngles ? '» English Conversation' : '» Conversar en Inglés')
   return carpetas
+}
+
+function tieneMateriasCurriculares(materias: string[]) {
+  return materias.some(m => !m.includes('Olimpiadas') && !m.includes('Conversar') && !m.includes('Conversation'))
+}
+
+function combinarConAccesosEspeciales(materias: string[], idiomaIngles: boolean) {
+  const out = Array.from(new Set(materias.filter(Boolean)))
+  if (!out.includes('Olimpiadas de Ciencias')) out.push('Olimpiadas de Ciencias')
+  const conversacion = idiomaIngles ? '» English Conversation' : '» Conversar en Inglés'
+  if (!out.includes(conversacion)) out.push(conversacion)
+  return out
 }
 
 async function leerDocumentosPadres(): Promise<string> {
@@ -644,6 +670,7 @@ export async function POST(req: NextRequest) {
     const materia_uuid = materia?.id || null
     const gradoEfectivo = grado_override || perfil.grado
     const colegioSlug = perfil.colegio?.sharepoint_folder || perfil.colegio?.slug
+    const carpetasColegio = getSharePointFolderCandidates(perfil.colegio)
     const materiaNumerica = esMateriaNumerica(materia?.nombre || materia_id || '')
 
     // ── ONBOARDING ──────────────────────────────────────────────────
@@ -654,7 +681,16 @@ export async function POST(req: NextRequest) {
     if (pregunta === '__CARGAR_MATERIAS__' || (estado === 'esperando_materia' && gradoAlumno && !pregunta.trim())) {
       const grado = gradoAlumno || grado_override || perfil.grado || ''
       if (grado) {
-        const carpetas = await leerCarpetasGrado(grado, idiomaIngles, colegioSlug)
+        let carpetas = await leerCarpetasGrado(grado, idiomaIngles, carpetasColegio)
+        if (!tieneMateriasCurriculares(carpetas)) {
+          const { data: materiasFallback } = await supabase
+            .from('materias')
+            .select('nombre')
+            .eq('colegio_id', perfil.colegio_id)
+            .eq('activa', true)
+            .order('nombre')
+          carpetas = combinarConAccesosEspeciales((materiasFallback || []).map(m => m.nombre), idiomaIngles)
+        }
         return NextResponse.json({ materias_disponibles: carpetas, respuesta: '', tokens: 0 })
       }
     }
@@ -668,7 +704,16 @@ export async function POST(req: NextRequest) {
       const gradoDetectado = normalizarGradoPorColegio(pregunta, colegioSlug)
       if (!gradoDetectado) return NextResponse.json({ respuesta: 'No reconocí ese grado. ¿Puedes decirme tu grado? Por ejemplo: "4to Primaria", "3ero Básico", "5to Bachillerato"...', nuevo_estado: 'esperando_grado', nombre_alumno: nombreAlumno, tokens: 0 })
       if (userId) await supabase.from('usuarios').update({ grado: gradoDetectado }).eq('id', userId)
-      const carpetasG = await leerCarpetasGrado(gradoDetectado, idiomaIngles, colegioSlug)
+      let carpetasG = await leerCarpetasGrado(gradoDetectado, idiomaIngles, carpetasColegio)
+      if (!tieneMateriasCurriculares(carpetasG)) {
+        const { data: materiasFallback } = await supabase
+          .from('materias')
+          .select('nombre')
+          .eq('colegio_id', perfil.colegio_id)
+          .eq('activa', true)
+          .order('nombre')
+        carpetasG = combinarConAccesosEspeciales((materiasFallback || []).map(m => m.nombre), idiomaIngles)
+      }
       return NextResponse.json({ respuesta: idiomaIngles ? `Perfect, ${nombreAlumno}! What would you like to study?` : `Perfecto, ${nombreAlumno}. ¿Qué quieres estudiar hoy?`, nuevo_estado: 'esperando_materia', nombre_alumno: nombreAlumno, grado_detectado: gradoDetectado, materias_disponibles: carpetasG, tokens: 0 })
     }
 
