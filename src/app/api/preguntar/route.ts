@@ -5,6 +5,7 @@ import { guardHumanisticResponse } from '@/lib/humanisticSafety'
 import { guardNoFinalAnswer } from '@/lib/pedagogicalGuard'
 import {
   CARPETA_COMPARTIDA_OWLARIS,
+  getDefaultSubjectsForSchool,
   getGradeFolderCandidates,
   getSharePointFolderCandidates,
   includeSharedPrograms,
@@ -14,6 +15,7 @@ import {
   normalizeSharePointKey,
   pushUniqueSharePointName,
   sharePointNameMatchesSubject,
+  sharePointTextMatchesGrade,
   type ColegioSharePointInput,
 } from '@/lib/sharepointFolders'
 import {
@@ -299,6 +301,7 @@ type ArchivoSharePoint = {
   name: string
   file?: unknown
   folder?: unknown
+  parentReference?: { path?: string }
   '@microsoft.graph.downloadUrl'?: string
 }
 
@@ -314,6 +317,16 @@ async function listarHijos(driveId: string, token: string, ...segs: string[]): P
 async function listarArchivos(driveId: string, token: string, ...segs: string[]) {
   const hijos = await listarHijos(driveId, token, ...segs)
   return hijos.filter((a: ArchivoSharePoint) => a.file && isSharePointDocx(a.name))
+}
+
+async function buscarArchivosPorBusqueda(driveId: string, token: string, query: string, ...segs: string[]) {
+  const ruta = segs.map(s => encodeURIComponent(s)).join('/')
+  const safeQuery = encodeURIComponent(query.replace(/'/g, "''"))
+  const url = `https://graph.microsoft.com/v1.0/drives/${driveId}/root:/${ruta}:/search(q='${safeQuery}')`
+  const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } })
+  if (!res.ok) return []
+  const data = await res.json()
+  return (data.value || []).filter((a: ArchivoSharePoint) => a.file && isSharePointDocx(a.name))
 }
 
 async function extraerTexto(url: string): Promise<string> {
@@ -403,6 +416,24 @@ async function buscarContenido(colegio: ColegioSharePointInput, grado: string, m
           archivosDirectos
         )
       }
+      if (idx.length > 0) return idx
+
+      for (const termino of [materiaB, ...getGradeFolderCandidates(gradoB)]) {
+        const archivosBusqueda = await buscarArchivosPorBusqueda(driveId, token, termino, ...raizSegs)
+        const matches = archivosBusqueda.filter((archivo: ArchivoSharePoint) => {
+          const textoUbicacion = `${archivo.name} ${archivo.parentReference?.path || ''}`
+          return sharePointNameMatchesSubject(textoUbicacion, materiaB) &&
+            sharePointTextMatchesGrade(textoUbicacion, gradoB)
+        })
+        if (matches.length > 0) {
+          idx = await construirIndiceDesdeArchivos(
+            'idx/' + [...raizSegs, gradoB, 'search', normalizeSharePointKey(materiaB)].join('/'),
+            [...raizSegs, gradoB].join('/') + ' [search:' + materiaB + ']',
+            matches
+          )
+          break
+        }
+      }
       return idx
     }
     for (const carpetaColegio of colegiosSP) {
@@ -472,6 +503,20 @@ async function leerCarpetasGrado(
   if (!token) return []
   const driveId = process.env.SHAREPOINT_DRIVE_ID!
   const carpetas: string[] = []
+  const buscarMateriasPorBusqueda = async (carpetaColegio: string) => {
+    const materias: string[] = []
+    for (const termino of getGradeFolderCandidates(grado)) {
+      const archivos = await buscarArchivosPorBusqueda(driveId, token, termino, 'Owlaris', carpetaColegio)
+      archivos
+        .filter((archivo: ArchivoSharePoint) => sharePointTextMatchesGrade(`${archivo.name} ${archivo.parentReference?.path || ''}`, grado))
+        .map((archivo: ArchivoSharePoint) => inferSubjectFromSharePointName(archivo.name))
+        .filter((materia: string | null): materia is string => Boolean(materia))
+        .forEach((materia: string) => pushUniqueSharePointName(materias, materia))
+      if (materias.length > 0) break
+    }
+    return materias
+  }
+
   for (const carpetaColegio of carpetasColegio) {
     for (const gradoCarpeta of getGradeFolderCandidates(grado)) {
       try {
@@ -494,6 +539,10 @@ async function leerCarpetasGrado(
           if (carpetasMateria.length > 0 || materiasDesdeDocumentos.length > 0) break
         }
       } catch { /* silencioso */ }
+    }
+    if (carpetas.length === 0) {
+      const materiasEncontradas = await buscarMateriasPorBusqueda(carpetaColegio).catch(() => [])
+      materiasEncontradas.forEach(materia => pushUniqueSharePointName(carpetas, materia))
     }
     if (carpetas.length > 0) break
   }
@@ -780,7 +829,11 @@ export async function POST(req: NextRequest) {
           .eq('colegio_id', perfil.colegio_id)
           .eq('activa', true)
           .order('nombre')
-        carpetas = combinarConAccesosEspeciales((materiasFallback || []).map(m => m.nombre), idiomaIngles, incluirOlimpiadas)
+        const materiasSupabase = (materiasFallback || []).map(m => m.nombre)
+        const materiasBase = tieneMateriasCurriculares(materiasSupabase)
+          ? materiasSupabase
+          : getDefaultSubjectsForSchool(colegioSharePoint)
+        carpetas = combinarConAccesosEspeciales(materiasBase, idiomaIngles, incluirOlimpiadas)
       }
       return carpetas
     }

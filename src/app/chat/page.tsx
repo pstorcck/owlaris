@@ -2,13 +2,22 @@ import { createClient } from '@/lib/supabase/server'
 import ChatInterface from '@/components/chat/ChatInterface'
 import { redirect } from 'next/navigation'
 import {
+  getDefaultSubjectsForSchool,
   getGradeFolderCandidates,
   getSharePointFolderCandidates,
   includeSharedPrograms,
   inferSubjectFromSharePointName,
   isSharePointDocx,
   pushUniqueSharePointName,
+  sharePointTextMatchesGrade,
 } from '@/lib/sharepointFolders'
+
+type SharePointItem = {
+  name: string
+  file?: unknown
+  folder?: unknown
+  parentReference?: { path?: string }
+}
 
 async function getToken(): Promise<string | null> {
   try {
@@ -36,6 +45,26 @@ async function leerCarpetasGrado(grado: string, carpetasColegio: string[], inclu
   if (!token) return []
   const driveId = process.env.SHAREPOINT_DRIVE_ID!
   const carpetas: string[] = []
+  const buscarArchivosPorGrado = async (carpetaColegio: string) => {
+    const materias: string[] = []
+    for (const termino of getGradeFolderCandidates(grado)) {
+      const ruta = encodeURIComponent('Owlaris') + '/' + encodeURIComponent(carpetaColegio)
+      const query = encodeURIComponent(termino.replace(/'/g, "''"))
+      const url = `https://graph.microsoft.com/v1.0/drives/${driveId}/root:/${ruta}:/search(q='${query}')`
+      const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` }, next: { revalidate: 300 } })
+      if (!res.ok) continue
+      const data = await res.json()
+      ;(data.value || [])
+        .filter((i: SharePointItem) => i.file && isSharePointDocx(i.name))
+        .filter((i: SharePointItem) => sharePointTextMatchesGrade(`${i.name} ${i.parentReference?.path || ''}`, grado))
+        .map((i: SharePointItem) => inferSubjectFromSharePointName(i.name))
+        .filter((materia: string | null): materia is string => Boolean(materia))
+        .forEach((materia: string) => pushUniqueSharePointName(materias, materia))
+      if (materias.length > 0) break
+    }
+    return materias
+  }
+
   for (const carpetaColegio of carpetasColegio) {
     for (const gradoCarpeta of getGradeFolderCandidates(grado)) {
       try {
@@ -58,6 +87,10 @@ async function leerCarpetasGrado(grado: string, carpetasColegio: string[], inclu
           if (carpetasMateria.length > 0 || materiasDesdeDocumentos.length > 0) break
         }
       } catch { /* silencioso */ }
+    }
+    if (carpetas.length === 0) {
+      const materiasEncontradas = await buscarArchivosPorGrado(carpetaColegio).catch(() => [])
+      materiasEncontradas.forEach(materia => pushUniqueSharePointName(carpetas, materia))
     }
     if (carpetas.length > 0) break
   }
@@ -105,9 +138,13 @@ export default async function ChatPage() {
   const carpetasColegio = getSharePointFolderCandidates(perfil?.colegio)
   const incluirOlimpiadas = includeSharedPrograms(perfil?.colegio)
   const materiasSharePoint = perfil?.rol === 'maestro' ? [] : await leerCarpetasGrado(grado, carpetasColegio, incluirOlimpiadas)
+  const materiasSupabase = (materias || []).map(m => m.nombre)
+  const materiasFallback = tieneMateriasCurriculares(materiasSupabase)
+    ? materiasSupabase
+    : getDefaultSubjectsForSchool(perfil?.colegio)
   const materiasDisponibles = tieneMateriasCurriculares(materiasSharePoint)
     ? materiasSharePoint
-    : combinarConAccesosEspeciales((materias || []).map(m => m.nombre), incluirOlimpiadas)
+    : combinarConAccesosEspeciales(materiasFallback, incluirOlimpiadas)
 
   return (
     <ChatInterface

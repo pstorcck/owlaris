@@ -24,6 +24,13 @@ export const GRADOS_ESCHOLARIS = [
   'Grado 11',
   'Grado 12',
 ]
+export const MATERIAS_BASE_MONTANO_ESCOLARIS = [
+  'Matemática',
+  'Español',
+  'Ciencias Naturales',
+  'Ciencias Sociales',
+  'Inglés',
+]
 
 function normalizeKey(value: string) {
   return value
@@ -127,7 +134,14 @@ export function getSharePointFolderCandidates(input: ColegioSharePointInput): st
 
   if (isMontanoEscolarisSchool(input)) {
     pushUnique(folders, CARPETA_COMPARTIDA_OWLARIS)
+    pushUnique(folders, 'Colegio Montano y Colegio Escolaris')
+    pushUnique(folders, 'Colegio Montano - Colegio Escolaris')
+    pushUnique(folders, 'Montano y Escolaris')
+    pushUnique(folders, 'Montano Escolaris')
     pushUnique(folders, 'Colegio Montano')
+    pushUnique(folders, 'Colegio Montano Portal Los Álamos')
+    pushUnique(folders, 'Colegio Montano Portal Los Alamos')
+    pushUnique(folders, 'Colegio Montano Cortijo')
     pushUnique(folders, 'Colegio Escolaris')
     pushUnique(folders, 'Escolaris')
     pushUnique(folders, 'colegio-escolaris')
@@ -144,6 +158,10 @@ export function includeSharedPrograms(input: ColegioSharePointInput) {
 
 export function getExpectedGradeFallbacks(input: ColegioSharePointInput) {
   return isEScholarisSchool(input) ? GRADOS_ESCHOLARIS : GRADOS_MONTANO_ESCOLARIS
+}
+
+export function getDefaultSubjectsForSchool(input: ColegioSharePointInput) {
+  return isMontanoEscolarisSchool(input) ? MATERIAS_BASE_MONTANO_ESCOLARIS : []
 }
 
 export function isLikelyGradeFolder(name: string, input?: ColegioSharePointInput) {
@@ -207,4 +225,40 @@ export function getGradeFolderCandidates(grado?: string | null) {
   })
 
   return folders
+}
+
+export function sharePointTextMatchesGrade(value: string, grado?: string | null) {
+  const normalizedValue = normalizeSharePointKey(value)
+  if (!normalizedValue || !grado) return false
+
+  const candidates = getGradeFolderCandidates(grado)
+    .map(candidate => normalizeSharePointKey(candidate))
+    .filter(Boolean)
+  if (candidates.some(candidate => normalizedValue.includes(candidate))) return true
+
+  const normalizedGrade = normalizeSharePointKey(grado)
+  const gradeNumber = normalizedGrade.match(/\b(\d+)\b/)?.[1]
+  if (!gradeNumber) return false
+
+  if (normalizedGrade.includes('primaria')) {
+    const names: Record<string, string> = { '4': 'cuarto', '5': 'quinto', '6': 'sexto' }
+    return normalizedValue.includes(`${gradeNumber} primaria`) ||
+      (!!names[gradeNumber] && normalizedValue.includes(`${names[gradeNumber]} primaria`))
+  }
+  if (normalizedGrade.includes('basico')) {
+    const names: Record<string, string> = { '1': 'primero', '2': 'segundo', '3': 'tercero' }
+    return normalizedValue.includes(`${gradeNumber} basico`) ||
+      (!!names[gradeNumber] && normalizedValue.includes(`${names[gradeNumber]} basico`))
+  }
+  if (normalizedGrade.includes('bachillerato')) {
+    const names: Record<string, string> = { '4': 'cuarto', '5': 'quinto' }
+    return normalizedValue.includes(`${gradeNumber} bachillerato`) ||
+      (!!names[gradeNumber] && normalizedValue.includes(`${names[gradeNumber]} bachillerato`)) ||
+      normalizedValue.includes('diversificado')
+  }
+  if (normalizedGrade.includes('grado')) {
+    return normalizedValue.includes(`grado ${gradeNumber}`) ||
+      normalizedValue.includes(`grade ${gradeNumber}`)
+  }
+  return false
 }
