@@ -33,9 +33,56 @@ function normalizeKey(value: string) {
     .trim()
 }
 
+export function normalizeSharePointKey(value: string) {
+  return normalizeKey(value).replace(/[^a-z0-9]+/g, ' ').trim()
+}
+
 function pushUnique(target: string[], value?: string | null) {
   const clean = (value || '').trim()
   if (clean && !target.includes(clean)) target.push(clean)
+}
+
+export function pushUniqueSharePointName(target: string[], value?: string | null) {
+  pushUnique(target, value)
+}
+
+export function isSharePointDocx(name: string) {
+  const clean = (name || '').trim()
+  return clean.toLowerCase().endsWith('.docx') && !clean.startsWith('~$')
+}
+
+const SUBJECT_PATTERNS: Array<{ subject: string; patterns: RegExp[] }> = [
+  { subject: 'Matemática', patterns: [/\bmatematica\b/, /\bmatematicas\b/, /\bmath\b/, /\bmathematics\b/, /\balgebra\b/, /\bgeometria\b/, /\bgeometry\b/] },
+  { subject: 'Español', patterns: [/\bespanol\b/, /\blenguaje\b/, /\bliteratura\b/, /\bcomunicacion\b/, /\blectura\b/, /\bspanish\b/] },
+  { subject: 'Inglés', patterns: [/\bingles\b/, /\benglish\b/, /\bela\b/, /\blanguage arts\b/] },
+  { subject: 'Ciencias Naturales', patterns: [/\bciencias naturales\b/, /\bnatural science\b/, /\bscience\b/, /\bciencias\b/, /\bnaturales\b/] },
+  { subject: 'Ciencias Sociales', patterns: [/\bciencias sociales\b/, /\bestudios sociales\b/, /\bsocial studies\b/, /\bsociales\b/, /\bhistoria\b/, /\bhistory\b/, /\bgeografia\b/, /\bgeography\b/] },
+  { subject: 'Biología', patterns: [/\bbiologia\b/, /\bbiology\b/] },
+  { subject: 'Física', patterns: [/\bfisica\b/, /\bphysics\b/] },
+  { subject: 'Química', patterns: [/\bquimica\b/, /\bchemistry\b/] },
+  { subject: 'Computación', patterns: [/\bcomputacion\b/, /\binformatica\b/, /\btechnology\b/, /\btecnologia\b/] },
+  { subject: 'Arte', patterns: [/\barte\b/, /\bart\b/, /\bmusica\b/, /\bmusic\b/] },
+  { subject: 'Educación Física', patterns: [/\beducacion fisica\b/, /\bphysical education\b/, /\bpe\b/] },
+]
+
+export function inferSubjectFromSharePointName(name: string) {
+  const normalized = normalizeSharePointKey(name.replace(/\.docx$/i, ' '))
+  for (const { subject, patterns } of SUBJECT_PATTERNS) {
+    if (patterns.some(pattern => pattern.test(normalized))) return subject
+  }
+  return null
+}
+
+export function sharePointNameMatchesSubject(name: string, subject: string) {
+  const normalizedName = normalizeSharePointKey(name)
+  const normalizedSubject = normalizeSharePointKey(subject)
+  if (!normalizedName || !normalizedSubject) return false
+  if (normalizedName.includes(normalizedSubject)) return true
+  const inferred = inferSubjectFromSharePointName(name)
+  if (inferred && normalizeSharePointKey(inferred) === normalizedSubject) return true
+
+  const subjectWords = normalizedSubject.split(' ').filter(word => word.length > 2)
+  return subjectWords.length > 0 && subjectWords.every(word => normalizedName.includes(word))
 }
 
 function getRawValues(input: ColegioSharePointInput) {

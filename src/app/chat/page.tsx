@@ -1,7 +1,14 @@
 import { createClient } from '@/lib/supabase/server'
 import ChatInterface from '@/components/chat/ChatInterface'
 import { redirect } from 'next/navigation'
-import { getGradeFolderCandidates, getSharePointFolderCandidates, includeSharedPrograms } from '@/lib/sharepointFolders'
+import {
+  getGradeFolderCandidates,
+  getSharePointFolderCandidates,
+  includeSharedPrograms,
+  inferSubjectFromSharePointName,
+  isSharePointDocx,
+  pushUniqueSharePointName,
+} from '@/lib/sharepointFolders'
 
 async function getToken(): Promise<string | null> {
   try {
@@ -37,11 +44,18 @@ async function leerCarpetasGrado(grado: string, carpetasColegio: string[], inclu
         const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` }, next: { revalidate: 300 } })
         if (res.ok) {
           const data = await res.json()
-          const items: string[] = (data.value || [])
+          const value = data.value || []
+          const carpetasMateria: string[] = value
             .filter((i: {folder?:unknown}) => i.folder)
             .map((i: {name:string}) => i.name)
-          carpetas.push(...items)
-          if (items.length > 0) break
+          const materiasDesdeDocumentos: string[] = value
+            .filter((i: {file?:unknown; name:string}) => i.file && isSharePointDocx(i.name))
+            .map((i: {name:string}) => inferSubjectFromSharePointName(i.name))
+            .filter((materia: string | null): materia is string => Boolean(materia))
+          ;[...carpetasMateria, ...materiasDesdeDocumentos].forEach(materia => {
+            pushUniqueSharePointName(carpetas, materia)
+          })
+          if (carpetasMateria.length > 0 || materiasDesdeDocumentos.length > 0) break
         }
       } catch { /* silencioso */ }
     }

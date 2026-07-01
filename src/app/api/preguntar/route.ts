@@ -8,7 +8,12 @@ import {
   getGradeFolderCandidates,
   getSharePointFolderCandidates,
   includeSharedPrograms,
+  inferSubjectFromSharePointName,
   isEScholarisSchool,
+  isSharePointDocx,
+  normalizeSharePointKey,
+  pushUniqueSharePointName,
+  sharePointNameMatchesSubject,
   type ColegioSharePointInput,
 } from '@/lib/sharepointFolders'
 import {
@@ -290,13 +295,25 @@ async function getToken(): Promise<string | null> {
   } catch { return null }
 }
 
-async function listarArchivos(driveId: string, token: string, ...segs: string[]) {
+type ArchivoSharePoint = {
+  name: string
+  file?: unknown
+  folder?: unknown
+  '@microsoft.graph.downloadUrl'?: string
+}
+
+async function listarHijos(driveId: string, token: string, ...segs: string[]): Promise<ArchivoSharePoint[]> {
   const ruta = segs.map(s => encodeURIComponent(s)).join('/')
   const url = `https://graph.microsoft.com/v1.0/drives/${driveId}/root:/${ruta}:/children`
   const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } })
   if (!res.ok) return []
   const data = await res.json()
-  return (data.value || []).filter((a: {name:string}) => a.name.endsWith('.docx') && !a.name.startsWith('~$'))
+  return data.value || []
+}
+
+async function listarArchivos(driveId: string, token: string, ...segs: string[]) {
+  const hijos = await listarHijos(driveId, token, ...segs)
+  return hijos.filter((a: ArchivoSharePoint) => a.file && isSharePointDocx(a.name))
 }
 
 async function extraerTexto(url: string): Promise<string> {
@@ -309,29 +326,37 @@ async function extraerTexto(url: string): Promise<string> {
 
 const indiceDocumentos = new Map<string, { nombre: string; tema: string; downloadUrl: string }[]>()
 
-async function construirIndice(driveId: string, token: string, ...segs: string[]) {
-  const idxKey = 'idx/' + segs.join('/')
+async function construirIndiceDesdeArchivos(idxKey: string, logLabel: string, archivos: ArchivoSharePoint[]) {
   const cached = indiceDocumentos.get(idxKey)
   if (cached) return cached
-  console.log('Construyendo indice: ' + segs.join('/'))
-  const archivos = await listarArchivos(driveId, token, ...segs)
+  console.log('Construyendo indice: ' + logLabel)
   if (archivos.length === 0) return []
   const indice: { nombre: string; tema: string; downloadUrl: string }[] = []
-  await Promise.all(archivos.map(async (archivo: { name: string; '@microsoft.graph.downloadUrl': string }) => {
+  await Promise.all(archivos.map(async (archivo: ArchivoSharePoint) => {
+    const downloadUrl = archivo['@microsoft.graph.downloadUrl']
+    if (!downloadUrl) return
     try {
-      const r = await fetch(archivo['@microsoft.graph.downloadUrl'])
+      const r = await fetch(downloadUrl)
       const buf = await r.arrayBuffer()
       const m = await import('mammoth')
       const { value } = await m.extractRawText({ buffer: Buffer.from(buf) })
-      indice.push({ nombre: archivo.name, tema: value.substring(0, 300).trim(), downloadUrl: archivo['@microsoft.graph.downloadUrl'] })
+      indice.push({ nombre: archivo.name, tema: value.substring(0, 300).trim(), downloadUrl })
     } catch {
-      indice.push({ nombre: archivo.name, tema: archivo.name, downloadUrl: archivo['@microsoft.graph.downloadUrl'] })
+      indice.push({ nombre: archivo.name, tema: archivo.name, downloadUrl })
     }
   }))
   indiceDocumentos.set(idxKey, indice)
   console.log(`✅ Índice construido: ${indice.length} documentos`)
   setTimeout(() => indiceDocumentos.delete(idxKey), CACHE_TTL)
   return indice
+}
+
+async function construirIndice(driveId: string, token: string, ...segs: string[]) {
+  const idxKey = 'idx/' + segs.join('/')
+  const cached = indiceDocumentos.get(idxKey)
+  if (cached) return cached
+  const archivos = await listarArchivos(driveId, token, ...segs)
+  return construirIndiceDesdeArchivos(idxKey, segs.join('/'), archivos)
 }
 
 async function buscarContenido(colegio: ColegioSharePointInput, grado: string, materia: string, pregunta: string) {
@@ -354,22 +379,35 @@ async function buscarContenido(colegio: ColegioSharePointInput, grado: string, m
       if (indice.length > 0) break
     }
   } else {
-    const buscarEnGrado = async (raiz: string, gradoB: string, materiaB: string) => {
-      let idx = await construirIndice(driveId, token, raiz, gradoB, materiaB)
+    const buscarEnGrado = async (raizSegs: string[], gradoB: string, materiaB: string) => {
+      let idx = await construirIndice(driveId, token, ...raizSegs, gradoB, materiaB)
       if (idx.length > 0) return idx
-      const url = 'https://graph.microsoft.com/v1.0/drives/' + driveId + '/root:/' + encodeURIComponent(raiz) + '/' + encodeURIComponent(gradoB) + ':/children'
-      const res = await fetch(url, { headers: { Authorization: 'Bearer ' + token } })
-      if (!res.ok) return []
-      const data = await res.json()
-      const carpetas: string[] = (data.value || []).filter((i: {folder?:unknown}) => i.folder).map((i: {name:string}) => i.name)
-      const mLower = materiaB.toLowerCase().replace(/á/g,'a').replace(/é/g,'e').replace(/í/g,'i').replace(/ó/g,'o').replace(/ú/g,'u')
-      const match = carpetas.find(cp => { const cl = cp.toLowerCase().replace(/á/g,'a').replace(/é/g,'e').replace(/í/g,'i').replace(/ó/g,'o').replace(/ú/g,'u'); return cl.includes(mLower) || mLower.includes(cl) })
-      if (match) idx = await construirIndice(driveId, token, raiz, gradoB, match)
+      const hijos = await listarHijos(driveId, token, ...raizSegs, gradoB)
+      if (hijos.length === 0) return []
+      const carpetas: string[] = hijos.filter((i: ArchivoSharePoint) => i.folder).map((i: ArchivoSharePoint) => i.name)
+      const mLower = normalizeSharePointKey(materiaB)
+      const match = carpetas.find(cp => {
+        const cl = normalizeSharePointKey(cp)
+        return cl.includes(mLower) || mLower.includes(cl)
+      })
+      if (match) idx = await construirIndice(driveId, token, ...raizSegs, gradoB, match)
+      if (idx.length > 0) return idx
+
+      const archivosDirectos = hijos
+        .filter((i: ArchivoSharePoint) => i.file && isSharePointDocx(i.name))
+        .filter((archivo: ArchivoSharePoint) => sharePointNameMatchesSubject(archivo.name, materiaB))
+      if (archivosDirectos.length > 0) {
+        idx = await construirIndiceDesdeArchivos(
+          'idx/' + [...raizSegs, gradoB, 'direct', normalizeSharePointKey(materiaB)].join('/'),
+          [...raizSegs, gradoB].join('/') + ' [direct:' + materiaB + ']',
+          archivosDirectos
+        )
+      }
       return idx
     }
     for (const carpetaColegio of colegiosSP) {
       for (const gradoCarpeta of getGradeFolderCandidates(grado)) {
-        indice = await buscarEnGrado('Owlaris/' + carpetaColegio, gradoCarpeta, materia)
+        indice = await buscarEnGrado(['Owlaris', carpetaColegio], gradoCarpeta, materia)
         if (indice.length > 0) break
       }
       if (indice.length > 0) break
@@ -442,11 +480,18 @@ async function leerCarpetasGrado(
         const res = await fetch(url, { headers: { Authorization: 'Bearer ' + token } })
         if (res.ok) {
           const data = await res.json()
-          const items = (data.value || [])
+          const value = data.value || []
+          const carpetasMateria = value
             .filter((i: {folder?:unknown}) => i.folder)
             .map((i: {name:string}) => i.name)
-          carpetas.push(...items)
-          if (items.length > 0) break
+          const materiasDesdeDocumentos = value
+            .filter((i: {file?:unknown; name:string}) => i.file && isSharePointDocx(i.name))
+            .map((i: {name:string}) => inferSubjectFromSharePointName(i.name))
+            .filter((materia: string | null): materia is string => Boolean(materia))
+          ;[...carpetasMateria, ...materiasDesdeDocumentos].forEach(materia => {
+            pushUniqueSharePointName(carpetas, materia)
+          })
+          if (carpetasMateria.length > 0 || materiasDesdeDocumentos.length > 0) break
         }
       } catch { /* silencioso */ }
     }
