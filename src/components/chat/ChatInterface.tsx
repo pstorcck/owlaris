@@ -150,14 +150,15 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
 
   // Estado onboarding
   const gradoGuardado = usuario.grado || ''
+  const nombreInicial = usuario.nombre_completo.split(' ')[0]
   const estadoInicial: EstadoChat = gradoGuardado ? 'esperando_materia' : 'esperando_nombre'
   const [estadoChat, setEstadoChat]       = useState<EstadoChat>(estadoInicial)
-  const [nombreAlumno, setNombreAlumno]   = useState('')
-  const [gradoAlumno, setGradoAlumno]     = useState('')
+  const [nombreAlumno, setNombreAlumno]   = useState(gradoGuardado ? nombreInicial : '')
+  const [gradoAlumno, setGradoAlumno]     = useState(gradoGuardado)
   const [materiaAlumno, setMateriaAlumno] = useState('')
 
   const finalRef = useRef<HTMLDivElement>(null)
-  const materiasDisponiblesRef = useRef<string[]>([])
+  const materiasDisponiblesRef = useRef<string[]>(materiasIniciales)
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const router   = useRouter()
   const supabase = createClient()
@@ -165,6 +166,12 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
   const iniciales = usuario.nombre_completo.split(' ').map((n:string) => n[0]).join('').substring(0,2).toUpperCase()
 
   useEffect(() => { finalRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [mensajes, cargando])
+
+  useEffect(() => {
+    if (estadoChat === 'esperando_grado' && !gradoGuardado && !gradoAlumno && gradosDisponibles.length > 0) {
+      setMostrandoGrados(true)
+    }
+  }, [estadoChat, gradoAlumno, gradoGuardado, gradosDisponibles.length])
 
   useEffect(() => {
     if (typeof window === 'undefined' || !('speechSynthesis' in window)) return
@@ -177,6 +184,9 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
   // Cargar materias desde API al iniciar si hay grado guardado
   useEffect(() => {
     if (!gradoGuardado) return
+    setNombreAlumno(nombreInicial)
+    setGradoAlumno(gradoGuardado)
+    setMostrandoGrados(false)
     fetch('/api/preguntar', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -194,10 +204,10 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
         materiasBaseRef.current = data.materias_disponibles
         setChipsMateria(traducirChips(data.materias_disponibles, idiomaIngles))
         setGradoAlumno(gradoGuardado)
-        setNombreAlumno(usuario.nombre_completo.split(' ')[0])
+        setNombreAlumno(nombreInicial)
       }
     }).catch(() => {})
-  }, [gradoGuardado, idiomaIngles])
+  }, [gradoGuardado, idiomaIngles, nombreInicial, usuario.id])
 
   useEffect(() => {
     const nombre = usuario.nombre_completo.split(' ')[0]
@@ -371,7 +381,8 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
           materia_sugerida: materiaSugerida,
           materias_disponibles: materiasDisponiblesRef.current,
           idioma_ingles: idiomaActivo,
-          modo_conversacion: modoConversacionActivo || estadoActivo === 'activo' && idiomaActivo,
+          modo_conversacion: modoConversacionActivo,
+          modo_conversacion_explicito: modoConversacionActivo,
           nivel_dificultad: nivelDificultad,
           aciertos_consecutivos: aciertosConsec,
           pending_math_interaction_id: pendingMathId,
@@ -385,13 +396,13 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
       // Actualizar estado onboarding
       if (data.nuevo_estado) setEstadoChat(data.nuevo_estado)
       if (data.nombre_alumno) setNombreAlumno(data.nombre_alumno)
-      if (data.nuevo_estado === 'esperando_grado' && gradosDisponibles.length > 0) {
+      if (data.nuevo_estado === 'esperando_grado' && !gradoGuardado && !gradoAlumno && gradosDisponibles.length > 0) {
         setMostrandoGrados(true)
       }
       if (data.grado_detectado) {
         setGradoAlumno(data.grado_detectado)
         // Guardar grado desde el frontend donde sí hay sesión activa
-        supabase.from('usuarios').update({ grado: data.grado_detectado }).eq('id', usuario.id)
+        await supabase.from('usuarios').update({ grado: data.grado_detectado }).eq('id', usuario.id)
       }
       if (data.materia_detectada) setMateriaAlumno(data.materia_detectada)
       if (data.activar_conversacion) { setModoConversacion(true); setIdiomaIngles(true) }
@@ -777,7 +788,7 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
             setMateriaAlumno('')
             setSugerencias([])
             setEstadoChat('esperando_materia')
-            supabase.from('usuarios').update({ grado }).eq('id', usuario.id)
+            await supabase.from('usuarios').update({ grado }).eq('id', usuario.id)
             const res: Response = await fetch('/api/preguntar', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },

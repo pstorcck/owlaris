@@ -4,9 +4,26 @@ import { checkContentSafety, type ContentSafetyResult } from '@/lib/contentSafet
 import { guardHumanisticResponse } from '@/lib/humanisticSafety'
 import { guardNoFinalAnswer } from '@/lib/pedagogicalGuard'
 import {
+  CARPETA_COMPARTIDA_OWLARIS,
+  getGradeFolderCandidates,
+  getSharedSubjectChipsForGrade,
+  getSharePointFolderCandidates,
+  includeSharedPrograms,
+  inferSubjectFromSharePointName,
+  isEScholarisSchool,
+  isSharePointPlainTextContent,
+  isSupportedSharePointContentFile,
+  normalizeSharePointKey,
+  pushUniqueSharePointName,
+  sharePointNameMatchesSubject,
+  sharePointTextMatchesGrade,
+  type ColegioSharePointInput,
+} from '@/lib/sharepointFolders'
+import {
   extractAndCleanOperation,
   handleMathEvaluation,
   inferCanonicalOperationFromText,
+  isLikelyNumericSubject,
   isSafeCanonicalOperation,
   looksLikeMathPracticePrompt,
   normalizeStudentAnswer,
@@ -24,6 +41,12 @@ PROTOCOLO ANTES DE RESPONDER:
 2. Usar el contenido de SharePoint como fuente principal para consultas académicas.
 3. Verificar si tienes base suficiente para responder. Si no, dilo claramente.
 4. Responder con utilidad pedagógica real.
+
+ALCANCE DE CONSULTAS ACADÉMICAS:
+El alumno entra a Owlaris para resolver dudas, estudiar, practicar, repasar, entender temas o trabajar ejercicios dentro de una materia.
+No asumas que solo puede preguntar sobre la lección actual. Puede preguntar sobre cualquier tema de la materia seleccionada siempre que esté respaldado por el contenido académico disponible.
+El contenido no tendrá números de lección asociados. Busca y relaciona la pregunta por tema, concepto, habilidad, competencia, tipo de ejercicio o contenido equivalente dentro de la materia, no por número de lección.
+Si el alumno dice que no entiende una lección por número, pero no indica el tema, pregúntale qué tema, concepto o ejercicio quiere trabajar antes de avanzar.
 
 REGLA DE PROFUNDIDAD:
 No respondas demasiado corto cuando el alumno necesite entender. Desarrolla la explicación. Usa ejemplos breves. Busca que la respuesta no solo conteste, sino que enseñe.
@@ -79,7 +102,7 @@ NO uses "Correcto" o "Incorrecto" como veredicto absoluto.
 Usa en cambio: "Bien argumentado", "Falta evidencia", "¿Puedes sustentar eso con el texto?", "Esa idea va bien encaminada, ¿puedes ampliarla?"
 Esto evita errores de evaluación subjetiva.
 
-DIFICULTAD PROGRESIVA:
+DIFICULTAD ADAPTATIVA:
 Nivel 1: Operaciones directas (7+5, 48-19, 72/8)
 Nivel 2: Orden de operaciones (8+3*2, (10+6)/2)
 Nivel 3: Porcentajes (25% de 200)
@@ -88,7 +111,11 @@ Nivel 5: Ecuaciones con coeficiente (2x-4=10)
 Nivel 6: Ecuaciones con paréntesis (2(x+3)=18)
 Nivel 7: Ecuaciones con x en ambos lados (5x+3=2x+15)
 Nivel 8: Ecuaciones combinadas (4(x-2)+3=2(x+1)+9)
-Sube nivel con 3 aciertos consecutivos. Baja con 2 errores consecutivos.
+Si el estudiante acumula 3 respuestas incorrectas seguidas, baja la dificultad como diagnóstico, nunca como castigo.
+Al bajar, busca qué concepto previo, definición, procedimiento o habilidad elemental no está comprendiendo, aunque sea muy básico.
+Cuando entienda esa base, vuelve gradualmente al tema original.
+Si el estudiante tiene más de 3 respuestas correctas seguidas, puedes subir gradualmente la dificultad con ejercicios un poco más complejos, menos pistas, más pasos o preguntas de razonamiento.
+Antes de subir demasiado, confirma que entiende el proceso y no solo acertó por memoria o azar.
 
 OPCIÓN MÚLTIPLE — REGLA CRÍTICA:
 Cuando plantees opción múltiple, SIEMPRE incluye [OP:] con la operación correcta.
@@ -117,13 +144,7 @@ const cacheContenido = new Map<string, { contenido: string; archivo: string; tim
 const cacheConfig    = new Map<string, { contenido: string; timestamp: number }>()
 const CACHE_TTL      = 1000 * 60 * 1
 
-const COLEGIOS_SP: Record<string, string> = {
-  'escolaris':       'Escolaris',
-  'colegio-montano': 'Colegio Montano',
-  'eScholaris':      'eScholaris',
-  'escholaris':      'eScholaris',
-}
-const CARPETA_COMPARTIDA = 'Colegio Montano y Escolaris'
+const CARPETA_COMPARTIDA = CARPETA_COMPARTIDA_OWLARIS
 
 function normalizarGrado(texto: string): string {
   const t = texto.toLowerCase()
@@ -162,8 +183,8 @@ function normalizarGradoEscholaris(texto: string): string {
 }
 
 // Wrapper que decide qué sistema de grados usar según el colegio
-function normalizarGradoPorColegio(texto: string, colegioSlug: string): string {
-  if (colegioSlug.toLowerCase() === 'escholaris') {
+function normalizarGradoPorColegio(texto: string, colegio?: ColegioSharePointInput): string {
+  if (isEScholarisSchool(colegio)) {
     return normalizarGradoEscholaris(texto)
   }
   return normalizarGrado(texto)
@@ -199,13 +220,8 @@ function normalizarMateria(texto: string, esOlimpiadas = false): string {
   return texto.trim()
 }
 
-// Materias numéricas — usan protocolo [OP:]
-const MATERIAS_NUMERICAS = ['Matemática', 'Física', 'Química', 'Biología', 'Ciencias Naturales', 'Estadística',
-  'Olimpiadas - Matemática', 'Olimpiadas - Biología', 'Olimpiadas - Física', 'Olimpiadas - Química',
-  'Olimpiadas - Ciencias Naturales', 'Mineduc - Matemática']
-
 function esMateriaNumerica(materia: string): boolean {
-  return MATERIAS_NUMERICAS.some(m => materia.includes(m.split(' ')[0]))
+  return isLikelyNumericSubject(materia)
 }
 
 const GRADOS_OLIMPIADAS: Record<string, string> = {
@@ -288,17 +304,44 @@ async function getToken(): Promise<string | null> {
   } catch { return null }
 }
 
-async function listarArchivos(driveId: string, token: string, ...segs: string[]) {
+type ArchivoSharePoint = {
+  name: string
+  file?: unknown
+  folder?: unknown
+  parentReference?: { path?: string }
+  '@microsoft.graph.downloadUrl'?: string
+}
+
+async function listarHijos(driveId: string, token: string, ...segs: string[]): Promise<ArchivoSharePoint[]> {
   const ruta = segs.map(s => encodeURIComponent(s)).join('/')
   const url = `https://graph.microsoft.com/v1.0/drives/${driveId}/root:/${ruta}:/children`
   const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } })
   if (!res.ok) return []
   const data = await res.json()
-  return (data.value || []).filter((a: {name:string}) => a.name.endsWith('.docx') && !a.name.startsWith('~$'))
+  return data.value || []
 }
 
-async function extraerTexto(url: string): Promise<string> {
+async function listarArchivos(driveId: string, token: string, ...segs: string[]) {
+  const hijos = await listarHijos(driveId, token, ...segs)
+  return hijos.filter((a: ArchivoSharePoint) => a.file && isSupportedSharePointContentFile(a.name))
+}
+
+async function buscarArchivosPorBusqueda(driveId: string, token: string, query: string, ...segs: string[]) {
+  const ruta = segs.map(s => encodeURIComponent(s)).join('/')
+  const safeQuery = encodeURIComponent(query.replace(/'/g, "''"))
+  const url = `https://graph.microsoft.com/v1.0/drives/${driveId}/root:/${ruta}:/search(q='${safeQuery}')`
+  const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } })
+  if (!res.ok) return []
+  const data = await res.json()
+  return (data.value || []).filter((a: ArchivoSharePoint) => a.file && isSupportedSharePointContentFile(a.name))
+}
+
+async function extraerTexto(url: string, nombreArchivo = ''): Promise<string> {
   const r = await fetch(url)
+  if (!r.ok) return ''
+  if (isSharePointPlainTextContent(nombreArchivo)) {
+    return (await r.text()).replace(/\r\n/g, '\n').trim()
+  }
   const buf = await r.arrayBuffer()
   const m = await import('mammoth')
   const { value } = await m.extractRawText({ buffer: Buffer.from(buf) })
@@ -307,23 +350,20 @@ async function extraerTexto(url: string): Promise<string> {
 
 const indiceDocumentos = new Map<string, { nombre: string; tema: string; downloadUrl: string }[]>()
 
-async function construirIndice(driveId: string, token: string, ...segs: string[]) {
-  const idxKey = 'idx/' + segs.join('/')
+async function construirIndiceDesdeArchivos(idxKey: string, logLabel: string, archivos: ArchivoSharePoint[]) {
   const cached = indiceDocumentos.get(idxKey)
   if (cached) return cached
-  console.log('Construyendo indice: ' + segs.join('/'))
-  const archivos = await listarArchivos(driveId, token, ...segs)
+  console.log('Construyendo indice: ' + logLabel)
   if (archivos.length === 0) return []
   const indice: { nombre: string; tema: string; downloadUrl: string }[] = []
-  await Promise.all(archivos.map(async (archivo: { name: string; '@microsoft.graph.downloadUrl': string }) => {
+  await Promise.all(archivos.map(async (archivo: ArchivoSharePoint) => {
+    const downloadUrl = archivo['@microsoft.graph.downloadUrl']
+    if (!downloadUrl) return
     try {
-      const r = await fetch(archivo['@microsoft.graph.downloadUrl'])
-      const buf = await r.arrayBuffer()
-      const m = await import('mammoth')
-      const { value } = await m.extractRawText({ buffer: Buffer.from(buf) })
-      indice.push({ nombre: archivo.name, tema: value.substring(0, 300).trim(), downloadUrl: archivo['@microsoft.graph.downloadUrl'] })
+      const value = await extraerTexto(downloadUrl, archivo.name)
+      indice.push({ nombre: archivo.name, tema: value.substring(0, 300).trim(), downloadUrl })
     } catch {
-      indice.push({ nombre: archivo.name, tema: archivo.name, downloadUrl: archivo['@microsoft.graph.downloadUrl'] })
+      indice.push({ nombre: archivo.name, tema: archivo.name, downloadUrl })
     }
   }))
   indiceDocumentos.set(idxKey, indice)
@@ -332,40 +372,91 @@ async function construirIndice(driveId: string, token: string, ...segs: string[]
   return indice
 }
 
-async function buscarContenido(colegio_slug: string, grado: string, materia: string, pregunta: string) {
+async function construirIndice(driveId: string, token: string, ...segs: string[]) {
+  const idxKey = 'idx/' + segs.join('/')
+  const cached = indiceDocumentos.get(idxKey)
+  if (cached) return cached
+  const archivos = await listarArchivos(driveId, token, ...segs)
+  return construirIndiceDesdeArchivos(idxKey, segs.join('/'), archivos)
+}
+
+async function buscarContenido(colegio: ColegioSharePointInput, grado: string, materia: string, pregunta: string) {
   const token = await getToken()
   if (!token) return { contenido: '', archivo: null }
   const driveId = process.env.SHAREPOINT_DRIVE_ID!
-  const colegioSP = COLEGIOS_SP[colegio_slug] || colegio_slug
+  const colegiosSP = getSharePointFolderCandidates(colegio, { includeShared: false })
+  const carpetasCompartidas = getSharePointFolderCandidates(colegio, { sharedOnly: true })
+  const permitirCompartidas = includeSharedPrograms(colegio)
   let indice: { nombre: string; tema: string; downloadUrl: string }[] = []
-  if (materia.startsWith('Olimpiadas')) {
+  if (materia.startsWith('Olimpiadas') && permitirCompartidas) {
     const carpetaMateria = MATERIAS_OLIMPIADAS[materia] || materia.replace('Olimpiadas - ', '')
     const carpetaGrado = GRADOS_OLIMPIADAS[grado] || grado
-    indice = await construirIndice(driveId, token, 'Owlaris', CARPETA_COMPARTIDA, 'Olimpiadas de Ciencias', carpetaMateria, carpetaGrado)
-    if (indice.length === 0) indice = await construirIndice(driveId, token, 'Owlaris', CARPETA_COMPARTIDA, 'Olimpiadas de Ciencias', carpetaMateria)
+    for (const carpetaColegio of carpetasCompartidas.length > 0 ? carpetasCompartidas : [CARPETA_COMPARTIDA]) {
+      for (const gradoCarpeta of getGradeFolderCandidates(carpetaGrado)) {
+        indice = await construirIndice(driveId, token, 'Owlaris', carpetaColegio, 'Olimpiadas de Ciencias', carpetaMateria, gradoCarpeta)
+        if (indice.length > 0) break
+      }
+      if (indice.length > 0) break
+      indice = await construirIndice(driveId, token, 'Owlaris', carpetaColegio, 'Olimpiadas de Ciencias', carpetaMateria)
+      if (indice.length > 0) break
+    }
   } else {
-    const buscarEnGrado = async (raiz: string, gradoB: string, materiaB: string) => {
-      let idx = await construirIndice(driveId, token, raiz, gradoB, materiaB)
+    const buscarEnGrado = async (raizSegs: string[], gradoB: string, materiaB: string) => {
+      const buscarPorBusqueda = async () => {
+        for (const termino of [materiaB, ...getGradeFolderCandidates(gradoB)]) {
+          const archivosBusqueda = await buscarArchivosPorBusqueda(driveId, token, termino, ...raizSegs)
+          const matches = archivosBusqueda.filter((archivo: ArchivoSharePoint) => {
+            const textoUbicacion = `${archivo.name} ${archivo.parentReference?.path || ''}`
+            return sharePointNameMatchesSubject(textoUbicacion, materiaB) &&
+              sharePointTextMatchesGrade(textoUbicacion, gradoB)
+          })
+          if (matches.length > 0) {
+            return construirIndiceDesdeArchivos(
+              'idx/' + [...raizSegs, gradoB, 'search', normalizeSharePointKey(materiaB)].join('/'),
+              [...raizSegs, gradoB].join('/') + ' [search:' + materiaB + ']',
+              matches
+            )
+          }
+        }
+        return []
+      }
+
+      let idx = await construirIndice(driveId, token, ...raizSegs, gradoB, materiaB)
       if (idx.length > 0) return idx
-      const url = 'https://graph.microsoft.com/v1.0/drives/' + driveId + '/root:/' + encodeURIComponent(raiz) + '/' + encodeURIComponent(gradoB) + ':/children'
-      const res = await fetch(url, { headers: { Authorization: 'Bearer ' + token } })
-      if (!res.ok) return []
-      const data = await res.json()
-      const carpetas: string[] = (data.value || []).filter((i: {folder?:unknown}) => i.folder).map((i: {name:string}) => i.name)
-      const mLower = materiaB.toLowerCase().replace(/á/g,'a').replace(/é/g,'e').replace(/í/g,'i').replace(/ó/g,'o').replace(/ú/g,'u')
-      const match = carpetas.find(cp => { const cl = cp.toLowerCase().replace(/á/g,'a').replace(/é/g,'e').replace(/í/g,'i').replace(/ó/g,'o').replace(/ú/g,'u'); return cl.includes(mLower) || mLower.includes(cl) })
-      if (match) idx = await construirIndice(driveId, token, raiz, gradoB, match)
-      return idx
+      const hijos = await listarHijos(driveId, token, ...raizSegs, gradoB)
+      if (hijos.length === 0) return buscarPorBusqueda()
+      const carpetas: string[] = hijos.filter((i: ArchivoSharePoint) => i.folder).map((i: ArchivoSharePoint) => i.name)
+      const mLower = normalizeSharePointKey(materiaB)
+      const match = carpetas.find(cp => {
+        const cl = normalizeSharePointKey(cp)
+        return cl.includes(mLower) || mLower.includes(cl)
+      })
+      if (match) idx = await construirIndice(driveId, token, ...raizSegs, gradoB, match)
+      if (idx.length > 0) return idx
+
+      const archivosDirectos = hijos
+        .filter((i: ArchivoSharePoint) => i.file && isSupportedSharePointContentFile(i.name))
+        .filter((archivo: ArchivoSharePoint) => sharePointNameMatchesSubject(archivo.name, materiaB))
+      if (archivosDirectos.length > 0) {
+        idx = await construirIndiceDesdeArchivos(
+          'idx/' + [...raizSegs, gradoB, 'direct', normalizeSharePointKey(materiaB)].join('/'),
+          [...raizSegs, gradoB].join('/') + ' [direct:' + materiaB + ']',
+          archivosDirectos
+        )
+      }
+      if (idx.length > 0) return idx
+
+      return buscarPorBusqueda()
     }
-    // eScholaris tiene carpeta propia; demás colegios usan CARPETA_COMPARTIDA
-    if (colegioSP === 'eScholaris') {
-      indice = await buscarEnGrado('Owlaris/' + colegioSP, grado, materia)
-    } else {
-      indice = await buscarEnGrado('Owlaris/' + CARPETA_COMPARTIDA, grado, materia)
-      if (indice.length === 0) indice = await buscarEnGrado('Owlaris/' + colegioSP, grado, materia)
+    for (const carpetaColegio of colegiosSP) {
+      for (const gradoCarpeta of getGradeFolderCandidates(grado)) {
+        indice = await buscarEnGrado(['Owlaris', carpetaColegio], gradoCarpeta, materia)
+        if (indice.length > 0) break
+      }
+      if (indice.length > 0) break
     }
-    if (indice.length === 0) indice = await construirIndice(driveId, token, 'Owlaris', CARPETA_COMPARTIDA, 'Preparación pruebas nacionales', 'Mineduc', grado, materia)
-    if (indice.length === 0) indice = await construirIndice(driveId, token, 'Owlaris', CARPETA_COMPARTIDA, 'Preparación pruebas nacionales', 'Mineduc', materia)
+    if (permitirCompartidas && indice.length === 0) indice = await construirIndice(driveId, token, 'Owlaris', CARPETA_COMPARTIDA, 'Preparación pruebas nacionales', 'Mineduc', grado, materia)
+    if (permitirCompartidas && indice.length === 0) indice = await construirIndice(driveId, token, 'Owlaris', CARPETA_COMPARTIDA, 'Preparación pruebas nacionales', 'Mineduc', materia)
   }
   if (indice.length === 0) return { contenido: '', archivo: null }
   const preguntaLower = pregunta.toLowerCase()
@@ -381,10 +472,10 @@ async function buscarContenido(colegio_slug: string, grado: string, materia: str
     if (puntaje > mejorPuntaje) { mejorPuntaje = puntaje; mejorDoc = doc }
   }
   console.log(`✅ Elegido: ${mejorDoc.nombre} (puntaje: ${mejorPuntaje})`)
-  const cacheKey = `${colegioSP}/${grado}/${materia}/${mejorDoc.nombre}`
+  const cacheKey = `${colegiosSP.join('|')}/${grado}/${materia}/${mejorDoc.nombre}`
   const cached = cacheContenido.get(cacheKey)
   if (cached && Date.now() - cached.timestamp < CACHE_TTL) return { contenido: cached.contenido, archivo: cached.archivo }
-  const contenido = await extraerTexto(mejorDoc.downloadUrl)
+  const contenido = await extraerTexto(mejorDoc.downloadUrl, mejorDoc.nombre)
   cacheContenido.set(cacheKey, { contenido, archivo: mejorDoc.nombre, timestamp: Date.now() })
   return { contenido, archivo: mejorDoc.nombre }
 }
@@ -405,7 +496,7 @@ async function leerConfig(): Promise<string> {
       if (!res.ok) { console.log(`Config no encontrada: ${doc}`); continue }
       const data = await res.json()
       if (!data['@microsoft.graph.downloadUrl']) continue
-      const texto = await extraerTexto(data['@microsoft.graph.downloadUrl'])
+      const texto = await extraerTexto(data['@microsoft.graph.downloadUrl'], doc)
       contenido += `\n\n=== ${doc} ===\n${texto.substring(0, 2000)}`
       console.log(`✅ Config: ${doc}`)
     } catch (e) { console.log(`Error config ${doc}:`, e) }
@@ -414,23 +505,107 @@ async function leerConfig(): Promise<string> {
   return contenido
 }
 
-async function leerCarpetasGrado(grado: string, idiomaIngles: boolean, carpetaColegio = CARPETA_COMPARTIDA): Promise<string[]> {
+async function leerCarpetasGrado(
+  grado: string,
+  idiomaIngles: boolean,
+  carpetasColegio: string[] = [CARPETA_COMPARTIDA]
+): Promise<string[]> {
   const token = await getToken()
   if (!token) return []
   const driveId = process.env.SHAREPOINT_DRIVE_ID!
   const carpetas: string[] = []
-  try {
-    const ruta = encodeURIComponent('Owlaris') + '/' + encodeURIComponent(carpetaColegio) + '/' + encodeURIComponent(grado)
-    const url = 'https://graph.microsoft.com/v1.0/drives/' + driveId + '/root:/' + ruta + ':/children'
-    const res = await fetch(url, { headers: { Authorization: 'Bearer ' + token } })
-    if (res.ok) {
-      const data = await res.json()
-      carpetas.push(...(data.value || []).filter((i: {folder?:unknown}) => i.folder).map((i: {name:string}) => i.name))
+  const buscarMateriasPorBusqueda = async (carpetaColegio: string) => {
+    const materias: string[] = []
+    for (const termino of getGradeFolderCandidates(grado)) {
+      const archivos = await buscarArchivosPorBusqueda(driveId, token, termino, 'Owlaris', carpetaColegio)
+      archivos
+        .filter((archivo: ArchivoSharePoint) => sharePointTextMatchesGrade(`${archivo.name} ${archivo.parentReference?.path || ''}`, grado))
+        .map((archivo: ArchivoSharePoint) => inferSubjectFromSharePointName(archivo.name))
+        .filter((materia: string | null): materia is string => Boolean(materia))
+        .forEach((materia: string) => pushUniqueSharePointName(materias, materia))
+      if (materias.length > 0) break
     }
-  } catch { /* silencioso */ }
-  if (!carpetas.includes('Olimpiadas de Ciencias')) carpetas.push('Olimpiadas de Ciencias')
+    return materias
+  }
+
+  for (const carpetaColegio of carpetasColegio) {
+    for (const gradoCarpeta of getGradeFolderCandidates(grado)) {
+      try {
+        const ruta = encodeURIComponent('Owlaris') + '/' + encodeURIComponent(carpetaColegio) + '/' + encodeURIComponent(gradoCarpeta)
+        const url = 'https://graph.microsoft.com/v1.0/drives/' + driveId + '/root:/' + ruta + ':/children'
+        const res = await fetch(url, { headers: { Authorization: 'Bearer ' + token } })
+        if (res.ok) {
+          const data = await res.json()
+          const value = data.value || []
+          const carpetasMateria = value
+            .filter((i: {folder?:unknown}) => i.folder)
+            .map((i: {name:string}) => i.name)
+          const materiasDesdeDocumentos = value
+            .filter((i: {file?:unknown; name:string}) => i.file && isSupportedSharePointContentFile(i.name))
+            .map((i: {name:string}) => inferSubjectFromSharePointName(i.name))
+            .filter((materia: string | null): materia is string => Boolean(materia))
+          ;[...carpetasMateria, ...materiasDesdeDocumentos].forEach(materia => {
+            pushUniqueSharePointName(carpetas, materia)
+          })
+          if (carpetasMateria.length > 0 || materiasDesdeDocumentos.length > 0) break
+        }
+      } catch { /* silencioso */ }
+    }
+    if (carpetas.length === 0) {
+      const materiasEncontradas = await buscarMateriasPorBusqueda(carpetaColegio).catch(() => [])
+      materiasEncontradas.forEach(materia => pushUniqueSharePointName(carpetas, materia))
+    }
+    if (carpetas.length > 0) break
+  }
   carpetas.push(idiomaIngles ? '» English Conversation' : '» Conversar en Inglés')
   return carpetas
+}
+
+function combinarConAccesosEspeciales(materias: string[], idiomaIngles: boolean, grado: string, incluirCompartidas: boolean) {
+  const out = Array.from(new Set(materias.filter(Boolean)))
+  if (incluirCompartidas) {
+    getSharedSubjectChipsForGrade(grado).forEach(materia => {
+      if (!out.includes(materia)) out.push(materia)
+    })
+  }
+  const conversacion = idiomaIngles ? '» English Conversation' : '» Conversar en Inglés'
+  if (!out.includes(conversacion)) out.push(conversacion)
+  return out
+}
+
+function normalizarClaveSeleccion(texto: string) {
+  return (texto || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[»🎙️🏆]/g, '')
+    .replace(/[^\w\s-]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function resolverMateriaSeleccionada(texto: string, disponibles: string[], permitirOlimpiadas: boolean) {
+  const entrada = normalizarClaveSeleccion(texto)
+  if (!entrada) return ''
+
+  const disponiblesCurriculares = disponibles.filter(Boolean)
+  const matchDirecto = disponiblesCurriculares.find(m => normalizarClaveSeleccion(m) === entrada)
+  if (matchDirecto) return matchDirecto
+
+  if (permitirOlimpiadas && /olimpiad|competencia/.test(entrada)) {
+    const existeOlimpiadas = disponiblesCurriculares.some(m => normalizarClaveSeleccion(m).includes('olimpiadas'))
+    if (existeOlimpiadas) return '__OLIMPIADAS__'
+  }
+
+  const normalizada = normalizarMateria(texto)
+  const normalizadaKey = normalizarClaveSeleccion(normalizada)
+  if (!normalizadaKey || normalizada === texto.trim()) return ''
+
+  const matchNormalizado = disponiblesCurriculares.find(m => {
+    const materiaKey = normalizarClaveSeleccion(m)
+    return materiaKey === normalizadaKey || materiaKey.includes(normalizadaKey) || normalizadaKey.includes(materiaKey)
+  })
+  return matchNormalizado || ''
 }
 
 async function leerDocumentosPadres(): Promise<string> {
@@ -473,8 +648,102 @@ async function registrarPendiente(_supabase: ReturnType<typeof import('@/lib/sup
 
 function respuestaSinFuenteSuficiente(idiomaIngles: boolean) {
   return idiomaIngles
-    ? 'With the content available for this lesson, I do not have enough information to answer that safely. We can continue with a topic that is covered in your lesson, or you can ask your teacher to add this material.'
-    : 'Con el contenido disponible para esta lección, no tengo suficiente información para responder eso con seguridad. Podemos continuar con un tema que sí esté cubierto en tu lección, o puedes pedirle a tu maestro que agregue este material.'
+    ? 'With the content available for this subject, I do not have enough information to answer that safely. We can continue with a topic that is covered in your subject material, or you can ask your teacher to add this material.'
+    : 'Con el contenido disponible para esta materia, no tengo suficiente información para responder eso con seguridad. Podemos continuar con un tema que sí esté cubierto en el material, o puedes pedirle a tu maestro que agregue este contenido.'
+}
+
+function normalizarTextoBase(texto: string) {
+  return texto
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+}
+
+function pideLeccionSinTema(pregunta: string) {
+  const texto = normalizarTextoBase(pregunta)
+  const match = texto.match(/\b(?:leccion|lesson)\s*(?:numero|no\.?|#)?\s*\d+\b/)
+  if (!match) return false
+  const despues = texto.slice((match.index || 0) + match[0].length)
+  const mencionaTemaDespues = /\b(?:de|sobre|about|tema|concepto|habilidad|competencia|ejercicio)\s+[a-z]{4,}/.test(despues)
+  return !mencionaTemaDespues
+}
+
+function respuestaPedirTemaLeccion(idiomaIngles: boolean) {
+  return idiomaIngles
+    ? 'I can help you with that, but Owlaris does not work by lesson number. Tell me the topic, concept, skill, or exercise you want to review, and we will work through it step by step.'
+    : 'Sí puedo ayudarte con eso, pero Owlaris no trabaja por número de lección. Dime el tema, concepto, habilidad o ejercicio que quieres revisar, y lo trabajamos paso a paso.'
+}
+
+type TipoRacha = 'correcta' | 'incorrecta'
+
+function clasificarInteraccionAprendizaje(row: { respuesta?: string | null; estado_evaluacion?: string | null }): TipoRacha | null {
+  const estado = row.estado_evaluacion || ''
+  if (estado === 'correcto' || estado === 'equivalente') return 'correcta'
+  if (estado === 'incorrecto') return 'incorrecta'
+  const respuesta = normalizarTextoBase(row.respuesta || '')
+  if (respuesta.includes('incorrecto') || respuesta.includes('no es correcto') || respuesta.includes('todavia no llegamos') || respuesta.includes('todavía no llegamos') || respuesta.includes('incorrect')) return 'incorrecta'
+  if (respuesta.startsWith('correcto') || respuesta.startsWith('correct.') || respuesta.includes('¡correcto!')) return 'correcta'
+  return null
+}
+
+async function obtenerRachaAprendizaje(
+  admin: ReturnType<typeof createAdminClient>,
+  userId: string,
+  materiaUuid: string | null
+) {
+  try {
+    let query = admin
+      .from('interacciones')
+      .select('respuesta, estado_evaluacion')
+      .eq('usuario_id', userId)
+      .order('creado_en', { ascending: false })
+      .limit(12)
+    if (materiaUuid) query = query.eq('materia_id', materiaUuid)
+    const { data } = await query
+
+    let tipo: TipoRacha | null = null
+    let total = 0
+    for (const row of data || []) {
+      const clasificacion = clasificarInteraccionAprendizaje(row)
+      if (!clasificacion) continue
+      if (!tipo) tipo = clasificacion
+      if (clasificacion !== tipo) break
+      total += 1
+    }
+    return {
+      correctas: tipo === 'correcta' ? total : 0,
+      incorrectas: tipo === 'incorrecta' ? total : 0,
+    }
+  } catch (e) {
+    console.error('No se pudo calcular racha de aprendizaje:', e)
+    return { correctas: 0, incorrectas: 0 }
+  }
+}
+
+function construirContextoAdaptativo(input: { correctas: number; incorrectas: number; nivel: number; idiomaIngles: boolean }) {
+  const nivel = Math.min(8, Math.max(1, Number.isFinite(input.nivel) ? input.nivel : 1))
+  if (input.incorrectas >= 3) {
+    return input.idiomaIngles
+      ? `\n\nADAPTIVE DIFFICULTY: The student has ${input.incorrectas} incorrect answers in a row. Lower the difficulty from level ${nivel} as a diagnosis. Find the missing prerequisite concept, explain one basic step, and then return gradually to the original topic. Do not frame this as failure or punishment.`
+      : `\n\nDIFICULTAD ADAPTATIVA: El estudiante acumula ${input.incorrectas} respuestas incorrectas seguidas. Baja la dificultad desde el nivel ${nivel} como diagnóstico. Busca el concepto previo que falta, explica una base concreta y vuelve gradualmente al tema original. No lo presentes como castigo ni fracaso.`
+  }
+  if (input.correctas > 3) {
+    return input.idiomaIngles
+      ? `\n\nADAPTIVE DIFFICULTY: The student has ${input.correctas} correct answers in a row. You may raise the difficulty gradually from level ${nivel}, but first confirm they understand the process and are not guessing.`
+      : `\n\nDIFICULTAD ADAPTATIVA: El estudiante lleva ${input.correctas} respuestas correctas seguidas. Puedes subir gradualmente la dificultad desde el nivel ${nivel}, pero confirma que entiende el proceso y no está adivinando.`
+  }
+  return input.idiomaIngles
+    ? `\n\nADAPTIVE DIFFICULTY: Current working level ${nivel}. Keep the exercise appropriate to the student's grade and the selected subject.`
+    : `\n\nDIFICULTAD ADAPTATIVA: Nivel de trabajo actual ${nivel}. Mantén el ejercicio adecuado al grado y a la materia seleccionada.`
+}
+
+function reforzarDiagnosticoPorFallos(respuesta: string, idiomaIngles: boolean, fallosConsecutivos: number) {
+  if (fallosConsecutivos < 3) return respuesta
+  const refuerzo = idiomaIngles
+    ? 'Let us lower the difficulty for a moment, not as a punishment, but to find the missing base. First, let us review the simplest step involved here.'
+    : 'Vamos a bajar la dificultad por un momento, no como castigo, sino para encontrar la base que falta. Primero revisemos el paso más simple de este procedimiento.'
+  return `${respuesta}\n\n${refuerzo}`
 }
 
 function buildEnglishConversationSystemPrompt(input: { entradaVoz: boolean; speechConfidence: number | null }) {
@@ -587,6 +856,7 @@ export async function POST(req: NextRequest) {
     const OpenAI = (await import('openai')).default
     const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
     const supabase = createClient()
+    const admin = createAdminClient()
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
 
@@ -624,7 +894,7 @@ export async function POST(req: NextRequest) {
       })
     }
 
-    const { data: configs } = await createAdminClient()
+    const { data: configs } = await admin
       .from('configuracion')
       .select('clave, valor')
       .eq('colegio_id', perfil.colegio_id)
@@ -645,8 +915,20 @@ export async function POST(req: NextRequest) {
     const materia = materiaPorId || materiaPorNombre
     const materia_uuid = materia?.id || null
     const gradoEfectivo = grado_override || perfil.grado
-    const colegioSlug = perfil.colegio?.sharepoint_folder || perfil.colegio?.slug
+    const colegioSharePoint = perfil.colegio || null
+    const carpetasColegio = getSharePointFolderCandidates(perfil.colegio, { includeShared: false })
+    const incluirOlimpiadas = includeSharedPrograms(colegioSharePoint)
     const materiaNumerica = esMateriaNumerica(materia?.nombre || materia_id || '')
+    const guardarGradoAlumno = async (grado: string) => {
+      if (!grado) return
+      const { error } = await admin.from('usuarios').update({ grado }).eq('id', user.id)
+      if (error) console.error('No se pudo guardar grado:', error.message)
+    }
+    const cargarMateriasDisponibles = async (grado: string) => {
+      let carpetas = await leerCarpetasGrado(grado, idiomaIngles, carpetasColegio)
+      carpetas = combinarConAccesosEspeciales(carpetas, idiomaIngles, grado, incluirOlimpiadas)
+      return carpetas
+    }
 
     // ── ONBOARDING ──────────────────────────────────────────────────
     const estado: string = body.estado || 'activo'
@@ -656,7 +938,8 @@ export async function POST(req: NextRequest) {
     if (pregunta === '__CARGAR_MATERIAS__' || (estado === 'esperando_materia' && gradoAlumno && !pregunta.trim())) {
       const grado = gradoAlumno || grado_override || perfil.grado || ''
       if (grado) {
-        const carpetas = await leerCarpetasGrado(grado, idiomaIngles, colegioSlug)
+        await guardarGradoAlumno(grado)
+        const carpetas = await cargarMateriasDisponibles(grado)
         return NextResponse.json({ materias_disponibles: carpetas, respuesta: '', tokens: 0 })
       }
     }
@@ -667,23 +950,56 @@ export async function POST(req: NextRequest) {
     }
 
     if (estado === 'esperando_grado') {
-      const gradoDetectado = normalizarGradoPorColegio(pregunta, colegioSlug)
+      const gradoDetectado = normalizarGradoPorColegio(pregunta, colegioSharePoint)
       if (!gradoDetectado) return NextResponse.json({ respuesta: 'No reconocí ese grado. ¿Puedes decirme tu grado? Por ejemplo: "4to Primaria", "3ero Básico", "5to Bachillerato"...', nuevo_estado: 'esperando_grado', nombre_alumno: nombreAlumno, tokens: 0 })
-      if (userId) await supabase.from('usuarios').update({ grado: gradoDetectado }).eq('id', userId)
-      const carpetasG = await leerCarpetasGrado(gradoDetectado, idiomaIngles, colegioSlug)
+      await guardarGradoAlumno(gradoDetectado)
+      const carpetasG = await cargarMateriasDisponibles(gradoDetectado)
       return NextResponse.json({ respuesta: idiomaIngles ? `Perfect, ${nombreAlumno}! What would you like to study?` : `Perfecto, ${nombreAlumno}. ¿Qué quieres estudiar hoy?`, nuevo_estado: 'esperando_materia', nombre_alumno: nombreAlumno, grado_detectado: gradoDetectado, materias_disponibles: carpetasG, tokens: 0 })
     }
 
     if (estado === 'esperando_materia') {
-      const materiaDetectada = normalizarMateria(pregunta)
       const gradoMostrar = gradoAlumno || body.grado_detectado || ''
-      if (materiaDetectada === '__OLIMPIADAS__') return NextResponse.json({ respuesta: 'Olimpiadas, perfecto. ¿De cuál materia? Matemática, Biología, Física, Química o Ciencias Naturales.', nuevo_estado: 'esperando_materia_olimpiadas', nombre_alumno: nombreAlumno, grado_detectado: gradoMostrar, tokens: 0 })
-      const esMateriaNormalizada = materiaDetectada !== pregunta.trim()
-      if (!esMateriaNormalizada && materia_id) return NextResponse.json({ respuesta: idiomaIngles ? 'Ok, let me help you with that topic.' : 'Ok, vamos con ese tema.', nuevo_estado: 'activo', nombre_alumno: nombreAlumno, grado_detectado: gradoAlumno, materia_detectada: materia_id, tokens: 0 })
-      return NextResponse.json({ respuesta: idiomaIngles ? 'Ok, ' + materiaDetectada + '. Do you have a specific question or would you like me to suggest a topic?' : 'Ok, ' + materiaDetectada + '. ¿Tienes una duda específica o quieres que te proponga un tema?', nuevo_estado: 'activo', nombre_alumno: nombreAlumno, grado_detectado: gradoAlumno, materia_detectada: materiaDetectada, tokens: 0 })
+      const disponibles = await cargarMateriasDisponibles(gradoMostrar || perfil.grado || '')
+      const materiaSeleccionada = resolverMateriaSeleccionada(pregunta, disponibles, incluirOlimpiadas)
+      if (materiaSeleccionada === '__OLIMPIADAS__') {
+        return NextResponse.json({ respuesta: 'Olimpiadas, perfecto. ¿De cuál materia? Matemática, Biología, Física, Química o Ciencias Naturales.', nuevo_estado: 'esperando_materia_olimpiadas', nombre_alumno: nombreAlumno, grado_detectado: gradoMostrar, materias_disponibles: disponibles, tokens: 0 })
+      }
+      if (!materiaSeleccionada) {
+        return NextResponse.json({
+          respuesta: idiomaIngles
+            ? 'Please choose one of the subject buttons below. I cannot use that as a subject.'
+            : 'Elige una materia de los botones de abajo. No voy a tomar ese mensaje como materia.',
+          nuevo_estado: 'esperando_materia',
+          nombre_alumno: nombreAlumno,
+          grado_detectado: gradoMostrar,
+          materias_disponibles: disponibles,
+          tokens: 0,
+        })
+      }
+      return NextResponse.json({
+        respuesta: idiomaIngles ? 'Ok, let me help you with that topic.' : 'Ok, vamos con ese tema.',
+        nuevo_estado: 'activo',
+        nombre_alumno: nombreAlumno,
+        grado_detectado: gradoAlumno,
+        materia_detectada: materiaSeleccionada,
+        tokens: 0,
+      })
     }
 
     if (estado === 'esperando_materia_olimpiadas') {
+      if (!incluirOlimpiadas) {
+        const disponibles = await cargarMateriasDisponibles(gradoAlumno || perfil.grado || '')
+        return NextResponse.json({
+          respuesta: idiomaIngles
+            ? 'Choose one of your available classes below.'
+            : 'Elige una de tus clases disponibles abajo.',
+          nuevo_estado: 'esperando_materia',
+          nombre_alumno: nombreAlumno,
+          grado_detectado: gradoAlumno || perfil.grado || '',
+          materias_disponibles: disponibles,
+          tokens: 0,
+        })
+      }
       const materiaDetectada = normalizarMateria(pregunta, true)
       return NextResponse.json({ respuesta: idiomaIngles ? 'Ok, ' + materiaDetectada + '. Do you have a specific question or would you like me to suggest a topic?' : 'Ok, ' + materiaDetectada + '. ¿Tienes una duda específica o quieres que te proponga un tema?', nuevo_estado: 'activo', nombre_alumno: nombreAlumno, grado_detectado: gradoAlumno, materia_detectada: materiaDetectada, tokens: 0 })
     }
@@ -724,10 +1040,11 @@ export async function POST(req: NextRequest) {
       const cambioGradoMatch = cambioGradoRegex.exec(pregunta)
       if (cambioGradoMatch) {
         const textoGrado = cambioGradoMatch[2] || cambioGradoMatch[4] || cambioGradoMatch[5] || ''
-        const nuevoGrado = normalizarGradoPorColegio(textoGrado.trim(), colegioSlug)
+        const nuevoGrado = normalizarGradoPorColegio(textoGrado.trim(), colegioSharePoint)
         if (nuevoGrado) {
-          if (userId) await supabase.from('usuarios').update({ grado: nuevoGrado }).eq('id', userId)
-          return NextResponse.json({ respuesta: 'Perfecto, actualicé tu grado a ' + nuevoGrado + '. ¿Qué materia quieres estudiar?', nuevo_estado: 'esperando_materia', grado_detectado: nuevoGrado, tokens: 0 })
+          await guardarGradoAlumno(nuevoGrado)
+          const carpetasNuevoGrado = await cargarMateriasDisponibles(nuevoGrado)
+          return NextResponse.json({ respuesta: 'Perfecto, actualicé tu grado a ' + nuevoGrado + '. ¿Qué materia quieres estudiar?', nuevo_estado: 'esperando_materia', grado_detectado: nuevoGrado, materias_disponibles: carpetasNuevoGrado, tokens: 0 })
         }
       }
     }
@@ -735,7 +1052,7 @@ export async function POST(req: NextRequest) {
 
     // ── RUTA RÁPIDA: conversación en inglés ─────────────────────────
     // Evita búsquedas en SharePoint y protocolo matemático para reducir latencia en voz.
-    const esModoConversacion = body.modo_conversacion || false
+    const esModoConversacion = body.modo_conversacion === true && body.modo_conversacion_explicito === true
     if (esModoConversacion) {
       const historialConv = (historial || [])
         .slice(-6)
@@ -781,11 +1098,44 @@ export async function POST(req: NextRequest) {
       })
     }
 
+    const tipoPregunta = detectarTipoPregunta(pregunta)
+    const esBienvenida = esSaludo(pregunta) && (!historial || historial.length === 0)
+    const nivelDificultadActual = Math.min(8, Math.max(1, parseInt(String(body.nivel_dificultad || '1'), 10) || 1))
+    const rachaAprendizaje = await obtenerRachaAprendizaje(admin, user.id, materia_uuid)
+
+    if (tipoPregunta === 'academica' && pideLeccionSinTema(pregunta)) {
+      const respuesta = respuestaPedirTemaLeccion(idiomaIngles)
+      const { data: insertedRow } = await supabase.from('interacciones').insert({
+        usuario_id: user.id,
+        colegio_id: perfil.colegio_id,
+        materia_id: materia_uuid,
+        grado: gradoEfectivo,
+        tema_detectado: 'Leccion sin tema',
+        pregunta,
+        respuesta,
+        tokens_usados: 0,
+        costo_usd: 0,
+        modelo_usado: 'lesson_topic_clarifier',
+        documento_fuente: null,
+        sospecha_copia: false,
+        guard_activado: true,
+      }).select('id').single()
+      supabase.from('usuarios').update({ ultimo_acceso: new Date().toISOString() }).eq('id', user.id).then(() => {})
+      return NextResponse.json({
+        respuesta,
+        source: 'lesson_topic_clarifier',
+        tokens: 0,
+        documento_fuente: null,
+        interaction_id: insertedRow?.id || null,
+        pending_math_interaction_id: null,
+      })
+    }
+
     // ── PROTOCOLO ANTI-ERRORES — evaluación por backend ─────────────
     let evaluacionProtocolo: MathEvaluation | null = null
     const pendingMathId: string | null = body.pending_math_interaction_id || null
 
-    if (pendingMathId && materiaNumerica) {
+    if (pendingMathId) {
       try {
         const { data: preguntaPendiente } = await supabase
           .from('interacciones')
@@ -813,10 +1163,10 @@ export async function POST(req: NextRequest) {
       } catch (e) { console.error('Error recuperando OP pendiente:', e) }
     }
 
-    if (!evaluacionProtocolo && materiaNumerica && normalizeStudentAnswer(pregunta) !== null) {
+    if (!evaluacionProtocolo && normalizeStudentAnswer(pregunta) !== null) {
       const ultimaPregunta = ultimoMensajeAsistente(historial)
       const opInferida = inferCanonicalOperationFromText(ultimaPregunta)
-      if (opInferida && isSafeCanonicalOperation(opInferida)) {
+      if (opInferida && isSafeCanonicalOperation(opInferida) && solveOperation(opInferida) !== null) {
         evaluacionProtocolo = await handleMathEvaluation(
           ultimaPregunta + '\n[OP: ' + opInferida + ']',
           pregunta,
@@ -828,7 +1178,18 @@ export async function POST(req: NextRequest) {
 
     // Si el protocolo evaluó y tiene resultado definitivo, responder directo
     if (evaluacionProtocolo && evaluacionProtocolo.estado !== 'no_evaluable') {
-      const respuesta = evaluacionProtocolo.feedback
+      const aciertosConsecutivos = evaluacionProtocolo.estado === 'correcto' || evaluacionProtocolo.estado === 'equivalente'
+        ? rachaAprendizaje.correctas + 1
+        : 0
+      const fallosConsecutivos = evaluacionProtocolo.estado === 'incorrecto'
+        ? rachaAprendizaje.incorrectas + 1
+        : 0
+      const nivelSiguiente = fallosConsecutivos >= 3
+        ? Math.max(1, nivelDificultadActual - 1)
+        : aciertosConsecutivos > 3
+          ? Math.min(8, nivelDificultadActual + 1)
+          : nivelDificultadActual
+      const respuesta = reforzarDiagnosticoPorFallos(evaluacionProtocolo.feedback, idiomaIngles, fallosConsecutivos)
       const { data: evaluacionInsertada } = await supabase.from('interacciones').insert({
         usuario_id: user.id, colegio_id: perfil.colegio_id, materia_id: materia_uuid,
         grado: gradoEfectivo, tema_detectado: pregunta.substring(0, 100),
@@ -848,7 +1209,14 @@ export async function POST(req: NextRequest) {
       
       // Si incorrecto conservar pendingMathId para reintento; si correcto ya fue marcado evaluada
       const returnPendingId = (evaluacionProtocolo?.estado === 'incorrecto') ? (pendingMathId || evaluacionInsertada?.id || null) : null
-      return NextResponse.json({ respuesta, tokens: 0, pending_math_interaction_id: returnPendingId })
+      return NextResponse.json({
+        respuesta,
+        tokens: 0,
+        pending_math_interaction_id: returnPendingId,
+        nivel_dificultad: nivelSiguiente,
+        aciertos_consecutivos: aciertosConsecutivos,
+        fallos_consecutivos: fallosConsecutivos,
+      })
     }
 
     // Inyectar contexto de evaluación al prompt si hay resultado no_evaluable o sin OP
@@ -857,29 +1225,26 @@ export async function POST(req: NextRequest) {
       : ''
     // ── FIN PROTOCOLO ANTI-ERRORES ───────────────────────────────────
 
-    const tipoPregunta = detectarTipoPregunta(pregunta)
-    const esBienvenida = esSaludo(pregunta) && (!historial || historial.length === 0)
-
     let contenidoCurricular = ''
     let documentoFuente: string | null = null
       if (tipoPregunta === 'academica' && !esBienvenida) {
-      const result = await buscarContenido(colegioSlug, gradoEfectivo, materia_id || '', pregunta)
+      const result = await buscarContenido(colegioSharePoint, gradoEfectivo, materia_id || '', pregunta)
       contenidoCurricular = result.contenido
       documentoFuente = result.archivo
     }
 
-    const operacionDirecta = materiaNumerica ? inferCanonicalOperationFromText(pregunta) : null
+    const operacionDirecta = inferCanonicalOperationFromText(pregunta)
     const tieneOperacionDirectaSegura = !!operacionDirecta && isSafeCanonicalOperation(operacionDirecta) && solveOperation(operacionDirecta) !== null
 
     if (
       tipoPregunta === 'academica' &&
       !esBienvenida &&
       !contenidoCurricular &&
-      materia &&
+      (materia || materia_id) &&
       !tieneOperacionDirectaSegura
     ) {
       const respuesta = respuestaSinFuenteSuficiente(idiomaIngles)
-      await registrarPendiente(supabase, perfil, materia, pregunta)
+      if (materia) await registrarPendiente(supabase, perfil, materia, pregunta)
       const { data: insertedRow } = await supabase.from('interacciones').insert({
         usuario_id: user.id,
         colegio_id: perfil.colegio_id,
@@ -908,11 +1273,18 @@ export async function POST(req: NextRequest) {
 
     const docsConfig = await leerConfig()
     const promptPersonalizado = cfg.prompt_personalizado?.trim()
+    const contextoAdaptativo = construirContextoAdaptativo({
+      correctas: rachaAprendizaje.correctas,
+      incorrectas: rachaAprendizaje.incorrectas,
+      nivel: nivelDificultadActual,
+      idiomaIngles,
+    })
     const promptBase = PROMPT_BASE +
       (promptPersonalizado
         ? '\n\nINSTRUCCIONES ADICIONALES DEL COLEGIO (no reemplazan el protocolo anti-error anterior):\n' + promptPersonalizado
         : '') +
       (idiomaIngles ? '\n\nIDIOMA: El alumno está en modo inglés. Responde SIEMPRE en inglés.' : '') +
+      contextoAdaptativo +
       contextoEvaluacion
 
     // Baja comprension se verifica en servidor despues de registrar cada interaccion.
@@ -940,7 +1312,7 @@ export async function POST(req: NextRequest) {
     } else if (contenidoCurricular) {
       contextoContenido = `CONTENIDO ACADEMICO (fuente principal):\n---\n${contenidoCurricular.substring(0, 3000)}\n---`
     } else {
-      contextoContenido = `No se encontro documento especifico en SharePoint. No inventes contenido academico. Indica que no hay suficiente informacion en la leccion disponible.`
+      contextoContenido = `No se encontro documento especifico en SharePoint. No inventes contenido academico. Indica que no hay suficiente informacion en el material disponible de la materia.`
     }
 
     const systemPrompt = `${promptBase}${promptPadre}${contextoIdioma}
@@ -969,9 +1341,7 @@ ${contextoContenido}`
     if (studentN !== null) {
       const respuestaLow = respuesta.toLowerCase()
       const dijoIncorrecto = respuestaLow.includes('incorrecto') || respuestaLow.includes('incorrect')
-      const opDeContexto = materiaNumerica
-        ? (inferCanonicalOperationFromText(ultimoMensajeAsistente(historial)) || inferCanonicalOperationFromText(respuesta))
-        : null
+      const opDeContexto = inferCanonicalOperationFromText(ultimoMensajeAsistente(historial)) || inferCanonicalOperationFromText(respuesta)
       const respuestaCorrectaCalculada = opDeContexto ? solveOperation(opDeContexto) : null
       respuestaVerificadaCorrecta = respuestaCorrectaCalculada !== null && Math.abs(studentN - respuestaCorrectaCalculada) < 0.001
       if (dijoIncorrecto && respuestaVerificadaCorrecta) {
@@ -1013,7 +1383,7 @@ ${contextoContenido}`
     // Extraer OP de la respuesta del tutor y limpiar texto visible
     const { visibleText: _respLimpia, operation: _opExtraida } = extractAndCleanOperation(respuesta)
     respuesta = _respLimpia
-    const opInferida = !_opExtraida && materiaNumerica && looksLikeMathPracticePrompt(respuesta)
+    const opInferida = !_opExtraida && looksLikeMathPracticePrompt(respuesta)
       ? inferCanonicalOperationFromText(respuesta)
       : null
     const opFinalRespuesta = _opExtraida || opInferida

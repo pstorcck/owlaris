@@ -1,5 +1,11 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import {
+  getExpectedGradeFallbacks,
+  getSharePointFolderCandidates,
+  isLikelyGradeFolder,
+  sortGradesForSchool,
+} from '@/lib/sharepointFolders'
 
 const NO_GRADOS = ['Olimpiadas de Ciencias', 'Preparación pruebas nacionales']
 
@@ -29,32 +35,40 @@ export async function GET() {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
 
-    const token = await getToken()
-    if (!token) return NextResponse.json({ grados: [] })
-
     // Obtener colegio del usuario para usar su carpeta de SharePoint correcta
     const { data: perfil } = await supabase
       .from('usuarios')
-      .select('colegio:colegios(sharepoint_folder, slug)')
+      .select('colegio:colegios(nombre, sharepoint_folder, slug)')
       .eq('id', user.id)
       .maybeSingle()
 
-    const carpetaColegio = (perfil?.colegio as {sharepoint_folder?: string; slug?: string} | null)?.sharepoint_folder
-    if (!carpetaColegio) return NextResponse.json({ grados: [] })
+    const colegio = perfil?.colegio as {nombre?: string; sharepoint_folder?: string; slug?: string} | null
+    const carpetasColegio = getSharePointFolderCandidates(colegio, { includeShared: false })
+    if (carpetasColegio.length === 0) return NextResponse.json({ grados: [] })
+    const fallback = getExpectedGradeFallbacks(colegio)
+
+    const token = await getToken()
+    if (!token) return NextResponse.json({ grados: fallback })
 
     const driveId = process.env.SHAREPOINT_DRIVE_ID!
-    const ruta = encodeURIComponent('Owlaris') + '/' + encodeURIComponent(carpetaColegio)
-    const url = `https://graph.microsoft.com/v1.0/drives/${driveId}/root:/${ruta}:/children`
-    const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } })
-    if (!res.ok) return NextResponse.json({ grados: [] })
+    let grados: string[] = []
+    for (const carpetaColegio of carpetasColegio) {
+      const ruta = encodeURIComponent('Owlaris') + '/' + encodeURIComponent(carpetaColegio)
+      const url = `https://graph.microsoft.com/v1.0/drives/${driveId}/root:/${ruta}:/children`
+      const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } })
+      if (!res.ok) continue
 
-    const data = await res.json()
-    const grados = (data.value || [])
-      .filter((i: {folder?: unknown; name: string}) => i.folder && !NO_GRADOS.includes(i.name))
-      .map((i: {name: string}) => i.name)
-      .sort()
+      const data = await res.json()
+      grados = (data.value || [])
+        .filter((i: {folder?: unknown; name: string}) =>
+          i.folder && !NO_GRADOS.includes(i.name) && isLikelyGradeFolder(i.name, colegio)
+        )
+        .map((i: {name: string}) => i.name)
+      grados = sortGradesForSchool(grados, colegio)
+      if (grados.length > 0) break
+    }
 
-    return NextResponse.json({ grados })
+    return NextResponse.json({ grados: grados.length > 0 ? grados : fallback })
   } catch {
     return NextResponse.json({ grados: [] })
   }

@@ -142,6 +142,20 @@ export function compareAnswers(studentN: number | null, correctN: number | null)
   return 'incorrecto'
 }
 
+function normalizeSubjectForMathProtocol(subject: string): string {
+  return String(subject || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+}
+
+export function isLikelyNumericSubject(subject: string): boolean {
+  const s = normalizeSubjectForMathProtocol(subject)
+  return /\b(mathematics?|math|algebra|geometry|geometria|aritmetica|estadistica|statistics|physics?|fisica|chemistry|quimica|biology|biologia|natural sciences?|ciencias naturales|olimpiadas?)\b/.test(s) ||
+    s.includes('matematica') ||
+    s.includes('mineduc - matematica')
+}
+
 function buildEvaluationState(comparison: string, hasVerifiedOp: boolean): string {
   if (!hasVerifiedOp) return 'no_evaluable'
   return comparison
@@ -339,6 +353,13 @@ export function inferCanonicalOperationFromText(text: string): string | null {
   if (equation) {
     const op = normalizeOperation(equation[0]).replace(/\.+$/g, '')
     if (/[xX]/.test(op) && isSafeCanonicalOperation(op)) return op
+  }
+
+  const parenthesizedExpressions = Array.from(normalized.matchAll(/\(-?\d+(?:\.\d+)?(?:\s*(?:[+\-*/^])\s*-?\d+(?:\.\d+)?){1,4}\)\s*(?:[*/^]\s*-?\d+(?:\.\d+)?){1,3}/g))
+  const parenthesizedExpression = parenthesizedExpressions.length > 0 ? parenthesizedExpressions[parenthesizedExpressions.length - 1] : null
+  if (parenthesizedExpression) {
+    const op = normalizeOperation(parenthesizedExpression[0])
+    if (isSafeCanonicalOperation(op)) return op
   }
 
   const expressions = Array.from(normalized.matchAll(/-?\d+(?:\.\d+)?(?:\s*(?:[+\-*/^])\s*-?\d+(?:\.\d+)?){1,4}/g))

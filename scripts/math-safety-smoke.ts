@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import {
   handleMathEvaluation,
   inferCanonicalOperationFromText,
+  isLikelyNumericSubject,
   looksLikeMathPracticePrompt,
   solveOperation,
 } from '../src/lib/mathSafety'
@@ -71,9 +72,26 @@ Respuesta: 13`,
   assert.equal(bothSidesEquation?.estado, 'correcto')
   assert.equal(bothSidesEquation?.correctAnswer, 4)
 
+  const implicitEquationPrompt = 'Resuelve la siguiente ecuación: 3x + 5 = 20. ¿Qué valor de x obtienes?'
+  const implicitEquation = inferCanonicalOperationFromText(implicitEquationPrompt)
+  assert.equal(implicitEquation, '3x+5=20')
+  assert.equal(solveOperation(implicitEquation), 5)
+
+  const implicitEquationCorrect = await handleMathEvaluation(implicitEquationPrompt, '5', false)
+  assert.equal(implicitEquationCorrect?.estado, 'correcto')
+  assert.equal(implicitEquationCorrect?.correctAnswer, 5)
+
+  const implicitEquationPhrase = await handleMathEvaluation(implicitEquationPrompt, 'si es 5', false)
+  assert.equal(implicitEquationPhrase?.estado, 'correcto')
+  assert.equal(implicitEquationPhrase?.correctAnswer, 5)
+
   const inferredEquation = inferCanonicalOperationFromText('Ahora resuelve: 2*x - 4 = 10. ¿Cuánto vale x?')
   assert.equal(inferredEquation, '2*x-4=10')
   assert.equal(solveOperation(inferredEquation), 7)
+
+  assert.equal(isLikelyNumericSubject('Math'), true)
+  assert.equal(isLikelyNumericSubject('Owlaris - Math Grade 8.md'), true)
+  assert.equal(isLikelyNumericSubject('Environmental Systems'), false)
 
   const multipleChoicePrompt = `¿Cuánto es 20 - 4 * 2?
 A) 16

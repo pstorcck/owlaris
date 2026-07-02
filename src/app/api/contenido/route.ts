@@ -1,15 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server'
+import {
+  getGradeFolderCandidates,
+  getSharePointFolderCandidates,
+  isSharePointPlainTextContent,
+  isSupportedSharePointContentFile,
+  sharePointNameMatchesSubject,
+  sharePointTextMatchesGrade,
+} from '@/lib/sharepointFolders'
 
 const cache = new Map<string, { contenido: string; archivo: string; timestamp: number }>()
 const CACHE_TTL = 1000 * 60 * 30
 
 const GRADOS_CON_MINEDUC = ['3ero Básico', '5to Bachillerato']
 
-const COLEGIOS_SHAREPOINT: Record<string, string> = {
-  'escolaris':       'Escolaris',
-  'colegio-montano': 'Colegio Montano',
-  'Escolaris':       'Escolaris',
-  'Colegio Montano': 'Colegio Montano',
+type SharePointItem = {
+  name: string
+  file?: unknown
+  parentReference?: { path?: string }
+  '@microsoft.graph.downloadUrl': string
 }
 
 async function listarArchivos(driveId: string, token: string, ...segmentos: string[]) {
@@ -22,13 +30,25 @@ async function listarArchivos(driveId: string, token: string, ...segmentos: stri
     return []
   }
   const data = await res.json()
-  return (data.value || []).filter((a: {name:string}) =>
-    a.name.endsWith('.docx') && !a.name.startsWith('~$')
-  )
+  return (data.value || []).filter((a: SharePointItem) => a.file && isSupportedSharePointContentFile(a.name))
 }
 
-async function extraerTexto(downloadUrl: string): Promise<string> {
+async function buscarArchivos(driveId: string, token: string, query: string, ...segmentos: string[]) {
+  const ruta = segmentos.map(s => encodeURIComponent(s)).join('/')
+  const safeQuery = encodeURIComponent(query.replace(/'/g, "''"))
+  const url = `https://graph.microsoft.com/v1.0/drives/${driveId}/root:/${ruta}:/search(q='${safeQuery}')`
+  const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } })
+  if (!res.ok) return []
+  const data = await res.json()
+  return (data.value || []).filter((a: SharePointItem) => a.file && isSupportedSharePointContentFile(a.name))
+}
+
+async function extraerTexto(downloadUrl: string, nombreArchivo = ''): Promise<string> {
   const r   = await fetch(downloadUrl)
+  if (!r.ok) return ''
+  if (isSharePointPlainTextContent(nombreArchivo)) {
+    return (await r.text()).replace(/\r\n/g, '\n').trim()
+  }
   const buf = await r.arrayBuffer()
   const mammoth = await import('mammoth')
   const { value } = await mammoth.extractRawText({ buffer: Buffer.from(buf) })
@@ -40,8 +60,9 @@ export async function POST(req: NextRequest) {
     const { colegio_slug, grado, materia, pregunta } = await req.json()
     if (!colegio_slug || !grado || !materia) return NextResponse.json({ contenido: '', archivo: null })
 
-    const colegioSP = COLEGIOS_SHAREPOINT[colegio_slug] || colegio_slug
-    const cacheKey  = `${colegioSP}/${grado}/${materia}`
+    const carpetasColegio = getSharePointFolderCandidates(colegio_slug, { includeShared: false })
+    const carpetasCompartidas = getSharePointFolderCandidates(colegio_slug, { sharedOnly: true })
+    const cacheKey  = `${carpetasColegio.join('|')}/${grado}/${materia}`
     const cached    = cache.get(cacheKey)
     if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
       return NextResponse.json({ contenido: cached.contenido, archivo: cached.archivo })
@@ -55,27 +76,60 @@ export async function POST(req: NextRequest) {
     let archivo   = null
 
     // Estructura real: Owlaris/[Colegio]/[Grado]/[Materia]/
-    console.log(`Buscando: Owlaris/${colegioSP}/${grado}/${materia}`)
+    for (const carpetaColegio of carpetasColegio) {
+      for (const gradoCarpeta of getGradeFolderCandidates(grado)) {
+        console.log(`Buscando: Owlaris/${carpetaColegio}/${gradoCarpeta}/${materia}`)
+        const archivos = await listarArchivos(driveId, token, 'Owlaris', carpetaColegio, gradoCarpeta, materia)
+        const elegido  = encontrarArchivoRelevante(archivos, pregunta)
+        if (elegido) {
+          contenido = await extraerTexto(elegido['@microsoft.graph.downloadUrl'], elegido.name)
+          archivo   = elegido.name
+          console.log(`✅ Encontrado: ${elegido.name}`)
+          break
+        }
+      }
+      if (contenido) break
+    }
 
-    const archivos = await listarArchivos(driveId, token, 'Owlaris', colegioSP, grado, materia)
-    const elegido  = encontrarArchivoRelevante(archivos, pregunta)
-
-    if (elegido) {
-      contenido = await extraerTexto(elegido['@microsoft.graph.downloadUrl'])
-      archivo   = elegido.name
-      console.log(`✅ Encontrado: ${elegido.name}`)
+    if (!contenido) {
+      for (const carpetaColegio of carpetasColegio) {
+        for (const termino of [materia, ...getGradeFolderCandidates(grado)]) {
+          const archivos = await buscarArchivos(driveId, token, termino, 'Owlaris', carpetaColegio)
+          const filtrados = archivos.filter((archivo: SharePointItem) => {
+            const textoUbicacion = `${archivo.name} ${archivo.parentReference?.path || ''}`
+            return sharePointNameMatchesSubject(textoUbicacion, materia) &&
+              sharePointTextMatchesGrade(textoUbicacion, grado)
+          })
+          const elegido = encontrarArchivoRelevante(filtrados, pregunta)
+          if (elegido) {
+            contenido = await extraerTexto(elegido['@microsoft.graph.downloadUrl'], elegido.name)
+            archivo = elegido.name
+            console.log(`✅ Encontrado por búsqueda: ${elegido.name}`)
+            break
+          }
+        }
+        if (contenido) break
+      }
     }
 
     // Mineduc solo para 3ero Básico y 5to Bachillerato
     if (GRADOS_CON_MINEDUC.includes(grado) && materia.startsWith('Mineduc')) {
-      console.log(`Buscando Mineduc: ${grado}/${materia}`)
-      const archivosM = await listarArchivos(driveId, token, 'Owlaris', colegioSP, grado, materia)
-      const elegidoM  = encontrarArchivoRelevante(archivosM, pregunta)
-      if (elegidoM) {
-        const textoM = await extraerTexto(elegidoM['@microsoft.graph.downloadUrl'])
-        contenido   += `\n\n--- Contenido Mineduc ---\n${textoM}`
-        archivo      = archivo || elegidoM.name
-        console.log(`✅ Mineduc: ${elegidoM.name}`)
+      let encontroMineduc = false
+      for (const carpetaColegio of carpetasCompartidas) {
+        for (const gradoCarpeta of getGradeFolderCandidates(grado)) {
+          console.log(`Buscando Mineduc: ${carpetaColegio}/${gradoCarpeta}/${materia}`)
+          const archivosM = await listarArchivos(driveId, token, 'Owlaris', carpetaColegio, gradoCarpeta, materia)
+          const elegidoM  = encontrarArchivoRelevante(archivosM, pregunta)
+          if (elegidoM) {
+            const textoM = await extraerTexto(elegidoM['@microsoft.graph.downloadUrl'], elegidoM.name)
+            contenido   += `\n\n--- Contenido Mineduc ---\n${textoM}`
+            archivo      = archivo || elegidoM.name
+            console.log(`✅ Mineduc: ${elegidoM.name}`)
+            encontroMineduc = true
+            break
+          }
+        }
+        if (encontroMineduc) break
       }
     }
 
@@ -109,9 +163,9 @@ async function obtenerTokenMicrosoft(): Promise<string | null> {
 }
 
 function encontrarArchivoRelevante(
-  archivos: { name: string; '@microsoft.graph.downloadUrl': string }[],
+  archivos: SharePointItem[],
   pregunta: string
-): { name: string; '@microsoft.graph.downloadUrl': string } | null {
+): SharePointItem | null {
   if (archivos.length === 0) return null
   if (archivos.length === 1) return archivos[0]
   const palabras = pregunta.toLowerCase().split(/\s+/).filter(p => p.length > 3)
