@@ -140,15 +140,39 @@ async function main() {
     const grade = GRADOS_ESCHOLARIS[i % GRADOS_ESCHOLARIS.length]
     const candidates = getGradeFolderCandidates(grade)
     const gradeNumber = grade.match(/\d+/)?.[0] || ''
+    const ordinalWord: Record<string, string> = {
+      '6': 'Sixth Grade',
+      '7': 'Seventh Grade',
+      '8': 'Eighth Grade',
+      '9': 'Ninth Grade',
+      '10': 'Tenth Grade',
+      '11': 'Eleventh Grade',
+      '12': 'Twelfth Grade',
+    }
+    const gradeAliases = [
+      `Grado ${gradeNumber}`,
+      `Grade ${gradeNumber}`,
+      `${gradeNumber}th Grade`,
+      `${gradeNumber}th`,
+      ordinalWord[gradeNumber],
+      ordinalWord[gradeNumber]?.replace(' Grade', ''),
+      `G${gradeNumber}`,
+    ].filter((alias): alias is string => Boolean(alias))
     test(`escholaris-grade-folder-${i}`, () => {
       assert.equal(isEScholarisSchool(eScholarisInput), true)
-      assert.equal(isLikelyGradeFolder(grade, eScholarisInput), true)
+      for (const alias of gradeAliases) assert.equal(isLikelyGradeFolder(alias, eScholarisInput), true, alias)
       assert.ok(candidates.includes(grade))
       assert.ok(candidates.includes(`Grade ${gradeNumber}`))
+      assert.ok(candidates.includes(`${gradeNumber}th Grade`))
+      assert.ok(candidates.includes(`${gradeNumber}th`))
+      assert.ok(candidates.includes(ordinalWord[gradeNumber]))
+      assert.ok(candidates.includes(`G${gradeNumber}`))
       assert.ok(sharePointTextMatchesGrade(`Owlaris - Math Grade ${gradeNumber}.md`, grade))
+      assert.ok(sharePointTextMatchesGrade(`Owlaris - Math Grado ${gradeNumber}.md`, `Grade ${gradeNumber}`))
+      assert.ok(sharePointTextMatchesGrade(`Owlaris - Math ${gradeNumber}th Grade.md`, `Grade ${gradeNumber}`))
 
-      const shuffled = ['Grado 12', 'Grado 6', 'Grado 9', 'Grado 7']
-      assert.deepEqual(sortGradesForSchool(shuffled, eScholarisInput), ['Grado 6', 'Grado 7', 'Grado 9', 'Grado 12'])
+      const shuffled = ['Grade 12', 'Grado 6', '9th Grade', 'Grade 7']
+      assert.deepEqual(sortGradesForSchool(shuffled, eScholarisInput), ['Grado 6', 'Grade 7', '9th Grade', 'Grade 12'])
     })
   }
 

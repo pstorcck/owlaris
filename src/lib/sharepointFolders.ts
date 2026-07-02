@@ -240,13 +240,37 @@ export function getSharedSubjectChipsForGrade(grado?: string | null) {
   return chips
 }
 
+function eScholarisGradeNumber(value: string) {
+  const normalized = normalizeKey(value)
+  const match = normalized.match(/^grado\s*(6|7|8|9|10|11|12)$/)?.[1]
+    || normalized.match(/^grade\s*(6|7|8|9|10|11|12)$/)?.[1]
+    || normalized.match(/^(6|7|8|9|10|11|12)(?:st|nd|rd|th)?\s*grade$/)?.[1]
+    || normalized.match(/^(6|7|8|9|10|11|12)(?:st|nd|rd|th)$/)?.[1]
+    || normalized.match(/^g\s*(6|7|8|9|10|11|12)$/)?.[1]
+    || normalized.match(/^(6|7|8|9|10|11|12)$/)?.[1]
+  if (match) return match
+
+  const words: Record<string, string> = {
+    sixth: '6',
+    seventh: '7',
+    eighth: '8',
+    ninth: '9',
+    tenth: '10',
+    eleventh: '11',
+    twelfth: '12',
+  }
+  for (const [word, num] of Object.entries(words)) {
+    if (normalized === word || normalized === `${word} grade`) return num
+  }
+  return ''
+}
+
 export function isLikelyGradeFolder(name: string, input?: ColegioSharePointInput) {
   const normalized = normalizeKey(name)
   const expected = (input ? getExpectedGradeFallbacks(input) : [...GRADOS_MONTANO_ESCOLARIS, ...GRADOS_ESCHOLARIS])
     .map(normalizeKey)
   if (expected.includes(normalized)) return true
-  if (/^grado\s*(6|7|8|9|10|11|12)$/.test(normalized)) return true
-  if (/^(6|7|8|9|10|11|12)(st|nd|rd|th)?\s*grade$/.test(normalized)) return true
+  if (eScholarisGradeNumber(name)) return true
   return /(primaria|basico|bachillerato)$/.test(normalized)
 }
 
@@ -256,6 +280,13 @@ export function sortGradesForSchool(grades: string[], input?: ColegioSharePointI
     const ia = expected.indexOf(normalizeKey(a))
     const ib = expected.indexOf(normalizeKey(b))
     if (ia !== -1 || ib !== -1) return (ia === -1 ? 999 : ia) - (ib === -1 ? 999 : ib)
+    if (isEScholarisSchool(input)) {
+      const gradeA = eScholarisGradeNumber(a)
+      const gradeB = eScholarisGradeNumber(b)
+      if (gradeA || gradeB) {
+        return (gradeA ? Number(gradeA) : 999) - (gradeB ? Number(gradeB) : 999)
+      }
+    }
     return a.localeCompare(b, 'es')
   })
 }
@@ -268,6 +299,19 @@ function englishOrdinalGrade(num: string) {
   return `${num}th Grade`
 }
 
+function englishOrdinalWordGrade(num: string) {
+  const words: Record<string, string> = {
+    '6': 'Sixth Grade',
+    '7': 'Seventh Grade',
+    '8': 'Eighth Grade',
+    '9': 'Ninth Grade',
+    '10': 'Tenth Grade',
+    '11': 'Eleventh Grade',
+    '12': 'Twelfth Grade',
+  }
+  return words[num] || ''
+}
+
 export function getGradeFolderCandidates(grado?: string | null) {
   const folders: string[] = []
   const clean = (grado || '').trim()
@@ -277,13 +321,16 @@ export function getGradeFolderCandidates(grado?: string | null) {
   const normalized = normalizeKey(clean)
   pushUnique(folders, clean.normalize('NFD').replace(/[\u0300-\u036f]/g, ''))
 
-  const gradeNumber = normalized.match(/^grado\s*(\d+)$/)?.[1]
-    || normalized.match(/^(\d+)(?:st|nd|rd|th)?\s*grade$/)?.[1]
+  const gradeNumber = eScholarisGradeNumber(clean)
   if (gradeNumber) {
     pushUnique(folders, gradeNumber)
     pushUnique(folders, `Grado ${gradeNumber}`)
     pushUnique(folders, `Grade ${gradeNumber}`)
     pushUnique(folders, englishOrdinalGrade(gradeNumber))
+    pushUnique(folders, englishOrdinalGrade(gradeNumber).replace(' Grade', ''))
+    pushUnique(folders, englishOrdinalWordGrade(gradeNumber))
+    pushUnique(folders, englishOrdinalWordGrade(gradeNumber).replace(' Grade', ''))
+    pushUnique(folders, `G${gradeNumber}`)
   }
 
   const spanishVariants: Record<string, string[]> = {
