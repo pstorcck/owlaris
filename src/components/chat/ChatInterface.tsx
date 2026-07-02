@@ -121,6 +121,7 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
   )
   const [mostrandoSubOlimpiadas, setMostrandoSubOlimpiadas] = useState(false)
   const [mostrandoGrados, setMostrandoGrados]               = useState(false)
+  const [gradoTemp, setGradoTemp]                           = useState('')
   const [gradosDisponibles, setGradosDisponibles]           = useState<string[]>([])
 
   // Cargar grados al iniciar
@@ -745,91 +746,115 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
 
       <div className="owlaris-root">
         {/* PANEL DE GRADOS */}
-        {mostrandoGrados && (
-          <div style={{position:'fixed',inset:0,zIndex:100,background:'rgba(30,27,75,.6)',backdropFilter:'blur(12px)',display:'flex',alignItems:'center',justifyContent:'center',padding:'20px'}}
-            onClick={e => { if(e.target===e.currentTarget) setMostrandoGrados(false) }}>
-            <div style={{background:'white',borderRadius:'28px',padding:'32px',width:'100%',maxWidth:'440px',boxShadow:'0 32px 80px rgba(30,27,75,.25)'}}>
-              <p style={{fontSize:'22px',fontWeight:800,color:'#1E1B4B',marginBottom:'6px',fontFamily:"'Syne',sans-serif",letterSpacing:'-0.5px'}}>
-                {idiomaIngles ? 'Select your grade' : 'Selecciona tu grado'}
-              </p>
-              <p style={{fontSize:'12px',color:'#9490B8',marginBottom:'24px',fontWeight:500}}>
-                {idiomaIngles ? 'Tap your current grade' : 'Toca tu grado actual'}
-              </p>
-              <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(88px,1fr))',gap:'12px',marginBottom:'28px'}}>
-                {gradosDisponibles.map(grado => (
-                  <button key={grado}
-                    onClick={async () => {
-                      setMostrandoGrados(false)
-                      setGradoAlumno(grado)
-                      setMateriaAlumno('')
-                      setSugerencias([])
-                      setEstadoChat('esperando_materia')
-                      supabase.from('usuarios').update({ grado }).eq('id', usuario.id)
-                      const res: Response = await fetch('/api/preguntar', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                          pregunta: '__CARGAR_MATERIAS__',
-                          estado: 'esperando_materia',
-                          grado_override: grado,
-                          user_id: usuario.id,
-                          idioma_ingles: idiomaIngles,
-                          nombre_alumno: nombreAlumno,
-                        })
-                      })
-                      const data = await res.json()
-                      if (data.materias_disponibles) {
-                        materiasBaseRef.current = data.materias_disponibles
-                        setChipsMateria(traducirChips(data.materias_disponibles, idiomaIngles))
-                        setEstadoChat('esperando_materia')
-                      }
-                    }}
-                    style={{
-                      background: grado === gradoAlumno 
-                        ? 'linear-gradient(135deg,#7C3AED,#5B21B6)' 
-                        : 'white',
-                      color: grado === gradoAlumno ? 'white' : '#1E1B4B',
-                      border: grado === gradoAlumno 
-                        ? 'none' 
-                        : '1.5px solid rgba(109,40,217,.12)',
-                      borderRadius:'20px',
-                      padding:'18px 16px',
-                      fontSize:'15px',
-                      fontWeight:700,
-                      cursor:'pointer',
-                      transition:'all .25s',
-                      boxShadow: grado === gradoAlumno 
-                        ? '0 8px 24px rgba(109,40,217,.35)' 
-                        : '0 2px 12px rgba(109,40,217,.06)',
-                      display:'flex',
-                      flexDirection:'column',
-                      alignItems:'center',
-                      gap:'6px',
-                      minWidth:'88px',
-                      transform: grado === gradoAlumno ? 'translateY(-2px) scale(1.04)' : 'none',
-                    }}>
-                    <span style={{
-                        fontSize:'28px',
-                        fontWeight:800,
-                        fontFamily:"'Syne',sans-serif",
-                        lineHeight:1,
-                        color: grado === gradoAlumno ? 'rgba(255,255,255,.9)' : '#7C3AED',
-                      }}>
-                        {grado.replace(/[^0-9]/g,'') || grado.substring(0,2)}
-                      </span>
-                      <span style={{fontSize:'10px',fontWeight:600,opacity:.75,letterSpacing:'.5px',textTransform:'uppercase'}}>
-                        {grado.includes('Grado') ? 'Grade' : grado.replace(/[0-9]/g,'').trim() || 'Grade'}
-                      </span>
-                  </button>
+        {mostrandoGrados && (() => {
+          const esUS = gradosDisponibles.length > 0 && gradosDisponibles.every(g => /^Grado \d+$/.test(g))
+          const grupos: { titulo: string; grados: string[] }[] = []
+          if (esUS) {
+            const middle = gradosDisponibles.filter(g => ['Grado 6','Grado 7','Grado 8','Grado 9'].includes(g))
+            const high = gradosDisponibles.filter(g => ['Grado 10','Grado 11','Grado 12'].includes(g))
+            const otros = gradosDisponibles.filter(g => !middle.includes(g) && !high.includes(g))
+            if (middle.length) grupos.push({ titulo: 'Middle School', grados: middle })
+            if (high.length) grupos.push({ titulo: 'High School', grados: high })
+            if (otros.length) grupos.push({ titulo: idiomaIngles ? 'Other' : 'Otros', grados: otros })
+          } else {
+            const prim = gradosDisponibles.filter(g => /prim/i.test(g))
+            const bas = gradosDisponibles.filter(g => /b[aá]sico/i.test(g))
+            const bach = gradosDisponibles.filter(g => /bach/i.test(g))
+            const otros = gradosDisponibles.filter(g => !prim.includes(g) && !bas.includes(g) && !bach.includes(g))
+            if (prim.length) grupos.push({ titulo: 'Primaria', grados: prim })
+            if (bas.length) grupos.push({ titulo: 'Básico', grados: bas })
+            if (bach.length) grupos.push({ titulo: 'Bachillerato', grados: bach })
+            if (otros.length) grupos.push({ titulo: idiomaIngles ? 'Other' : 'Otros', grados: otros })
+          }
+          const numeroDe = (g: string) => g.startsWith('Grado ') ? g.replace('Grado ','') : g.split(' ')[0]
+          const etiquetaDe = (g: string) => g.startsWith('Grado ') ? 'Grade' : g.split(' ').slice(1).join(' ')
+          const confirmar = async () => {
+            if (!gradoTemp) return
+            const grado = gradoTemp
+            setMostrandoGrados(false)
+            setGradoTemp('')
+            setGradoAlumno(grado)
+            setMateriaAlumno('')
+            setSugerencias([])
+            setEstadoChat('esperando_materia')
+            supabase.from('usuarios').update({ grado }).eq('id', usuario.id)
+            const res: Response = await fetch('/api/preguntar', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                pregunta: '__CARGAR_MATERIAS__',
+                estado: 'esperando_materia',
+                grado_override: grado,
+                user_id: usuario.id,
+                idioma_ingles: idiomaIngles,
+                nombre_alumno: nombreAlumno,
+              })
+            })
+            const data = await res.json()
+            if (data.materias_disponibles) {
+              materiasDisponiblesRef.current = data.materias_disponibles
+              materiasBaseRef.current = data.materias_disponibles
+              setChipsMateria(traducirChips(data.materias_disponibles, idiomaIngles))
+              setEstadoChat('esperando_materia')
+            }
+          }
+          return (
+            <div style={{position:'fixed',inset:0,zIndex:100,background:'linear-gradient(135deg,rgba(26,16,64,.97) 0%,rgba(13,8,38,.97) 100%)',backdropFilter:'blur(16px)',display:'flex',alignItems:'center',justifyContent:'center',padding:'20px',overflowY:'auto'}}
+              onClick={e => { if(e.target===e.currentTarget) { setMostrandoGrados(false); setGradoTemp('') } }}>
+              <div style={{width:'100%',maxWidth:'480px'}}>
+                <div style={{textAlign:'center',marginBottom:'28px'}}>
+                  <div style={{width:'56px',height:'56px',borderRadius:'16px',background:'rgba(124,58,237,.2)',border:'1px solid rgba(124,58,237,.4)',display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 16px'}}>
+                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#A78BFA" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+                  </div>
+                  <p style={{fontSize:'24px',fontWeight:800,color:'white',margin:'0 0 6px',letterSpacing:'-0.5px',fontFamily:"'Syne',sans-serif"}}>
+                    {idiomaIngles ? 'What grade are you in?' : '¿En qué grado estás?'}
+                  </p>
+                  <p style={{fontSize:'14px',color:'rgba(255,255,255,.45)',margin:0}}>
+                    {idiomaIngles ? 'Select your grade to see your subjects' : 'Selecciona tu grado para ver tus materias'}
+                  </p>
+                </div>
+                {grupos.map(grupo => (
+                  <div key={grupo.titulo} style={{marginBottom:'20px'}}>
+                    <p style={{fontSize:'11px',fontWeight:600,letterSpacing:'1.5px',color:'rgba(167,139,250,.7)',textTransform:'uppercase',margin:'0 0 12px 2px'}}>{grupo.titulo}</p>
+                    <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(100px,1fr))',gap:'10px'}}>
+                      {grupo.grados.map(grado => {
+                        const sel = grado === gradoTemp
+                        return (
+                          <button key={grado} onClick={() => setGradoTemp(grado)}
+                            style={{
+                              display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:'5px',
+                              padding:'18px 12px',borderRadius:'14px',
+                              border: sel ? '1px solid transparent' : '1px solid rgba(124,58,237,.25)',
+                              background: sel ? 'linear-gradient(135deg,#7C3AED,#5B21B6)' : 'rgba(255,255,255,.05)',
+                              cursor:'pointer',transition:'all .18s ease',
+                              transform: sel ? 'translateY(-2px)' : 'none',
+                              boxShadow: sel ? '0 8px 32px rgba(124,58,237,.4)' : 'none',
+                            }}>
+                            <span style={{fontSize:'26px',fontWeight:800,lineHeight:1,letterSpacing:'-0.5px',color: sel ? 'white' : 'rgba(255,255,255,.6)',fontFamily:"'Syne',sans-serif"}}>{numeroDe(grado)}</span>
+                            <span style={{fontSize:'10px',fontWeight:600,letterSpacing:'.8px',textTransform:'uppercase',color: sel ? 'rgba(255,255,255,.75)' : 'rgba(255,255,255,.35)'}}>{etiquetaDe(grado)}</span>
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
                 ))}
+                <button onClick={confirmar} disabled={!gradoTemp}
+                  style={{width:'100%',padding:'15px',borderRadius:'14px',border:'none',
+                    background:'linear-gradient(135deg,#7C3AED,#5B21B6)',color:'white',fontSize:'15px',fontWeight:700,
+                    cursor: gradoTemp ? 'pointer' : 'not-allowed',
+                    opacity: gradoTemp ? 1 : .35,
+                    transition:'all .2s',letterSpacing:'-0.2px',marginTop:'8px'}}>
+                  {gradoTemp
+                    ? (idiomaIngles ? 'Continue with ' : 'Continuar con ') + gradoTemp
+                    : (idiomaIngles ? 'Confirm grade' : 'Confirmar grado')}
+                </button>
+                <p style={{textAlign:'center',fontSize:'12px',color:'rgba(255,255,255,.25)',margin:'16px 0 0'}}>
+                  {idiomaIngles ? 'You can change this later' : 'Puedes cambiarlo después'}
+                </p>
               </div>
-              <button onClick={() => setMostrandoGrados(false)}
-                style={{width:'100%',background:'#F8F7FF',border:'1px solid rgba(109,40,217,.1)',borderRadius:'14px',padding:'13px',fontSize:'13px',fontWeight:600,color:'#9490B8',cursor:'pointer'}}>
-                {idiomaIngles ? 'Cancel' : 'Cancelar'}
-              </button>
             </div>
-          </div>
-        )}
+          )
+        })()}
         {/* Header */}
         <header className="o-header">
           <div style={{maxWidth:'900px',margin:'0 auto',display:'flex',alignItems:'center',justifyContent:'space-between',gap:'16px'}}>
