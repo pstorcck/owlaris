@@ -46,6 +46,8 @@ type InteraccionReporte = {
   estado_evaluacion?: string | null
   documento_fuente?: string | null
   operacion_canonica?: string | null
+  op_respuesta_alumno?: string | null
+  op_estado?: string | null
   creado_en?: string | null
 }
 
@@ -110,6 +112,33 @@ function calcularMetricasHoy(interacciones: InteraccionReporte[]) {
   }
 }
 
+function etiquetaResultado(estado?: string | null, opEstado?: string | null) {
+  if (estado === 'correcto' || estado === 'equivalente') return 'Correcta'
+  if (estado === 'incorrecto') return 'Por reforzar'
+  if (estado === 'paso_correcto') return 'Paso correcto'
+  if (opEstado === 'pendiente') return 'Pendiente'
+  return 'Registrada'
+}
+
+function construirEvidenciaHoy(interacciones: InteraccionReporte[]) {
+  return interacciones
+    .filter(i => i.operacion_canonica || i.estado_evaluacion)
+    .map((i, idx) => ({
+      secuencia: idx + 1,
+      hora: i.creado_en
+        ? new Date(i.creado_en).toLocaleTimeString('es-GT', { hour: '2-digit', minute: '2-digit' })
+        : '',
+      tema: (i.tema_detectado || 'Práctica guiada').replace(/\s+/g, ' ').trim().substring(0, 120),
+      ejercicio: i.operacion_canonica
+        ? `Operación / habilidad: ${i.operacion_canonica}`
+        : 'Ejercicio académico registrado',
+      respuesta_estudiante: (i.op_respuesta_alumno || i.pregunta || '').replace(/\s+/g, ' ').trim().substring(0, 240),
+      resultado: etiquetaResultado(i.estado_evaluacion, i.op_estado),
+      fuente: i.documento_fuente || '',
+    }))
+    .slice(0, 80)
+}
+
 export async function POST(req: NextRequest) {
   try {
     const OpenAI = (await import('openai')).default
@@ -137,12 +166,13 @@ export async function POST(req: NextRequest) {
     const ventana = ventanaHoyGuatemala()
     const { data: interaccionesHoy } = await supabase
       .from('interacciones')
-      .select('pregunta,respuesta,tema_detectado,estado_evaluacion,documento_fuente,operacion_canonica,creado_en')
+      .select('pregunta,respuesta,tema_detectado,estado_evaluacion,documento_fuente,operacion_canonica,op_respuesta_alumno,op_estado,creado_en')
       .eq('usuario_id', user.id)
       .gte('creado_en', ventana.start.toISOString())
       .lt('creado_en', ventana.end.toISOString())
       .order('creado_en', { ascending: true })
     const metricasHoy = calcularMetricasHoy((interaccionesHoy || []) as InteraccionReporte[])
+    const evidenciaHoy = construirEvidenciaHoy((interaccionesHoy || []) as InteraccionReporte[])
 
     const conversacion = historial.map((m: {rol:string; contenido:string}) =>
       `${m.rol === 'usuario' ? 'Alumno' : 'Owlaris'}: ${m.contenido}`
@@ -209,6 +239,7 @@ REGLAS ESTRICTAS:
     analisis.adaptaciones_dificultad = adaptaciones
     analisis.nivel_dificultad_final = nivelFinal
     analisis.metricas_hoy = metricasHoy
+    analisis.evidencia_hoy = evidenciaHoy
     analisis.frase_motivacional = fraseMotivacionalSesion(seed)
     analisis.fecha_generacion = new Date().toISOString()
     analisis.grado = grado

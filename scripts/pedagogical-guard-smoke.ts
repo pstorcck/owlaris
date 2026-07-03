@@ -6,6 +6,11 @@ import {
   isPendingContextQuestion,
   stripUnapprovedExternalResources,
 } from '../src/lib/tutorContext'
+import {
+  buildCourseTopicListResponse,
+  extractCourseTopicIndex,
+  isCourseTopicListRequest,
+} from '../src/lib/courseTopics'
 
 function main() {
   assert.equal(shouldGuideWithoutFinalAnswer({
@@ -75,6 +80,39 @@ function main() {
   assert.equal(strippedResource.guardActivado, true)
   assert.doesNotMatch(strippedResource.text, /youtube|Eduardo/i)
   assert.match(strippedResource.text, /material oficial/)
+
+  assert.equal(isCourseTopicListRequest('Dame todos los temas de esta clase'), true)
+  const completeIndex = extractCourseTopicIndex(`
+## Índice de temas
+Cantidad de temas: 3
+1. Forces and motion
+2. Energy in interactions
+3. Waves and information
+`)
+  assert.equal(completeIndex.declaredCount, 3)
+  assert.equal(completeIndex.topics.length, 3)
+  assert.equal(completeIndex.incomplete, false)
+  const completeResponse = buildCourseTopicListResponse({
+    index: completeIndex,
+    subject: 'Science Grade 8',
+    documentName: 'Owlaris - Science Grade 8.md',
+  })
+  assert.match(completeResponse, /Forces and motion/)
+
+  const incompleteIndex = extractCourseTopicIndex(`
+Mapa del curso
+36 temas de ciclo completo
+- Forces and motion
+- Energy transfer
+`)
+  assert.equal(incompleteIndex.declaredCount, 36)
+  assert.equal(incompleteIndex.incomplete, true)
+  const incompleteResponse = buildCourseTopicListResponse({
+    index: incompleteIndex,
+    subject: 'Science Grade 8',
+  })
+  assert.match(incompleteResponse, /36 temas/)
+  assert.match(incompleteResponse, /solo puedo recuperar 2/)
 
   console.log('pedagogical-guard smoke passed')
 }

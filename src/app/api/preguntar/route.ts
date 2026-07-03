@@ -4,6 +4,11 @@ import { checkContentSafety, type ContentSafetyResult } from '@/lib/contentSafet
 import { guardHumanisticResponse } from '@/lib/humanisticSafety'
 import { guardNoFinalAnswer } from '@/lib/pedagogicalGuard'
 import {
+  buildCourseTopicListResponse,
+  extractCourseTopicIndex,
+  isCourseTopicListRequest,
+} from '@/lib/courseTopics'
+import {
   CARPETA_COMPARTIDA_OWLARIS,
   getGradeFolderCandidates,
   getSharedSubjectChipsForGrade,
@@ -63,6 +68,7 @@ El contenido no tendrá números de lección asociados. Busca y relaciona la pre
 Si el alumno dice que no entiende una lección por número, pero no indica el tema, pregúntale qué tema, concepto o ejercicio quiere trabajar antes de avanzar.
 Mantén el contexto activo: si hay un ejercicio pendiente y el alumno pregunta si puede resolverlo sin calculadora, pide ayuda, dice que no entiende o reclama que no respondiste, NO cambies de ejercicio ni de tema. Responde esa duda y vuelve al mismo ejercicio pendiente.
 No compartas enlaces, videos, canales o recursos externos no autorizados. Trabaja con el contenido oficial de Owlaris y SharePoint.
+Si el alumno pide todos los temas, el índice, el mapa del curso o la lista completa de la clase, eso es orientación académica permitida. Debes listar los temas oficiales disponibles; no lo trates como una solicitud de copia.
 
 REGLA DE PROFUNDIDAD:
 No respondas demasiado corto cuando el alumno necesite entender. Desarrolla la explicación. Usa ejemplos breves. Busca que la respuesta no solo conteste, sino que enseñe.
@@ -1457,6 +1463,67 @@ export async function POST(req: NextRequest) {
       const result = await buscarContenido(colegioSharePoint, gradoEfectivo, materiaConsultaSharePoint, pregunta)
       contenidoCurricular = result.contenido
       documentoFuente = result.archivo
+    }
+
+    if (tipoPregunta === 'academica' && !esBienvenida && isCourseTopicListRequest(pregunta)) {
+      if (!contenidoCurricular) {
+        const respuesta = respuestaSinFuenteSuficiente(idiomaIngles)
+        const { data: insertedRow } = await supabase.from('interacciones').insert({
+          usuario_id: user.id,
+          colegio_id: perfil.colegio_id,
+          materia_id: materia_uuid,
+          grado: gradoEfectivo,
+          tema_detectado: 'Solicitud de índice de temas',
+          pregunta,
+          respuesta,
+          tokens_usados: 0,
+          costo_usd: 0,
+          modelo_usado: 'course_index_guard',
+          documento_fuente: documentoFuente,
+          sospecha_copia: false,
+          guard_activado: true,
+        }).select('id').single()
+        return NextResponse.json({
+          respuesta,
+          source: 'course_index_guard',
+          tokens: 0,
+          documento_fuente: documentoFuente,
+          interaction_id: insertedRow?.id || null,
+          pending_math_interaction_id: null,
+        })
+      }
+
+      const index = extractCourseTopicIndex(contenidoCurricular)
+      const respuesta = buildCourseTopicListResponse({
+        index,
+        subject: materiaConsultaSharePoint || materia_id || 'esta clase',
+        documentName: documentoFuente,
+        idiomaIngles,
+      })
+      const { data: insertedRow } = await supabase.from('interacciones').insert({
+        usuario_id: user.id,
+        colegio_id: perfil.colegio_id,
+        materia_id: materia_uuid,
+        grado: gradoEfectivo,
+        tema_detectado: 'Índice de temas',
+        pregunta,
+        respuesta,
+        tokens_usados: 0,
+        costo_usd: 0,
+        modelo_usado: 'course_index_guard',
+        documento_fuente: documentoFuente,
+        sospecha_copia: false,
+        guard_activado: index.incomplete || index.source === 'none',
+      }).select('id').single()
+      supabase.from('usuarios').update({ ultimo_acceso: new Date().toISOString() }).eq('id', user.id).then(() => {})
+      return NextResponse.json({
+        respuesta,
+        source: 'course_index_guard',
+        tokens: 0,
+        documento_fuente: documentoFuente,
+        interaction_id: insertedRow?.id || null,
+        pending_math_interaction_id: null,
+      })
     }
 
     const operacionDirecta = inferCanonicalOperationFromText(pregunta)

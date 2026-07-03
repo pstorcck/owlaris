@@ -171,6 +171,7 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
   const finalRef = useRef<HTMLDivElement>(null)
   const materiasDisponiblesRef = useRef<string[]>(materiasIniciales)
   const inputRef = useRef<HTMLTextAreaElement>(null)
+  const bienvenidaInicializadaRef = useRef(false)
   const router   = useRouter()
   const supabase = createClient()
 
@@ -221,6 +222,8 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
   }, [gradoGuardado, idiomaIngles, nombreInicial, usuario.id])
 
   useEffect(() => {
+    if (bienvenidaInicializadaRef.current) return
+    bienvenidaInicializadaRef.current = true
     const nombre = usuario.nombre_completo.split(' ')[0]
     const msg = gradoGuardado
       ? (idiomaIngles
@@ -238,7 +241,7 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
     setNombreAlumno(nombre)
     // Sin grado guardado: abrir modal de grados automáticamente
     if (!gradoGuardado) setMostrandoGrados(true)
-  }, [idiomaIngles])
+  }, [gradoGuardado, idiomaIngles, usuario.nombre_completo])
 
   // Traducir chips cuando cambia idioma
   useEffect(() => {
@@ -708,6 +711,7 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
       const alumnoNombre = nombreAlumno || usuario.nombre_completo
       const estudianteMsgs = mensajes.filter(m => m.rol === 'usuario').length
       const metricasHoy = data.analisis.metricas_hoy || {}
+      const evidenciaHoy = Array.isArray(data.analisis.evidencia_hoy) ? data.analisis.evidencia_hoy : []
       const documentos = Array.from(new Set([
         ...mensajes.map(m => m.documento_fuente).filter(Boolean),
         ...(Array.isArray(metricasHoy.fuentes) ? metricasHoy.fuentes : []),
@@ -809,20 +813,30 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
       addPage()
       doc.setFillColor(20,28,45); doc.rect(0, 0, W, 16, 'F')
       doc.setFontSize(11); doc.setFont('helvetica','bold'); doc.setTextColor(255,255,255)
-      doc.text('ANEXO: HISTORIAL DE LA SESION', margin, 11); y = 26
-      for (const m of mensajes) {
-        if (m.id === 'bienvenida') continue
-        const esAlumno = m.rol === 'usuario'
-        const textLines = doc.splitTextToSize(m.contenido, maxW - 16)
-        const boxH = textLines.length * 4.5 + 10
+      doc.text('ANEXO: EVIDENCIA DE ACTIVIDAD', margin, 11); y = 26
+      if (evidenciaHoy.length === 0) {
+        wrapped('Todavía no hay ejercicios evaluados suficientes para mostrar evidencia detallada. El reporte ejecutivo resume la actividad disponible del día.', margin, y, maxW, 9.2, palette.muted)
+        y += 12
+      }
+      for (const item of evidenciaHoy) {
+        const header = `#${item.secuencia || ''} ${item.hora ? '· ' + item.hora : ''} · ${item.resultado || 'Registrada'}`
+        const detail = [
+          item.tema ? `Tema: ${item.tema}` : null,
+          item.ejercicio ? `Ejercicio: ${item.ejercicio}` : null,
+          item.respuesta_estudiante ? `Respuesta del estudiante: ${item.respuesta_estudiante}` : null,
+          item.fuente ? `Fuente: ${item.fuente}` : null,
+        ].filter(Boolean).join('\n')
+        const detailLines = doc.splitTextToSize(detail, maxW - 16)
+        const boxH = detailLines.length * 4.4 + 14
         checkY(boxH)
-        doc.setFillColor(esAlumno ? 239 : 255, esAlumno ? 246 : 255, esAlumno ? 255 : 255)
+        doc.setFillColor(255, 255, 255)
         doc.roundedRect(margin, y - 5, maxW, boxH, 3, 3, 'F')
+        doc.setDrawColor(palette.line[0], palette.line[1], palette.line[2]); doc.roundedRect(margin, y - 5, maxW, boxH, 3, 3, 'S')
         doc.setFontSize(8); doc.setFont('helvetica','bold')
-        doc.setTextColor(esAlumno ? 37 : 100, esAlumno ? 99 : 90, esAlumno ? 235 : 160)
-        doc.text(esAlumno ? (nombreAlumno || usuario.nombre_completo.split(' ')[0]) : 'Owlaris Tutor', margin + 4, y + 1)
-        doc.setFontSize(9); doc.setFont('helvetica','normal'); doc.setTextColor(30,41,59)
-        doc.text(textLines, margin + 4, y + 7); y += boxH + 4
+        doc.setTextColor(palette.violet[0], palette.violet[1], palette.violet[2])
+        doc.text(header, margin + 4, y + 1)
+        doc.setFontSize(8.7); doc.setFont('helvetica','normal'); doc.setTextColor(30,41,59)
+        doc.text(detailLines, margin + 4, y + 8); y += boxH + 4
       }
       const totalPages = doc.getNumberOfPages()
       for (let i = 1; i <= totalPages; i++) {
@@ -1014,7 +1028,7 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
                 }
               }}
                 style={{background:idiomaIngles?'linear-gradient(135deg,#1d4ed8,#1e40af)':'#F3F0FF',border:idiomaIngles?'none':'1px solid rgba(109,40,217,.2)',borderRadius:'10px',padding:'6px 12px',fontSize:'12px',fontWeight:700,color:idiomaIngles?'white':'#7C3AED',cursor:'pointer',display:'flex',alignItems:'center',gap:'5px',transition:'all .2s',flexShrink:0}}>
-                {idiomaIngles ? '🇬🇧 EN' : '🇬🇧 EN'}
+                {idiomaIngles ? '🇪🇸 ES' : '🇬🇧 EN'}
               </button>
             </div>
 
