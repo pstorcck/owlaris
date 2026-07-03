@@ -31,6 +31,11 @@ function normalize(text: string): string {
     .replace(/[\u0300-\u036f]/g, '')
     .replace(/\s+/g, ' ')
     .trim()
+    // Sustituciones foneticas comunes al escribir rapido (komo->como, kiero->quiero, qiero->quiero).
+    // Solo afecta el texto usado para comparar contra las listas de riesgo, no lo que ve el alumno.
+    .replace(/k([ie])/g, 'qu$1')
+    .replace(/k/g, 'c')
+    .replace(/q(?!u)([ie])/g, 'qu$1')
 }
 
 function includesAny(text: string, patterns: Array<string | RegExp>): boolean {
@@ -192,10 +197,10 @@ export function checkContentSafety(pregunta: string, idiomaIngles = false): Cont
   if (includesAny(p, HARM_OTHERS)) {
     return { bloqueado: true, tipo: 'dano_otros', severidad: 'alta', debeAlertar: true, respuesta: immediateSafetyResponse('dano_otros', idiomaIngles) }
   }
-  if (includesAny(p, WEAPONS)) {
+  if (includesAny(p, WEAPONS) && !isAcademicQuestion(p)) {
     return { bloqueado: true, tipo: 'armas', severidad: 'alta', debeAlertar: true, respuesta: immediateSafetyResponse('armas', idiomaIngles) }
   }
-  if (includesAny(p, DRUGS_OR_CRIME)) {
+  if (includesAny(p, DRUGS_OR_CRIME) && !isAcademicQuestion(p)) {
     return { bloqueado: true, tipo: 'drogas_delitos', severidad: 'media', debeAlertar: true, respuesta: outOfScopeResponse(idiomaIngles) }
   }
   if (includesAny(p, SEXUAL_NON_ACADEMIC)) {

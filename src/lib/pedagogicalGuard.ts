@@ -7,8 +7,8 @@ type GuardOptions = {
 }
 
 const SOLICITUD_RESPUESTA_DIRECTA = [
-  /dame\s+(?:solo\s+)?(?:la\s+)?respuesta/i,
-  /solo\s+dime/i,
+  /(?:dame|darme)\s+(?:solo\s+)?(?:la\s+respuesta|el\s+resultado)/i,
+  /solo\s+(?:dime|dame|darme)/i,
   /hazme\s+(?:la\s+)?tarea/i,
   /resu[eé]lve(?:me)?\s+todo/i,
   /no\s+me\s+expliques/i,
@@ -34,10 +34,23 @@ const CONTEXTO_PRACTICA = [
 ]
 
 const FRASES_RESPUESTA_FINAL = [
-  /\b(?:la\s+)?respuesta\s+correcta\s+(?:es|ser[ií]a|:)\s*[^\n.]+[.\n]?/gi,
-  /\b(?:el\s+)?resultado\s+correcto\s+(?:es|ser[ií]a|:)\s*[^\n.]+[.\n]?/gi,
-  /\b(?:the\s+)?correct\s+answer\s+(?:is|would\s+be|:)\s*[^\n.]+[.\n]?/gi,
-  /\b(?:the\s+)?correct\s+result\s+(?:is|would\s+be|:)\s*[^\n.]+[.\n]?/gi,
+  // Anuncios explícitos de respuesta final (con o sin "correcta/o")
+  /\b(?:la\s+)?respuesta\s+(?:correcta\s+|final\s+)?(?:es|ser[ií]a|:)\s*[^\n.]+[.\n]?/gi,
+  /\b(?:el\s+)?resultado\s+(?:correcto\s+|final\s+)?(?:es|ser[ií]a|:)\s*[^\n.]+[.\n]?/gi,
+  /\b(?:the\s+)?(?:correct\s+|final\s+)?answer\s+(?:is|would\s+be|:)\s*[^\n.]+[.\n]?/gi,
+  /\b(?:the\s+)?(?:correct\s+|final\s+)?result\s+(?:is|would\s+be|:)\s*[^\n.]+[.\n]?/gi,
+  /\bfinal\s+answer\s*:?\s*-?\d+(?:[.,]\d+)?[^\n.]*[.\n]?/gi,
+  // Conclusiones que revelan el valor de la variable ("x = N", "x vale N", "el valor de x es N")
+  /\b(?:entonces|por lo tanto|as[ií]\s+que|en conclusi[oó]n|al final|finalmente)\s*,?\s*(?:el\s+valor\s+de\s+)?x\s*(?:=|vale|es(?:\s+igual\s+a)?)\s*-?\d+(?:[.,]\d+)?[^\n.]*[.\n]?/gi,
+  /\b(?:so|thus|therefore|finally|in\s+conclusion|that\s+gives\s+us)\b[^\n.]{0,20}\bx\s*(?:=|is|equals)\s*-?\d+(?:[.,]\d+)?[^\n.]*[.\n]?/gi,
+  /\b(?:el\s+)?valor\s+(?:de\s+)?x\s+es\s+-?\d+(?:[.,]\d+)?[^\n.]*[.\n]?/gi,
+  /\bx\s+vale\s+-?\d+(?:[.,]\d+)?[^\n.]*[.\n]?/gi,
+  /\b(?:el\s+)?valor\s+final\s+es\s+-?\d+(?:[.,]\d+)?[^\n.]*[.\n]?/gi,
+  /\bllegamos\s+a\s+-?\d+(?:[.,]\d+)?[^\n.]*[.\n]?/gi,
+  /\bx\s+queda\s+en\s+-?\d+(?:[.,]\d+)?[^\n.]*[.\n]?/gi,
+  /\bx\s+da\s+-?\d+(?:[.,]\d+)?[^\n.]*[.\n]?/gi,
+  // "x = N" / "x=N" sueltos, como declaración final (no como parte de una ecuación con más operadores)
+  /\bx\s*=\s*-?\d+(?:[.,]\d+)?\.?(?=\s|$)/gi,
 ]
 
 export function shouldGuideWithoutFinalAnswer(options: GuardOptions): boolean {
