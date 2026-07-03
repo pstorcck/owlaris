@@ -71,7 +71,7 @@ function main() {
     activePrompt: 'Convierte la fracción 3/8 a decimal.',
   })
   assert.match(complaintContext, /Tienes razón/)
-  assert.match(complaintContext, /3\/8/)
+  assert.match(complaintContext, /3 \/ 8/)
 
   const strippedResource = stripUnapprovedExternalResources(
     'Te comparto este recurso de Eduardo Montano que puede ayudarte: https://www.youtube.com/c/EduardoMontano',

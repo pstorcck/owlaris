@@ -32,6 +32,18 @@ function asStringArray(value: unknown, fallback: string[]) {
   return clean.length > 0 ? clean : fallback
 }
 
+// El LLM a veces copia la respuesta cruda del alumno (un numero, "27?") en vez de
+// sintetizar un tema real. Se filtra antes de mostrarlo como "tema estudiado".
+function esTemaValido(valor: string) {
+  return !/^-?\d+([.,]\d+)?[?!.,]*$/.test(valor.trim())
+}
+
+function asTemasArray(value: unknown, fallback: string[]) {
+  return asStringArray(value, fallback).filter(esTemaValido).length > 0
+    ? asStringArray(value, fallback).filter(esTemaValido)
+    : fallback
+}
+
 type AdaptacionDificultadReporte = {
   tipo?: string
   nivel_anterior?: number
@@ -203,6 +215,7 @@ export async function POST(req: NextRequest) {
 
 REGLAS ESTRICTAS:
 - Explica qué materia estudió y qué temas trabajó de forma clara.
+- "temas" y "temas_por_materia" deben ser nombres de temas o habilidades (ej. "Ecuaciones con una variable", "Fracciones a decimal"). NUNCA copies ahí un numero suelto, una respuesta del alumno o texto tal cual lo escribio el alumno (ej. "4", "22", "27?", "convariable" no son temas validos).
 - Las áreas de mejora deben decir qué reforzar y cómo hacerlo, no solo listar debilidades.
 - NUNCA uses palabras como: error, incorrecto, falló, se equivocó, mal, fracaso, deficiente.
 - Las dificultades se expresan como "oportunidades de práctica" o "temas para reforzar".
@@ -243,7 +256,13 @@ REGLAS ESTRICTAS:
     const seed = `${user.id}-${new Date().toISOString().split('T')[0]}-${historial.length}-${materia}-${grado}`
     analisis.nivel = ['Excelente', 'Muy bien', 'En progreso', 'Con potencial'].includes(analisis.nivel) ? analisis.nivel : 'Muy bien'
     analisis.materias_estudiadas = asStringArray(analisis.materias_estudiadas, [materia || 'Materia trabajada'])
-    analisis.temas = asStringArray(analisis.temas, [materia ? `${materia} - Práctica guiada` : 'Práctica guiada'])
+    analisis.temas = asTemasArray(analisis.temas, [materia ? `${materia} - Práctica guiada` : 'Práctica guiada'])
+    if (Array.isArray(analisis.temas_por_materia)) {
+      analisis.temas_por_materia = analisis.temas_por_materia.map((tm: { materia?: string; temas?: unknown }) => ({
+        materia: String(tm?.materia || materia || '').trim() || materia,
+        temas: asTemasArray(tm?.temas, ['Práctica guiada']),
+      }))
+    }
     analisis.logros = asStringArray(analisis.logros, ['Participación activa durante la sesión'])
     analisis.areas_mejora = asStringArray(analisis.areas_mejora, ['Reforzar el procedimiento paso a paso y explicar la respuesta con sus propias palabras'])
     analisis.recomendaciones_alumno = asStringArray(analisis.recomendaciones_alumno, ['Practicar una idea a la vez y explicar el proceso antes de pasar al siguiente ejercicio'])
