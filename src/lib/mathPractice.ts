@@ -51,83 +51,128 @@ export function isRepeatedMathOperation(op: string | null | undefined, recentOps
   return recentOps.some((recent) => normalizePracticeOperation(recent) === key)
 }
 
-function hashText(value: string) {
-  let hash = 0
-  for (let i = 0; i < value.length; i += 1) {
-    hash = ((hash << 5) - hash + value.charCodeAt(i)) | 0
-  }
-  return Math.abs(hash)
+function randInt(min: number, max: number) {
+  return min + Math.floor(Math.random() * (max - min + 1))
 }
 
-// Solo suma/resta, sin * ni /. Filtra el banco cuando el alumno pidio ese tema en concreto.
-function isPureAdditionSubtraction(op: string) {
-  return /^[\d.\s+-]+$/.test(op) && !/^-/.test(op.trim())
+// Un valor con signo listo para concatenar despues de "=" o "+" sin producir
+// "+-5" (doble signo pegado), que algunos parsers de expresiones rechazan.
+function withSign(value: number) {
+  return value >= 0 ? `+${value}` : `-${Math.abs(value)}`
 }
 
-// Solo multiplicacion/division, sin + ni -.
-function isPureMultiplicationDivision(op: string) {
-  return /^[\d.\s*/]+$/.test(op)
+// Generadores por nivel: cada llamada produce una operacion aleatoria dentro
+// de un rango amplio, en vez de elegir entre un puñado de ejercicios fijos.
+// Esa lista fija (6-8 items por nivel) era la causa real de la repeticion:
+// cualquier alumno con mas de unas pocas sesiones agotaba las combinaciones
+// posibles y el sistema quedaba obligado a repetir el mismo banco para siempre.
+const LEVEL_GENERATORS: Array<() => string> = [
+  // Nivel 1: suma, resta, multiplicacion o division simple.
+  () => {
+    const kind = randInt(0, 3)
+    if (kind === 0) return `${randInt(10, 89)}+${randInt(3, 70)}`
+    if (kind === 1) { const a = randInt(20, 99); const b = randInt(3, a - 3); return `${a}-${b}` }
+    if (kind === 2) return `${randInt(2, 12)}*${randInt(2, 12)}`
+    const b = randInt(2, 12); const k = randInt(2, 12); return `${b * k}/${b}`
+  },
+  // Nivel 2: dos pasos, orden de operaciones.
+  () => {
+    const kind = randInt(0, 3)
+    if (kind === 0) return `${randInt(4, 40)}+${randInt(2, 9)}*${randInt(2, 9)}`
+    if (kind === 1) {
+      const d = randInt(2, 8); const k = randInt(2, 15); const suma = d * k
+      const p = randInt(1, suma - 1)
+      return `(${p}+${suma - p})/${d}`
+    }
+    if (kind === 2) { const d = randInt(2, 8); const k = randInt(2, 15); return `${d * k}/${d}+${randInt(2, 30)}` }
+    return `${randInt(20, 70)}-${randInt(2, 9)}*${randInt(2, 9)}`
+  },
+  // Nivel 3: decimales/porcentajes.
+  () => {
+    const decimales = [0.1, 0.15, 0.2, 0.25, 0.3, 0.4, 0.5, 0.6, 0.75, 0.8, 0.9]
+    const d = decimales[randInt(0, decimales.length - 1)]
+    return `${d}*${randInt(2, 40) * 10}`
+  },
+  // Nivel 4: ecuaciones de un paso.
+  () => {
+    const kind = randInt(0, 3)
+    const b = randInt(2, 30)
+    if (kind === 0) { const x = randInt(2, 60); return `x+${b}=${x + b}` }
+    if (kind === 1) { const x = randInt(b + 2, b + 60); return `x-${b}=${x - b}` }
+    if (kind === 2) { const k = randInt(2, 15); return `x/${b}=${k}` }
+    const k = randInt(2, 15); return `x*${b}=${b * k}`
+  },
+  // Nivel 5: ecuaciones de dos pasos.
+  () => {
+    const m = randInt(2, 9); const x = randInt(2, 20); const c = randInt(1, 40)
+    const signo = randInt(0, 1) === 0 ? '+' : '-'
+    const r = signo === '+' ? m * x + c : m * x - c
+    return `${m}*x${signo}${c}=${r}`
+  },
+  // Nivel 6: ecuaciones con parentesis.
+  () => {
+    const m = randInt(2, 8); const x = randInt(2, 20); const c = randInt(1, 15)
+    const signo = randInt(0, 1) === 0 ? '+' : '-'
+    const dentro = signo === '+' ? x + c : x - c
+    return `${m}*(x${signo}${c})=${m * dentro}`
+  },
+  // Nivel 7: x en ambos lados.
+  () => {
+    const m2 = randInt(2, 8); const m1 = randInt(m2 + 1, m2 + 6)
+    const x = randInt(2, 20); const c1 = randInt(1, 30)
+    const c2 = (m1 - m2) * x + c1
+    return `${m1}*x+${c1}=${m2}*x+${c2}`
+  },
+  // Nivel 8: ecuaciones combinadas (parentesis + terminos en ambos lados).
+  () => {
+    const m2 = randInt(2, 6); const m1 = randInt(m2 + 1, m2 + 5)
+    const x = randInt(2, 15); const c1 = randInt(1, 10); const c2 = randInt(1, 10)
+    const d1 = randInt(1, 20)
+    const signo1 = randInt(0, 1) === 0 ? '+' : '-'
+    const signo2 = randInt(0, 1) === 0 ? '+' : '-'
+    const dentro1 = signo1 === '+' ? x + c1 : x - c1
+    const dentro2 = signo2 === '+' ? x + c2 : x - c2
+    const izquierda = m1 * dentro1 + d1
+    const d2 = izquierda - m2 * dentro2
+    return `${m1}*(x${signo1}${c1})+${d1}=${m2}*(x${signo2}${c2})${withSign(d2)}`
+  },
+]
+
+// Generadores dedicados para los enfoques de practica dirigida: garantizan por
+// construccion que la operacion sea pura (sin mezclar suma/resta con mult/div),
+// y crecen el rango con el nivel para no agotar las combinaciones en sesiones largas.
+function generateSumaResta(level: number): string {
+  const span = 30 + level * 25
+  if (randInt(0, 1) === 0) return `${randInt(4, span)}+${randInt(3, span)}`
+  const a = randInt(20, span * 2)
+  const b = randInt(3, Math.max(4, a - 2))
+  return `${a}-${b}`
 }
 
-function exercisePoolForLevel(level: number, focus: MathPracticeFocus = 'general') {
+function generateMultDiv(level: number): string {
+  const maxFactor = Math.min(50, 12 + level * 6)
+  if (randInt(0, 1) === 0) return `${randInt(2, maxFactor)}*${randInt(2, maxFactor)}`
+  const b = randInt(2, maxFactor); const k = randInt(2, maxFactor)
+  return `${b * k}/${b}`
+}
+
+function generateDecimal(): string {
+  return LEVEL_GENERATORS[2]()
+}
+
+function exerciseGeneratorFor(level: number, focus: MathPracticeFocus): () => string {
   const safeLevel = Math.min(8, Math.max(1, Number.isFinite(level) ? Math.round(level) : 1))
-  const pools = [
-    ['7+5', '48-19', '72/8', '8*6', '63-27', '9*7'],
-    ['8+3*2', '(10+6)/2', '24/3+5', '20-4*2', '30+6/2', '15-3*2'],
-    ['0.25*200', '0.10*80', '0.5*36', '0.15*60', '0.2*45', '0.75*24'],
-    ['x+5=12', 'x-8=14', 'x/4=6', 'x+9=20', 'x-11=7', 'x/3=9'],
-    ['2*x-4=10', '3*x+5=20', '4*x-7=21', '5*x+2=32', '6*x-3=27', '7*x+1=43'],
-    ['2*(x+3)=18', '3*(x-2)=15', '4*(x+1)=28', '5*(x-3)=20', '2*(x+7)=30'],
-    ['5*x+3=2*x+15', '4*x-1=x+11', '6*x+2=3*x+20', '7*x-5=2*x+25'],
-    ['4*(x-2)+3=2*(x+1)+9', '3*(x+4)-5=x+17', '2*(x-6)+8=4*x-10'],
-  ]
+
+  if (focus === 'suma_resta') return () => generateSumaResta(safeLevel)
+  if (focus === 'multiplicacion_division') return () => generateMultDiv(safeLevel)
+  if (focus === 'decimal') return generateDecimal
 
   if (focus === 'equation') {
     const equationMaxLevel = Math.min(8, Math.max(4, safeLevel + 3))
-    return pools.slice(3, equationMaxLevel).flat()
+    return () => LEVEL_GENERATORS[randInt(4, equationMaxLevel) - 1]()
   }
 
-  if (focus === 'decimal') return pools[2]
-
-  if (focus === 'suma_resta') {
-    const filtered = pools.slice(0, safeLevel).flat().filter(isPureAdditionSubtraction)
-    return filtered.length > 0 ? filtered : pools.slice(0, safeLevel).flat()
-  }
-
-  if (focus === 'multiplicacion_division') {
-    const filtered = pools.slice(0, safeLevel).flat().filter(isPureMultiplicationDivision)
-    return filtered.length > 0 ? filtered : pools.slice(0, safeLevel).flat()
-  }
-
-  return pools.slice(0, safeLevel).flat()
-}
-
-function fallbackExercise(recentOps: string[], level: number, focus: MathPracticeFocus = 'general') {
-  const seed = recentOps.length + Math.max(1, level) * 11
-  if (focus === 'equation' || level >= 4) {
-    const x = (seed % 9) + 2
-    const a = (seed % 5) + 2
-    const b = (seed % 7) + 1
-    return `${a}*x+${b}=${a * x + b}`
-  }
-  if (focus === 'decimal') {
-    const hundredths = [10, 15, 20, 25, 50, 75][seed % 6]
-    const quantity = ((seed % 9) + 2) * 10
-    return `${hundredths / 100}*${quantity}`
-  }
-  if (focus === 'suma_resta') {
-    const a = (seed % 60) + 15
-    const b = (seed % 30) + 5
-    return seed % 2 === 0 ? `${a}+${b}` : `${a + b}-${b}`
-  }
-  if (focus === 'multiplicacion_division') {
-    const a = (seed % 9) + 2
-    const b = (seed % 9) + 2
-    return seed % 2 === 0 ? `${a}*${b}` : `${a * b}/${b}`
-  }
-  const a = (seed % 40) + 12
-  const b = (seed % 9) + 2
-  return `${a}+${b}*2`
+  return () => LEVEL_GENERATORS[randInt(1, safeLevel) - 1]()
 }
 
 function formatOperation(op: string) {
@@ -138,8 +183,8 @@ function formatOperation(op: string) {
     .replace(/\//g, ' / ')
     .replace(/=/g, ' = ')
     .replace(/\s+/g, ' ')
-    .replace('( ', '(')
-    .replace(' )', ')')
+    .replace(/\(\s+/g, '(')
+    .replace(/\s+\)/g, ')')
     .trim()
 }
 
@@ -216,30 +261,34 @@ export function calculateAdaptiveDifficulty(input: {
   }
 }
 
+const MAX_GENERATION_ATTEMPTS = 60
+
 export function buildNextMathExercise(
   recentOps: Array<string | null | undefined>,
   level = 1,
   idiomaIngles = false,
   focus: MathPracticeFocus = 'general'
 ): MathPracticeExercise {
-  const recentClean = recentOps
-    .map((op) => normalizePracticeOperation(op))
-    .filter(Boolean)
-  const recentSet = new Set(recentClean)
-  const pool = exercisePoolForLevel(level, focus)
-  const start = hashText(`${recentClean.join('|')}|${level}|${focus}`) % pool.length
+  const recentSet = new Set(
+    recentOps.map((op) => normalizePracticeOperation(op)).filter(Boolean)
+  )
+  const generate = exerciseGeneratorFor(level, focus)
 
-  for (let i = 0; i < pool.length; i += 1) {
-    const op = pool[(start + i) % pool.length]
+  for (let attempt = 0; attempt < MAX_GENERATION_ATTEMPTS; attempt += 1) {
+    const op = generate()
     const key = normalizePracticeOperation(op)
-    if (!recentSet.has(key) && isSafeCanonicalOperation(op) && solveOperation(op) !== null) {
+    if (key && !recentSet.has(key) && isSafeCanonicalOperation(op) && solveOperation(op) !== null) {
       return { op, text: exerciseText(op, idiomaIngles) }
     }
   }
 
-  let op = fallbackExercise(recentClean, level, focus)
-  while (recentSet.has(normalizePracticeOperation(op))) {
-    op = fallbackExercise([...recentClean, op], level, focus)
+  // Con el rango de valores de los generadores esto es extremadamente
+  // improbable, pero siempre debe devolverse un ejercicio utilizable.
+  let op = generate()
+  let guard = 0
+  while (recentSet.has(normalizePracticeOperation(op)) && guard < 200) {
+    op = generate()
+    guard += 1
   }
   return { op, text: exerciseText(op, idiomaIngles) }
 }
