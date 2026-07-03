@@ -673,6 +673,10 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
         doc.setFontSize(size); doc.setFont('helvetica', bold ? 'bold' : 'normal'); setColor(color)
         doc.text(String(value || ''), x, yy)
       }
+      const textRight = (value: string, x: number, yy: number, size: number, bold = false, color = palette.ink) => {
+        doc.setFontSize(size); doc.setFont('helvetica', bold ? 'bold' : 'normal'); setColor(color)
+        doc.text(String(value || ''), x, yy, { align: 'right' })
+      }
       const wrapped = (value: string, x: number, yy: number, width: number, size = 9.5, color = palette.muted, bold = false) => {
         doc.setFontSize(size); doc.setFont('helvetica', bold ? 'bold' : 'normal'); setColor(color)
         const lines = doc.splitTextToSize(String(value || ''), width)
@@ -742,8 +746,8 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
       text('Alumno', margin + 6, y + 9, 8, true, palette.muted)
       text(alumnoNombre, margin + 6, y + 19, 14, true, palette.ink)
       text(`Grado: ${gradoAlumno || 'No asignado'}  |  Materia: ${materiaAlumno || 'No seleccionada'}`, margin + 6, y + 28, 8.5, false, palette.muted)
-      text(`Nivel adaptativo final: ${nivelDificultad}`, W - margin - 6, y + 14, 9, true, palette.violet)
-      text(`Duración: ${metricasHoy.duracion_minutos ? `${metricasHoy.duracion_minutos} minutos` : durStr || 'sesión corta'}`, W - margin - 6, y + 24, 8.5, false, palette.muted)
+      textRight(`Nivel adaptativo final: ${nivelDificultad}`, W - margin - 6, y + 14, 9, true, palette.violet)
+      textRight(`Duración: ${metricasHoy.duracion_minutos ? `${metricasHoy.duracion_minutos} minutos` : durStr || 'sesión corta'}`, W - margin - 6, y + 24, 8.5, false, palette.muted)
       y += 46
 
       const cardW = (maxW - 9) / 4
