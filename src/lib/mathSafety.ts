@@ -276,6 +276,16 @@ function buildGuidedMathHint(op: string | null | undefined, idiomaIngles: boolea
       ? 'First identify what operation is affecting x, then use the inverse operation to isolate it.'
       : 'Primero identifica qué operación afecta a x y luego usa la operación inversa para dejarla sola.'
   }
+  if (/\d+\.\d+/.test(clean) && clean.includes('*')) {
+    return idiomaIngles
+      ? 'For decimal multiplication, treat the decimal as a fraction or percentage: 0.15 means 15/100, so multiply by 15 and then divide by 100.'
+      : 'Para multiplicar con decimales, piensa el decimal como fracción o porcentaje: 0.15 significa 15/100, así que multiplica por 15 y luego divide entre 100.'
+  }
+  if (clean.includes('%')) {
+    return idiomaIngles
+      ? 'For a percentage, first change it to a decimal or fraction, then multiply by the quantity.'
+      : 'Para un porcentaje, primero conviértelo a decimal o fracción y luego multiplícalo por la cantidad.'
+  }
   if ((clean.includes('*') || clean.includes('/')) && (clean.includes('+') || clean.includes('-'))) {
     return idiomaIngles
       ? 'Remember the order of operations: solve multiplication or division before addition or subtraction.'

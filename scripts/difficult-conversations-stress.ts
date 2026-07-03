@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { checkContentSafety } from '../src/lib/contentSafety'
 import { guardHumanisticResponse } from '../src/lib/humanisticSafety'
+import { buildAnalogousWorkedExample, buildNextMathExercise, isRepeatedMathOperation, isWorkedExampleRequest, normalizePracticeOperation } from '../src/lib/mathPractice'
 import { handleMathEvaluation, inferCanonicalOperationFromText, solveOperation } from '../src/lib/mathSafety'
 
 type Failure = {
@@ -232,7 +233,32 @@ async function main() {
     { materia: 'Biología', tipoPregunta: 'academica', materiaNumerica: true, hasVerifiedOperation: false },
   ]
 
-  for (let i = 0; i < 166; i++) {
+  const productionOps = ['0.15*60', '72/8', '20-4*2', '2*(x+3)=18']
+  for (let i = 0; i < 3; i++) {
+    test(`production-no-repeat-${i}`, () => {
+      const next = buildNextMathExercise(productionOps, 6, false)
+      assert.equal(isRepeatedMathOperation(next.op, productionOps), false, `repeated ${next.op}`)
+    })
+  }
+
+  test('pending-example-uses-analog-operation', () => {
+    const example = buildAnalogousWorkedExample('2*(x+3)=18', false)
+    assert.notEqual(normalizePracticeOperation(example.op), normalizePracticeOperation('2*(x+3)=18'))
+    assert.doesNotMatch(example.text, /\bx\s*=\s*6\b/i)
+  })
+
+  test('detects-explain-with-example-request', () => {
+    assert.equal(isWorkedExampleRequest('Explícame con un ejemplo'), true)
+  })
+
+  await testAsync('decimal-feedback-is-contextual', async () => {
+    const result = await handleMathEvaluation('¿Cuánto es 0.15 * 60? [OP: 0.15*60]', '8', false)
+    assert.equal(result?.estado, 'incorrecto')
+    assert.match(result?.feedback || '', /decimal|15\/100|porcentaje/i)
+    assert.doesNotMatch(result?.feedback || '', /grupos iguales/i)
+  })
+
+  for (let i = 0; i < 160; i++) {
     test(`humanistic-guard-${i}`, () => {
       const result = guardHumanisticResponse(
         humanisticBadResponses[i % humanisticBadResponses.length],

@@ -125,3 +125,58 @@ export function buildNextMathExercise(
   }
   return { op, text: exerciseText(op, idiomaIngles) }
 }
+
+export function isWorkedExampleRequest(text: string) {
+  const normalized = String(text || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+  return /(explicame|explica|explain|show me|muestrame|dame).*(ejemplo|example)/i.test(normalized) ||
+    /(con|with)\s+(un\s+)?(ejemplo|example)/i.test(normalized)
+}
+
+function chooseAnalogousOperation(activeOp: string | null | undefined) {
+  const activeKey = normalizePracticeOperation(activeOp)
+  const candidates = activeKey.includes('=') && /x/.test(activeKey)
+    ? activeKey.includes('(')
+      ? ['3*(x+2)=15', '4*(x+1)=20', '2*(x+5)=18']
+      : ['3*x+6=21', '2*x-3=11', 'x+4=12']
+    : activeKey.includes('.') || activeKey.includes('%')
+      ? ['0.2*50', '0.25*80', '0.15*40']
+      : activeKey.includes('*') && (activeKey.includes('+') || activeKey.includes('-'))
+        ? ['18-3*4', '6+2*5', '20-4*3']
+        : activeKey.includes('/')
+          ? ['36/6', '48/8', '45/5']
+          : ['8+7', '21-9', '6*4']
+
+  return candidates.find((op) => normalizePracticeOperation(op) !== activeKey && solveOperation(op) !== null) || candidates[0]
+}
+
+function solvedAnalogExample(op: string, idiomaIngles: boolean) {
+  const visible = formatOperation(op)
+  const solution = solveOperation(op)
+  const solutionText = solution === null ? '' : Number(solution.toFixed(6)).toString()
+
+  if (op.includes('=') && /x/i.test(op)) {
+    if (idiomaIngles) {
+      return `Use this similar example, not your active exercise: ${visible}. First undo the outside operation, then isolate x. In this example the final value is x = ${solutionText}. Now apply the same kind of step to your exercise without copying this number.`
+    }
+    return `Usemos un ejemplo parecido, no tu ejercicio activo: ${visible}. Primero deshacemos la operación de afuera y luego dejamos x sola. En este ejemplo el valor final es x = ${solutionText}. Ahora aplica ese mismo tipo de paso a tu ejercicio sin copiar este número.`
+  }
+
+  if (idiomaIngles) {
+    return `Use this similar example, not your active exercise: ${visible}. Work one operation at a time until the result is ${solutionText}. Now try the same process with your exercise.`
+  }
+  return `Usemos un ejemplo parecido, no tu ejercicio activo: ${visible}. Resuelve una operación a la vez hasta llegar a ${solutionText}. Ahora intenta el mismo proceso con tu ejercicio.`
+}
+
+export function buildAnalogousWorkedExample(activeOp: string | null | undefined, idiomaIngles = false): MathPracticeExercise {
+  const op = chooseAnalogousOperation(activeOp)
+  const intro = idiomaIngles
+    ? 'I will not solve the active exercise for you, but I can show you the method with different numbers.'
+    : 'No voy a resolver el ejercicio activo por ti, pero sí puedo mostrarte el método con números distintos.'
+  return {
+    op,
+    text: `${intro}\n\n${solvedAnalogExample(op, idiomaIngles)}`,
+  }
+}

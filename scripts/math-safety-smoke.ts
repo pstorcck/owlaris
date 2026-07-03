@@ -144,6 +144,11 @@ D) 10
   assert.equal(multipleChoiceWrong?.correctAnswer, 12)
   assert.doesNotMatch(multipleChoiceWrong?.feedback || '', /\b12\b/)
 
+  const decimalWrong = await handleMathEvaluation('¿Cuánto es 0.15 * 60? [OP: 0.15*60]', '8', false)
+  assert.equal(decimalWrong?.estado, 'incorrecto')
+  assert.match(decimalWrong?.feedback || '', /decimal|15\/100|porcentaje/i)
+  assert.doesNotMatch(decimalWrong?.feedback || '', /grupos iguales/i)
+
   console.log('math-safety smoke passed')
 }
 

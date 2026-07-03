@@ -31,9 +31,11 @@ import {
   type MathEvaluation,
 } from '@/lib/mathSafety'
 import {
+  buildAnalogousWorkedExample,
   buildNextMathExercise,
   collectRecentMathOperations,
   isRepeatedMathOperation,
+  isWorkedExampleRequest,
 } from '@/lib/mathPractice'
 
 const PROMPT_BASE = `Eres Owlaris, Tu tutor AI. Eres un profesor paciente cuyo objetivo es ayudar a los estudiantes a entender, practicar y aprender por sí mismos. Hablas de forma clara, cercana, motivadora y respetuosa. Tratas al usuario de tú. No usas emoticones.
@@ -751,6 +753,64 @@ function reforzarDiagnosticoPorFallos(respuesta: string, idiomaIngles: boolean, 
   return `${respuesta}\n\n${refuerzo}`
 }
 
+async function cargarOperacionesEvaluadas(
+  supabase: ReturnType<typeof createClient>,
+  userId: string
+) {
+  try {
+    const { data, error } = await supabase
+      .from('interacciones')
+      .select('operacion_canonica')
+      .eq('usuario_id', userId)
+      .eq('op_estado', 'evaluada')
+      .not('operacion_canonica', 'is', null)
+      .limit(1000)
+    if (error) throw error
+    return (data || [])
+      .map((row: { operacion_canonica: string | null }) => row.operacion_canonica || '')
+      .filter(Boolean)
+  } catch (error) {
+    console.error('No se pudieron cargar operaciones evaluadas:', error)
+    return []
+  }
+}
+
+function combinarOperacionesBloqueadas(...grupos: Array<Array<string | null | undefined>>) {
+  const out: string[] = []
+  const seen = new Set<string>()
+  for (const grupo of grupos) {
+    for (const op of grupo) {
+      const canonical = inferCanonicalOperationFromText(String(op || '')) || String(op || '')
+      const key = canonical.replace(/\s+/g, '').toLowerCase()
+      if (canonical && key && !seen.has(key)) {
+        seen.add(key)
+        out.push(canonical)
+      }
+    }
+  }
+  return out
+}
+
+async function obtenerFuenteCurricularParaPractica(input: {
+  colegio: ColegioSharePointInput
+  grado: string
+  materiaConsulta: string
+  pregunta: string
+  fallbackArchivo?: string | null
+}) {
+  if (!input.materiaConsulta) return { contenido: '', archivo: input.fallbackArchivo || null }
+  try {
+    const result = await buscarContenido(input.colegio, input.grado, input.materiaConsulta, input.pregunta)
+    return {
+      contenido: result.contenido || '',
+      archivo: result.archivo || input.fallbackArchivo || null,
+    }
+  } catch (error) {
+    console.error('No se pudo obtener fuente curricular de práctica:', error)
+    return { contenido: '', archivo: input.fallbackArchivo || null }
+  }
+}
+
 function buildEnglishConversationSystemPrompt(input: { entradaVoz: boolean; speechConfidence: number | null }) {
   const confidenceHint = input.entradaVoz
     ? input.speechConfidence !== null
@@ -919,6 +979,7 @@ export async function POST(req: NextRequest) {
     const { data: materiaPorNombre } = !materiaPorId && materia_id ? await supabase.from('materias').select('*').ilike('nombre', materia_id).eq('colegio_id', perfil.colegio_id).single() : { data: null }
     const materia = materiaPorId || materiaPorNombre
     const materia_uuid = materia?.id || null
+    const materiaConsultaSharePoint = materia?.nombre || materia_id || ''
     const gradoEfectivo = grado_override || perfil.grado
     const colegioSharePoint = perfil.colegio || null
     const carpetasColegio = getSharePointFolderCandidates(perfil.colegio, { includeShared: false })
@@ -1139,12 +1200,15 @@ export async function POST(req: NextRequest) {
     // ── PROTOCOLO ANTI-ERRORES — evaluación por backend ─────────────
     let evaluacionProtocolo: MathEvaluation | null = null
     const pendingMathId: string | null = body.pending_math_interaction_id || null
+    let pendingMathOperation: string | null = null
+    let pendingMathDocumentoFuente: string | null = null
+    let pendingMathPrompt: string | null = null
 
     if (pendingMathId) {
       try {
         const { data: preguntaPendiente } = await supabase
           .from('interacciones')
-          .select('id, respuesta, operacion_canonica, op_estado, op_evaluada_en')
+          .select('id, respuesta, operacion_canonica, op_estado, op_evaluada_en, documento_fuente')
           .eq('id', pendingMathId)
           .eq('usuario_id', user.id)
           .eq('op_estado', 'pendiente')
@@ -1152,6 +1216,9 @@ export async function POST(req: NextRequest) {
           .maybeSingle()
 
         if (preguntaPendiente?.operacion_canonica && isSafeCanonicalOperation(preguntaPendiente.operacion_canonica)) {
+          pendingMathOperation = preguntaPendiente.operacion_canonica
+          pendingMathDocumentoFuente = preguntaPendiente.documento_fuente || null
+          pendingMathPrompt = preguntaPendiente.respuesta || null
           const textoConOP = preguntaPendiente.respuesta + '\n[OP: ' + preguntaPendiente.operacion_canonica + ']'
           evaluacionProtocolo = await handleMathEvaluation(textoConOP, pregunta, idiomaIngles, process.env.WOLFRAM_APP_ID)
           // Si acertó el valor final: marcar como evaluada. Un paso intermedio válido conserva la OP pendiente.
@@ -1166,6 +1233,53 @@ export async function POST(req: NextRequest) {
           evaluacionProtocolo = { estado: 'no_evaluable', feedback: idiomaIngles ? 'I cannot verify that safely. Let me explain step by step.' : 'No puedo verificarlo con seguridad. Revisemos el procedimiento paso a paso.', correctAnswer: null, op: null, guardActivado: false }
         }
       } catch (e) { console.error('Error recuperando OP pendiente:', e) }
+    }
+
+    if (
+      pendingMathId &&
+      pendingMathOperation &&
+      isWorkedExampleRequest(pregunta) &&
+      (!evaluacionProtocolo || evaluacionProtocolo.estado === 'no_evaluable')
+    ) {
+      const ejemploAnalogico = buildAnalogousWorkedExample(pendingMathOperation, idiomaIngles)
+      const fuentePractica = await obtenerFuenteCurricularParaPractica({
+        colegio: colegioSharePoint,
+        grado: gradoEfectivo,
+        materiaConsulta: materiaConsultaSharePoint,
+        pregunta: `${pendingMathPrompt || ''}\n${pregunta}\n${ejemploAnalogico.text}`,
+        fallbackArchivo: pendingMathDocumentoFuente,
+      })
+      const respuesta = ejemploAnalogico.text
+      const { data: insertedRow } = await supabase.from('interacciones').insert({
+        usuario_id: user.id,
+        colegio_id: perfil.colegio_id,
+        materia_id: materia_uuid,
+        grado: gradoEfectivo,
+        tema_detectado: 'Ejemplo análogo',
+        pregunta,
+        respuesta,
+        tokens_usados: 0,
+        costo_usd: 0,
+        modelo_usado: 'math_example_guard',
+        documento_fuente: fuentePractica.archivo,
+        sospecha_copia: detectarCopia(pregunta),
+        operacion_canonica: null,
+        op_estado: null,
+        estado_evaluacion: 'ejemplo_analogico',
+        guard_activado: true,
+      }).select('id').single()
+      await verificarAlertasBajaComprension(supabase, user.id, perfil, gradoEfectivo, materia, respuesta, fuentePractica.archivo, 'ejemplo_analogico')
+      supabase.from('usuarios').update({ ultimo_acceso: new Date().toISOString() }).eq('id', user.id).then(() => {})
+      return NextResponse.json({
+        respuesta,
+        tokens: 0,
+        documento_fuente: fuentePractica.archivo,
+        interaction_id: insertedRow?.id || null,
+        pending_math_interaction_id: pendingMathId,
+        nivel_dificultad: nivelDificultadActual,
+        aciertos_consecutivos: rachaAprendizaje.correctas,
+        fallos_consecutivos: rachaAprendizaje.incorrectas,
+      })
     }
 
     if (!evaluacionProtocolo && normalizeStudentAnswer(pregunta) !== null) {
@@ -1196,13 +1310,27 @@ export async function POST(req: NextRequest) {
         : aciertosConsecutivos > 3
           ? Math.min(8, nivelDificultadActual + 1)
           : nivelDificultadActual
-      const operacionesRecientes = collectRecentMathOperations([
+      const operacionesHistorial = collectRecentMathOperations([
         ...(Array.isArray(historial) ? historial.map((msg: { contenido?: string }) => msg.contenido || '') : []),
-        evaluacionProtocolo.op || '',
       ])
+      const operacionesEvaluadas = esRespuestaCorrecta ? await cargarOperacionesEvaluadas(supabase, user.id) : []
+      const operacionesBloqueadas = combinarOperacionesBloqueadas(
+        operacionesHistorial,
+        operacionesEvaluadas,
+        [evaluacionProtocolo.op || '']
+      )
       const siguienteEjercicio = esRespuestaCorrecta
-        ? buildNextMathExercise(operacionesRecientes, nivelSiguiente, idiomaIngles)
+        ? buildNextMathExercise(operacionesBloqueadas, nivelSiguiente, idiomaIngles)
         : null
+      const fuentePractica = siguienteEjercicio
+        ? await obtenerFuenteCurricularParaPractica({
+            colegio: colegioSharePoint,
+            grado: gradoEfectivo,
+            materiaConsulta: materiaConsultaSharePoint,
+            pregunta: `${pendingMathPrompt || ''}\n${pregunta}\n${siguienteEjercicio.text}`,
+            fallbackArchivo: pendingMathDocumentoFuente,
+          })
+        : { contenido: '', archivo: pendingMathDocumentoFuente }
       const respuestaCorrectaConSiguiente = siguienteEjercicio
         ? idiomaIngles
           ? `Correct. Your answer is right. Let's try a different exercise now.\n\n${siguienteEjercicio.text}`
@@ -1217,7 +1345,7 @@ export async function POST(req: NextRequest) {
         usuario_id: user.id, colegio_id: perfil.colegio_id, materia_id: materia_uuid,
         grado: gradoEfectivo, tema_detectado: pregunta.substring(0, 100),
         pregunta, respuesta, tokens_usados: 0, costo_usd: 0,
-        modelo_usado: 'calculadora', documento_fuente: null, sospecha_copia: false,
+        modelo_usado: 'calculadora', documento_fuente: fuentePractica.archivo, sospecha_copia: false,
         operacion_canonica: siguienteEjercicio?.op || evaluacionProtocolo?.op || null,
         op_estado: siguienteEjercicio ? 'pendiente' : evaluacionProtocolo?.estado === 'incorrecto' || (esPasoIntermedio && !pendingMathId) ? 'pendiente' : 'evaluada',
         op_evaluada_en: siguienteEjercicio || evaluacionProtocolo?.estado === 'incorrecto' || (esPasoIntermedio && !pendingMathId) ? null : new Date().toISOString(),
@@ -1228,7 +1356,7 @@ export async function POST(req: NextRequest) {
       supabase.from('usuarios').update({ ultimo_acceso: new Date().toISOString() }).eq('id', user.id).then(() => {})
       
       // Verificar alertas pedagógicas
-      await verificarAlertasBajaComprension(supabase, user.id, perfil, gradoEfectivo, materia, respuesta, null, evaluacionProtocolo?.estado || null)
+      await verificarAlertasBajaComprension(supabase, user.id, perfil, gradoEfectivo, materia, respuesta, fuentePractica.archivo, evaluacionProtocolo?.estado || null)
       
       // Si incorrecto conservar pendingMathId para reintento; si correcto, la nueva pregunta queda pendiente.
       const returnPendingId = siguienteEjercicio
@@ -1239,6 +1367,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({
         respuesta,
         tokens: 0,
+        documento_fuente: fuentePractica.archivo,
         pending_math_interaction_id: returnPendingId,
         nivel_dificultad: nivelSiguiente,
         aciertos_consecutivos: aciertosConsecutivos,
@@ -1255,7 +1384,7 @@ export async function POST(req: NextRequest) {
     let contenidoCurricular = ''
     let documentoFuente: string | null = null
       if (tipoPregunta === 'academica' && !esBienvenida) {
-      const result = await buscarContenido(colegioSharePoint, gradoEfectivo, materia_id || '', pregunta)
+      const result = await buscarContenido(colegioSharePoint, gradoEfectivo, materiaConsultaSharePoint, pregunta)
       contenidoCurricular = result.contenido
       documentoFuente = result.archivo
     }
@@ -1426,24 +1555,12 @@ ${contextoContenido}`
     let opFinalRespuesta = _opExtraida || opInferida || opDesdeAlumno
     let opValidaEnRespuesta = isSafeCanonicalOperation(opFinalRespuesta) ? opFinalRespuesta : null
     if (opValidaEnRespuesta) {
-      const operacionesRecientes = collectRecentMathOperations(
+      const operacionesHistorial = collectRecentMathOperations(
         Array.isArray(historial) ? historial.map((msg: { contenido?: string }) => msg.contenido || '') : []
       )
       try {
-        const { data: opsPrevias } = await supabase
-          .from('interacciones')
-          .select('operacion_canonica')
-          .eq('usuario_id', user.id)
-          .eq('op_estado', 'evaluada')
-          .not('operacion_canonica', 'is', null)
-          .limit(500)
-        const operacionesEvaluadas = (opsPrevias || [])
-          .map((r: { operacion_canonica: string | null }) => r.operacion_canonica || '')
-          .filter(Boolean)
-        const operacionesBloqueadas = collectRecentMathOperations([
-          ...operacionesRecientes,
-          ...operacionesEvaluadas,
-        ])
+        const operacionesEvaluadas = await cargarOperacionesEvaluadas(supabase, user.id)
+        const operacionesBloqueadas = combinarOperacionesBloqueadas(operacionesHistorial, operacionesEvaluadas)
         if (isRepeatedMathOperation(opValidaEnRespuesta, operacionesBloqueadas)) {
           const ejercicioFresco = buildNextMathExercise([...operacionesBloqueadas, opValidaEnRespuesta], nivelDificultadActual, idiomaIngles)
           respuesta = idiomaIngles

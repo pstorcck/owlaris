@@ -1,7 +1,9 @@
 import assert from 'node:assert/strict'
 import {
+  buildAnalogousWorkedExample,
   buildNextMathExercise,
   collectRecentMathOperations,
+  isWorkedExampleRequest,
   isRepeatedMathOperation,
   normalizePracticeOperation,
 } from '../src/lib/mathPractice'
@@ -70,7 +72,7 @@ async function main() {
     })
   }
 
-  for (let i = 0; i < 360; i += 1) {
+  for (let i = 0; i < 300; i += 1) {
     const level = (i % 8) + 1
     const history = recentOps.slice(0, (i % recentOps.length) + 1)
     const next = buildNextMathExercise(history, level, i % 2 === 0)
@@ -82,6 +84,41 @@ async function main() {
       assert.notEqual(solveOperation(next.op), null, `unsolved ${next.op}`)
       const inferred = inferCanonicalOperationFromText(next.text)
       assert.equal(normalizePracticeOperation(inferred), normalizePracticeOperation(next.op))
+    })
+  }
+
+  const productionRepeatedOps = ['0.15*60', '72/8', '20-4*2', '2*(x+3)=18']
+  const productionSessionOps = [...productionRepeatedOps]
+  for (let i = 0; i < 20; i += 1) {
+    const next = buildNextMathExercise(productionSessionOps, 6, false)
+    test(`production-session-no-repeat-${i}`, () => {
+      assert.equal(isRepeatedMathOperation(next.op, productionSessionOps), false, `repeated ${next.op}`)
+      assert.notEqual(solveOperation(next.op), null, `unsolved ${next.op}`)
+    })
+    productionSessionOps.push(next.op)
+  }
+
+  for (let i = 0; i < 20; i += 1) {
+    const activeOp = i % 2 === 0 ? '2*(x+3)=18' : '2*x-4=10'
+    const example = buildAnalogousWorkedExample(activeOp, i % 3 === 0)
+    test(`analog-example-does-not-solve-active-${i}`, () => {
+      assert.notEqual(normalizePracticeOperation(example.op), normalizePracticeOperation(activeOp))
+      assert.doesNotMatch(example.text, /2\s*\*\s*\(\s*x\s*\+\s*3\s*\)\s*=\s*18/i)
+      assert.doesNotMatch(example.text, /\bx\s*=\s*6\b/i)
+      assert.notEqual(solveOperation(example.op), solveOperation(activeOp))
+    })
+  }
+
+  const exampleRequests = [
+    'Explícame con un ejemplo',
+    'explicame con un ejemplo por favor',
+    'Dame un ejemplo parecido',
+    'Explain with an example',
+    'show me one example',
+  ]
+  for (let i = 0; i < 20; i += 1) {
+    test(`worked-example-request-${i}`, () => {
+      assert.equal(isWorkedExampleRequest(exampleRequests[i % exampleRequests.length]), true)
     })
   }
 
