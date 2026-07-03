@@ -1066,6 +1066,7 @@ export async function POST(req: NextRequest) {
         grado_detectado: gradoAlumno,
         materia_detectada: materiaSeleccionada,
         tokens: 0,
+        pending_math_interaction_id: null,
       })
     }
 
@@ -1084,7 +1085,7 @@ export async function POST(req: NextRequest) {
         })
       }
       const materiaDetectada = normalizarMateria(pregunta, true)
-      return NextResponse.json({ respuesta: idiomaIngles ? 'Ok, ' + materiaDetectada + '. Do you have a specific question or would you like me to suggest a topic?' : 'Ok, ' + materiaDetectada + '. ¿Tienes una duda específica o quieres que te proponga un tema?', nuevo_estado: 'activo', nombre_alumno: nombreAlumno, grado_detectado: gradoAlumno, materia_detectada: materiaDetectada, tokens: 0 })
+      return NextResponse.json({ respuesta: idiomaIngles ? 'Ok, ' + materiaDetectada + '. Do you have a specific question or would you like me to suggest a topic?' : 'Ok, ' + materiaDetectada + '. ¿Tienes una duda específica o quieres que te proponga un tema?', nuevo_estado: 'activo', nombre_alumno: nombreAlumno, grado_detectado: gradoAlumno, materia_detectada: materiaDetectada, tokens: 0, pending_math_interaction_id: null })
     }
 
     if (estado === 'activo' && materia_id) {
@@ -1098,7 +1099,7 @@ export async function POST(req: NextRequest) {
       if (esAfirmativo && materiaSugerida) {
         Array.from(cacheContenido.keys()).forEach(key => { if (key.includes(materia_id)) cacheContenido.delete(key) })
         Array.from(indiceDocumentos.keys()).forEach(key => { if (key.includes(materia_id)) indiceDocumentos.delete(key) })
-        return NextResponse.json({ respuesta: 'Perfecto, cambiamos a ' + materiaSugerida + '. ¿Tienes una duda específica o quieres que te proponga un tema?', nuevo_estado: 'activo', materia_detectada: materiaSugerida, tokens: 0 })
+        return NextResponse.json({ respuesta: 'Perfecto, cambiamos a ' + materiaSugerida + '. ¿Tienes una duda específica o quieres que te proponga un tema?', nuevo_estado: 'activo', materia_detectada: materiaSugerida, tokens: 0, pending_math_interaction_id: null })
       }
       return NextResponse.json({ respuesta: 'Sin problema, seguimos con ' + materia_id + '. ¿En qué te puedo ayudar?', nuevo_estado: 'activo', tokens: 0 })
     }
@@ -1113,7 +1114,7 @@ export async function POST(req: NextRequest) {
         if (nuevaMateria && nuevaMateria !== materia_id && !nuevaMateria.startsWith('__')) {
           Array.from(cacheContenido.keys()).forEach(key => { if (key.includes(materia_id)) cacheContenido.delete(key) })
           Array.from(indiceDocumentos.keys()).forEach(key => { if (key.includes(materia_id)) indiceDocumentos.delete(key) })
-          return NextResponse.json({ respuesta: 'Claro, cambiamos a ' + nuevaMateria + '. ¿Tienes una duda específica o quieres que te proponga un tema?', nuevo_estado: 'activo', materia_detectada: nuevaMateria, tokens: 0 })
+          return NextResponse.json({ respuesta: 'Claro, cambiamos a ' + nuevaMateria + '. ¿Tienes una duda específica o quieres que te proponga un tema?', nuevo_estado: 'activo', materia_detectada: nuevaMateria, tokens: 0, pending_math_interaction_id: null })
         }
       }
     }
@@ -1127,7 +1128,7 @@ export async function POST(req: NextRequest) {
         if (nuevoGrado) {
           await guardarGradoAlumno(nuevoGrado)
           const carpetasNuevoGrado = await cargarMateriasDisponibles(nuevoGrado)
-          return NextResponse.json({ respuesta: 'Perfecto, actualicé tu grado a ' + nuevoGrado + '. ¿Qué materia quieres estudiar?', nuevo_estado: 'esperando_materia', grado_detectado: nuevoGrado, materias_disponibles: carpetasNuevoGrado, tokens: 0 })
+          return NextResponse.json({ respuesta: 'Perfecto, actualicé tu grado a ' + nuevoGrado + '. ¿Qué materia quieres estudiar?', nuevo_estado: 'esperando_materia', grado_detectado: nuevoGrado, materias_disponibles: carpetasNuevoGrado, tokens: 0, pending_math_interaction_id: null })
         }
       }
     }
