@@ -4,7 +4,7 @@ import { useState } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
-import { ArrowRight, Users } from 'lucide-react'
+import { Users } from 'lucide-react'
 
 export default function LoginPage() {
   const [email, setEmail] = useState('')
@@ -37,227 +37,276 @@ export default function LoginPage() {
         body { margin: 0; }
         .ow-page {
           min-height: 100vh;
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif;
+        }
+        .ow-hero {
+          position: relative;
           display: flex;
           flex-direction: column;
-          font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif;
-          color: #1E2433;
-          background: #FBFAFF;
-          background-image:
-            radial-gradient(60% 55% at 18% 8%, rgba(124,58,237,.07) 0%, transparent 65%),
-            radial-gradient(55% 50% at 88% 92%, rgba(13,148,136,.06) 0%, transparent 65%);
-        }
-        .ow-main {
-          flex: 1;
-          display: flex;
           align-items: center;
           justify-content: center;
-          padding: 32px 20px;
+          gap: 26px;
+          padding: 48px;
+          overflow: hidden;
+          background: linear-gradient(155deg, #7C3AED 0%, #6D28D9 55%, #5B21B6 100%);
         }
-        .ow-card {
-          width: 100%;
-          max-width: 392px;
-          display: flex;
-          flex-direction: column;
-          align-items: center;
+        .ow-hero::before, .ow-hero::after {
+          content: "";
+          position: absolute;
+          border-radius: 50%;
+          background: rgba(255,255,255,.07);
         }
-        .ow-mark {
-          width: 60px;
-          height: 60px;
-          border-radius: 18px;
+        .ow-hero::before { width: 340px; height: 340px; top: -120px; left: -100px; }
+        .ow-hero::after { width: 260px; height: 260px; bottom: -90px; right: -60px; background: rgba(20,184,166,.16); }
+        .ow-owl-badge {
+          position: relative;
+          z-index: 1;
+          width: 176px;
+          height: 176px;
+          border-radius: 50%;
           display: grid;
           place-items: center;
           background: #FFFFFF;
-          border: 1px solid rgba(109,40,217,.14);
-          box-shadow: 0 10px 26px rgba(109,40,217,.14);
-          margin-bottom: 20px;
+          box-shadow: 0 20px 0 rgba(76,29,149,.4), 0 30px 60px rgba(0,0,0,.22);
+          animation: ow-bob 3.4s ease-in-out infinite;
         }
-        .ow-name {
+        @keyframes ow-bob {
+          0%, 100% { transform: translateY(0) rotate(-1.5deg); }
+          50% { transform: translateY(-10px) rotate(1.5deg); }
+        }
+        .ow-hero-text { position: relative; z-index: 1; text-align: center; }
+        .ow-hero-name {
           margin: 0;
-          font-size: 22px;
+          color: #FFFFFF;
+          font-size: 40px;
+          font-weight: 900;
+          letter-spacing: -.02em;
+        }
+        .ow-hero-tagline {
+          margin: 10px 0 0;
+          color: rgba(255,255,255,.88);
+          font-size: 17px;
+          font-weight: 600;
+          max-width: 320px;
+          line-height: 1.5;
+        }
+        .ow-hero-chips {
+          position: relative;
+          z-index: 1;
+          display: flex;
+          gap: 10px;
+          flex-wrap: wrap;
+          justify-content: center;
+          max-width: 340px;
+        }
+        .ow-chip {
+          background: rgba(255,255,255,.14);
+          border: 1px solid rgba(255,255,255,.22);
+          color: #FFFFFF;
+          font-size: 12.5px;
           font-weight: 800;
-          letter-spacing: -.01em;
+          padding: 8px 14px;
+          border-radius: 999px;
+        }
+        .ow-formside {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          padding: 32px 24px;
+          background: #FAF9FF;
+        }
+        .ow-card { width: 100%; max-width: 380px; }
+        .ow-card-head { margin-bottom: 24px; }
+        .ow-card-head h2 {
+          margin: 0;
+          font-size: 26px;
+          font-weight: 900;
           color: #191333;
+          letter-spacing: -.01em;
         }
-        .ow-tagline {
-          margin: 6px 0 32px;
-          font-size: 14px;
-          font-weight: 500;
-          color: #6B7186;
-          text-align: center;
+        .ow-card-head p {
+          margin: 8px 0 0;
+          font-size: 14.5px;
+          font-weight: 600;
+          color: #726F8A;
         }
-        .ow-panel {
-          width: 100%;
-          border-radius: 20px;
-          padding: 32px 30px;
-          background: rgba(255,255,255,.86);
-          border: 1px solid rgba(109,40,217,.10);
-          box-shadow: 0 24px 60px rgba(30,27,75,.08);
-          backdrop-filter: blur(16px);
-        }
-        .ow-form {
-          display: grid;
-          gap: 16px;
-        }
-        .ow-field {
-          display: grid;
-          gap: 7px;
-        }
+        .ow-form { display: grid; gap: 16px; }
+        .ow-field { display: grid; gap: 7px; }
         .ow-field label {
           font-size: 12px;
-          font-weight: 700;
-          color: #6B7186;
+          font-weight: 800;
+          color: #726F8A;
+          text-transform: uppercase;
+          letter-spacing: .04em;
         }
         .ow-input {
           width: 100%;
-          height: 46px;
-          border-radius: 12px;
-          border: 1.5px solid rgba(148,163,184,.32);
+          height: 52px;
+          border-radius: 16px;
+          border: 2px solid #E4E1F5;
           background: #FFFFFF;
           color: #191333;
           outline: none;
-          padding: 0 14px;
-          font-size: 14.5px;
-          font-weight: 500;
+          padding: 0 16px;
+          font-size: 15px;
+          font-weight: 600;
           transition: border-color .15s ease, box-shadow .15s ease;
         }
-        .ow-input::placeholder { color: #AAB0C2; }
+        .ow-input::placeholder { color: #B3AFCB; }
         .ow-input:focus {
-          border-color: rgba(109,40,217,.55);
-          box-shadow: 0 0 0 3.5px rgba(109,40,217,.10);
+          border-color: #7C3AED;
+          box-shadow: 0 0 0 4px rgba(124,58,237,.14);
         }
         .ow-error {
-          border: 1px solid rgba(239,68,68,.2);
-          background: #FEF2F2;
-          color: #B91C1C;
-          border-radius: 10px;
-          padding: 9px 12px;
-          font-size: 12.5px;
-          font-weight: 600;
-        }
-        .ow-submit {
-          width: 100%;
-          height: 46px;
-          margin-top: 2px;
+          border: 1.5px solid #FFCDD2;
+          background: #FFF1F2;
+          color: #C0362C;
           border-radius: 12px;
-          border: 0;
-          background: #6D28D9;
-          color: #FFFFFF;
-          font-size: 14.5px;
-          font-weight: 700;
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          gap: 8px;
-          cursor: pointer;
-          box-shadow: 0 10px 24px rgba(109,40,217,.24);
-          transition: transform .16s ease, box-shadow .16s ease, opacity .16s ease;
-        }
-        .ow-submit:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 14px 28px rgba(109,40,217,.28); }
-        .ow-submit:disabled { opacity: .6; cursor: not-allowed; transform: none; }
-        .ow-divider {
-          height: 1px;
-          background: rgba(148,163,184,.2);
-          margin: 24px 0 18px;
-        }
-        .ow-secondary {
-          width: 100%;
-          height: 42px;
-          border-radius: 12px;
-          border: 1px solid rgba(13,148,136,.2);
-          background: rgba(13,148,136,.04);
-          color: #0F766E;
-          font-size: 13.5px;
-          font-weight: 700;
-          text-decoration: none;
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          gap: 8px;
-          transition: background .16s ease, transform .16s ease;
-        }
-        .ow-secondary:hover { background: rgba(13,148,136,.09); transform: translateY(-1px); }
-        .ow-signup-line {
-          margin: 16px 0 0;
-          text-align: center;
+          padding: 10px 13px;
           font-size: 13px;
-          font-weight: 500;
-          color: #8A8FA3;
+          font-weight: 700;
         }
-        .ow-signup-line a { color: #6D28D9; font-weight: 700; text-decoration: none; }
-        .ow-signup-line a:hover { text-decoration: underline; }
-        .ow-footer {
-          padding: 22px 20px;
-          text-align: center;
+        .ow-btn {
+          -webkit-appearance: none;
+          appearance: none;
+          width: 100%;
+          height: 54px;
+          border-radius: 16px;
+          border: 0;
+          font-size: 15.5px;
+          font-weight: 900;
+          letter-spacing: .01em;
+          cursor: pointer;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 8px;
+          text-decoration: none;
+          transition: transform .12s ease, box-shadow .12s ease, opacity .12s ease;
+        }
+        .ow-btn-primary {
+          margin-top: 4px;
+          background: #7C3AED;
+          color: #FFFFFF;
+          box-shadow: 0 6px 0 #5B21B6;
+        }
+        .ow-btn-primary:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 7px 0 #5B21B6; }
+        .ow-btn-primary:active:not(:disabled) { transform: translateY(3px); box-shadow: 0 2px 0 #5B21B6; }
+        .ow-btn-primary:disabled { opacity: .6; cursor: not-allowed; transform: none; }
+        .ow-btn-secondary {
+          background: #E6FBF7;
+          color: #0F766E;
+          box-shadow: 0 6px 0 #B7EDE4;
+        }
+        .ow-btn-secondary:hover { transform: translateY(-1px); box-shadow: 0 7px 0 #B7EDE4; }
+        .ow-btn-secondary:active { transform: translateY(3px); box-shadow: 0 2px 0 #B7EDE4; }
+        .ow-divider {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          margin: 22px 0 16px;
+          color: #B3AFCB;
           font-size: 12px;
-          font-weight: 500;
-          color: #A6ABBD;
+          font-weight: 800;
+          text-transform: uppercase;
+          letter-spacing: .05em;
         }
-        @media (max-width: 420px) {
-          .ow-panel { padding: 26px 20px; }
+        .ow-divider::before, .ow-divider::after {
+          content: "";
+          flex: 1;
+          height: 1px;
+          background: #E4E1F5;
+        }
+        .ow-signup-line {
+          margin: 20px 0 0;
+          text-align: center;
+          font-size: 13.5px;
+          font-weight: 600;
+          color: #8A8697;
+        }
+        .ow-signup-line a { color: #7C3AED; font-weight: 900; text-decoration: none; }
+        .ow-signup-line a:hover { text-decoration: underline; }
+        @media (max-width: 860px) {
+          .ow-page { grid-template-columns: 1fr; }
+          .ow-hero { padding: 40px 24px 44px; gap: 18px; }
+          .ow-owl-badge { width: 132px; height: 132px; }
+          .ow-hero-name { font-size: 32px; }
+          .ow-hero-tagline { font-size: 15px; }
+          .ow-formside { padding: 30px 22px 44px; }
         }
       `}</style>
 
       <main className="ow-page">
-        <div className="ow-main">
-          <div className="ow-card">
-            <div className="ow-mark">
-              <Image src="/buho.png" alt="Owlaris" width={34} height={34} priority />
-            </div>
-            <h1 className="ow-name">Owlaris</h1>
-            <p className="ow-tagline">Tu tutor académico inteligente</p>
-
-            <section className="ow-panel" aria-label="Acceso a Owlaris">
-              <form onSubmit={handleLogin} className="ow-form">
-                <div className="ow-field">
-                  <label htmlFor="email">Correo electrónico</label>
-                  <input
-                    id="email"
-                    type="email"
-                    value={email}
-                    onChange={e => setEmail(e.target.value)}
-                    placeholder="tu@colegio.edu.gt"
-                    required
-                    className="ow-input"
-                    autoComplete="email"
-                  />
-                </div>
-                <div className="ow-field">
-                  <label htmlFor="password">Contraseña</label>
-                  <input
-                    id="password"
-                    type="password"
-                    value={password}
-                    onChange={e => setPassword(e.target.value)}
-                    placeholder="••••••••"
-                    required
-                    className="ow-input"
-                    autoComplete="current-password"
-                  />
-                </div>
-
-                {error && <div className="ow-error">{error}</div>}
-
-                <button type="submit" disabled={loading} className="ow-submit">
-                  {loading ? 'Entrando...' : 'Entrar'} <ArrowRight size={16} />
-                </button>
-              </form>
-
-              <div className="ow-divider" />
-
-              <Link href="/padres/login" className="ow-secondary">
-                <Users size={16} /> Portal para padres de familia
-              </Link>
-
-              <p className="ow-signup-line">
-                ¿No tienes cuenta? <Link href="/signup">Regístrate aquí</Link>
-              </p>
-            </section>
+        <section className="ow-hero">
+          <div className="ow-owl-badge">
+            <Image src="/buho.png" alt="Owlaris" width={124} height={124} priority style={{ objectFit: 'contain' }} />
           </div>
-        </div>
+          <div className="ow-hero-text">
+            <h1 className="ow-hero-name">Owlaris</h1>
+            <p className="ow-hero-tagline">Tu tutor académico inteligente, listo para acompañarte a entender, practicar y avanzar.</p>
+          </div>
+          <div className="ow-hero-chips">
+            <span className="ow-chip">Práctica guiada</span>
+            <span className="ow-chip">Reportes para familia</span>
+            <span className="ow-chip">Contenido oficial</span>
+          </div>
+        </section>
 
-        <footer className="ow-footer">
-          © 2026 Owlaris · Tutor académico para colegios
-        </footer>
+        <section className="ow-formside">
+          <div className="ow-card">
+            <div className="ow-card-head">
+              <h2>Bienvenido de nuevo</h2>
+              <p>Ingresa con tu cuenta del colegio para continuar.</p>
+            </div>
+
+            <form onSubmit={handleLogin} className="ow-form">
+              <div className="ow-field">
+                <label htmlFor="email">Correo electrónico</label>
+                <input
+                  id="email"
+                  type="email"
+                  value={email}
+                  onChange={e => setEmail(e.target.value)}
+                  placeholder="tu@colegio.edu.gt"
+                  required
+                  className="ow-input"
+                  autoComplete="email"
+                />
+              </div>
+              <div className="ow-field">
+                <label htmlFor="password">Contraseña</label>
+                <input
+                  id="password"
+                  type="password"
+                  value={password}
+                  onChange={e => setPassword(e.target.value)}
+                  placeholder="••••••••"
+                  required
+                  className="ow-input"
+                  autoComplete="current-password"
+                />
+              </div>
+
+              {error && <div className="ow-error">{error}</div>}
+
+              <button type="submit" disabled={loading} className="ow-btn ow-btn-primary">
+                {loading ? 'Entrando...' : 'Entrar a Owlaris'}
+              </button>
+            </form>
+
+            <div className="ow-divider">o</div>
+
+            <Link href="/padres/login" className="ow-btn ow-btn-secondary">
+              <Users size={18} /> Portal para padres de familia
+            </Link>
+
+            <p className="ow-signup-line">
+              ¿No tienes cuenta? <Link href="/signup">Regístrate aquí</Link>
+            </p>
+          </div>
+        </section>
       </main>
     </>
   )
