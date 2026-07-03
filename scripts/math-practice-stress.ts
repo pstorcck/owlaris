@@ -8,6 +8,7 @@ import {
   isWorkedExampleRequest,
   isRepeatedMathOperation,
   normalizePracticeOperation,
+  resolveMathPracticeFocus,
 } from '../src/lib/mathPractice'
 import {
   handleMathEvaluation,
@@ -181,7 +182,70 @@ async function main() {
     })
   }
 
-  assert.equal(total, 1000)
+  // ── Enfoque suma/resta y multiplicacion/division ────────────────
+  const sumaRestaPhrases = [
+    'quiero practicar sumas y restas', 'vamos con suma y resta', 'suma y resta por favor',
+    'practiquemos restas', 'quiero sumar y restar', 'addition and subtraction please',
+  ]
+  for (let i = 0; i < 30; i += 1) {
+    test(`focus-detects-suma-resta-${i}`, () => {
+      const focus = inferMathPracticeFocus([sumaRestaPhrases[i % sumaRestaPhrases.length]])
+      assert.equal(focus, 'suma_resta')
+    })
+  }
+
+  const multDivPhrases = [
+    'quiero practicar multiplicacion y division', 'vamos con multiplicacion', 'practiquemos division',
+    'quiero multiplicar y dividir', 'el producto de dos numeros', 'multiplication and division please',
+  ]
+  for (let i = 0; i < 30; i += 1) {
+    test(`focus-detects-mult-div-${i}`, () => {
+      const focus = inferMathPracticeFocus([multDivPhrases[i % multDivPhrases.length]])
+      assert.equal(focus, 'multiplicacion_division')
+    })
+  }
+
+  for (let i = 0; i < 60; i += 1) {
+    const level = (i % 8) + 1
+    test(`suma-resta-pool-is-pure-${i}`, () => {
+      const next = buildNextMathExercise([], level, false, 'suma_resta')
+      assert.doesNotMatch(next.op, /[*/]/, `not pure addition/subtraction: ${next.op}`)
+    })
+  }
+
+  for (let i = 0; i < 60; i += 1) {
+    const level = (i % 8) + 1
+    test(`mult-div-pool-is-pure-${i}`, () => {
+      const next = buildNextMathExercise([], level, false, 'multiplicacion_division')
+      assert.doesNotMatch(next.op, /[+-]/, `not pure multiplication/division: ${next.op}`)
+    })
+  }
+
+  // ── Bug reportado en produccion: el alumno pide "sumas y restas" una vez,
+  // y varios ejercicios despues el sistema le da division/multiplicacion
+  // porque la ventana de historial (6 mensajes) ya no incluye esa frase. ──
+  const sumaRestaSessionOps: string[] = []
+  let enfoqueSesion = resolveMathPracticeFocus(['quiero practicar sumas y restas'], null)
+  for (let i = 0; i < 25; i += 1) {
+    // A partir de aqui, el contexto de cada turno YA NO menciona "sumas y restas"
+    // (simula la ventana de 6 mensajes deslizandose mas alla del pedido original).
+    enfoqueSesion = resolveMathPracticeFocus([String(i), 'Matematica'], enfoqueSesion)
+    const next = buildNextMathExercise(sumaRestaSessionOps, 1, false, enfoqueSesion)
+    test(`focus-persists-across-sliding-window-${i}`, () => {
+      assert.equal(enfoqueSesion, 'suma_resta', `enfoque se perdio en el turno ${i}`)
+      assert.doesNotMatch(next.op, /[*/]/, `se coló multiplicacion/division en el turno ${i}: ${next.op}`)
+    })
+    sumaRestaSessionOps.push(next.op)
+  }
+
+  // Sin la funcion de persistencia, el mismo escenario SI pierde el enfoque
+  // (confirma que el hallazgo era real y que resolveMathPracticeFocus lo cierra).
+  test('without-persistence-focus-is-lost', () => {
+    const focusSinPersistencia = inferMathPracticeFocus(['23', 'Matematica'])
+    assert.equal(focusSinPersistencia, 'general')
+  })
+
+  assert.equal(total, 1000 + 30 + 30 + 60 + 60 + 25 + 1)
 
   if (failures.length > 0) {
     console.error(`math practice stress failed: ${failures.length}/${total}`)

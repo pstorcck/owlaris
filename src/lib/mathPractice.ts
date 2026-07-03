@@ -9,7 +9,7 @@ export type MathPracticeExercise = {
   op: string
 }
 
-export type MathPracticeFocus = 'general' | 'equation' | 'decimal'
+export type MathPracticeFocus = 'general' | 'equation' | 'decimal' | 'suma_resta' | 'multiplicacion_division'
 
 export type DifficultyAdaptationType = 'sube' | 'baja' | 'refuerza' | 'mantiene'
 
@@ -59,6 +59,16 @@ function hashText(value: string) {
   return Math.abs(hash)
 }
 
+// Solo suma/resta, sin * ni /. Filtra el banco cuando el alumno pidio ese tema en concreto.
+function isPureAdditionSubtraction(op: string) {
+  return /^[\d.\s+-]+$/.test(op) && !/^-/.test(op.trim())
+}
+
+// Solo multiplicacion/division, sin + ni -.
+function isPureMultiplicationDivision(op: string) {
+  return /^[\d.\s*/]+$/.test(op)
+}
+
 function exercisePoolForLevel(level: number, focus: MathPracticeFocus = 'general') {
   const safeLevel = Math.min(8, Math.max(1, Number.isFinite(level) ? Math.round(level) : 1))
   const pools = [
@@ -79,6 +89,16 @@ function exercisePoolForLevel(level: number, focus: MathPracticeFocus = 'general
 
   if (focus === 'decimal') return pools[2]
 
+  if (focus === 'suma_resta') {
+    const filtered = pools.slice(0, safeLevel).flat().filter(isPureAdditionSubtraction)
+    return filtered.length > 0 ? filtered : pools.slice(0, safeLevel).flat()
+  }
+
+  if (focus === 'multiplicacion_division') {
+    const filtered = pools.slice(0, safeLevel).flat().filter(isPureMultiplicationDivision)
+    return filtered.length > 0 ? filtered : pools.slice(0, safeLevel).flat()
+  }
+
   return pools.slice(0, safeLevel).flat()
 }
 
@@ -94,6 +114,16 @@ function fallbackExercise(recentOps: string[], level: number, focus: MathPractic
     const hundredths = [10, 15, 20, 25, 50, 75][seed % 6]
     const quantity = ((seed % 9) + 2) * 10
     return `${hundredths / 100}*${quantity}`
+  }
+  if (focus === 'suma_resta') {
+    const a = (seed % 60) + 15
+    const b = (seed % 30) + 5
+    return seed % 2 === 0 ? `${a}+${b}` : `${a + b}-${b}`
+  }
+  if (focus === 'multiplicacion_division') {
+    const a = (seed % 9) + 2
+    const b = (seed % 9) + 2
+    return seed % 2 === 0 ? `${a}*${b}` : `${a * b}/${b}`
   }
   const a = (seed % 40) + 12
   const b = (seed % 9) + 2
@@ -234,6 +264,30 @@ export function inferMathPracticeFocus(texts: Array<string | null | undefined>):
     return 'decimal'
   }
 
+  const pideSumaResta = /\b(suma|sumas|sumar|adicion|resta|restas|restar|sustraccion|addition|subtraction|add|subtract)\b/.test(normalized)
+  const pideMultDiv = /\b(multiplicaci[oa]n|multiplicar|division|dividir|producto|cociente|multiplication|divide|divid[ei]ng)\b/.test(normalized)
+
+  if (pideSumaResta && !pideMultDiv) return 'suma_resta'
+  if (pideMultDiv && !pideSumaResta) return 'multiplicacion_division'
+
+  return 'general'
+}
+
+const ENFOQUES_PRACTICA_VALIDOS: MathPracticeFocus[] = ['equation', 'decimal', 'suma_resta', 'multiplicacion_division']
+
+// El historial que llega al backend es una ventana corta (ultimos 6 mensajes),
+// asi que a partir del 3er-4to ejercicio la frase original ("sumas y restas")
+// ya no esta en esa ventana. Si el turno actual no trae una senal clara, se
+// conserva el enfoque que el alumno ya habia pedido antes en la sesion.
+export function resolveMathPracticeFocus(
+  textosActuales: Array<string | null | undefined>,
+  enfoquePersistido: unknown
+): MathPracticeFocus {
+  const inferido = inferMathPracticeFocus(textosActuales)
+  if (inferido !== 'general') return inferido
+  if (ENFOQUES_PRACTICA_VALIDOS.includes(enfoquePersistido as MathPracticeFocus)) {
+    return enfoquePersistido as MathPracticeFocus
+  }
   return 'general'
 }
 

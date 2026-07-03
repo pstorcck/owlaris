@@ -112,6 +112,7 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
   const [expandido, setExpandido]       = useState<string | null>(null)
   const [generandoPDF, setGenerandoPDF]       = useState(false)
   const [nivelDificultad, setNivelDificultad] = useState(1)
+  const [practicaEnfoque, setPracticaEnfoque] = useState('general')
   const [aciertosConsec, setAciertosConsec]   = useState(0)
   const [adaptacionesDificultad, setAdaptacionesDificultad] = useState<AdaptacionDificultad[]>([])
   const sessionStartedAtRef = useRef<string>(new Date().toISOString())
@@ -186,6 +187,7 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
     setNivelDificultad(1)
     setAciertosConsec(0)
     setPendingMathId(null)
+    setPracticaEnfoque('general')
   }
 
   useEffect(() => {
@@ -413,6 +415,7 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
           modo_conversacion: modoConversacionActivo,
           modo_conversacion_explicito: modoConversacionActivo,
           nivel_dificultad: nivelDificultad,
+          practica_enfoque: practicaEnfoque,
           aciertos_consecutivos: aciertosConsec,
           pending_math_interaction_id: pendingMathId,
           entrada_voz: opciones.fromVoice || false,
@@ -436,6 +439,7 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
       if (data.materia_detectada) setMateriaAlumno(data.materia_detectada)
       if (data.activar_conversacion) { setModoConversacion(true); setIdiomaIngles(true) }
       if (data.nivel_dificultad) setNivelDificultad(data.nivel_dificultad)
+      if (data.practica_enfoque) setPracticaEnfoque(data.practica_enfoque)
 
 
       if (data.materias_disponibles) {
