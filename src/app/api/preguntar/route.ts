@@ -49,6 +49,8 @@ import {
   isPendingContextQuestion,
   stripUnapprovedExternalResources,
 } from '@/lib/tutorContext'
+import { withOpenAIRetry } from '@/lib/openaiRetry'
+import { calcularCostoUSD } from '@/lib/openaiCost'
 
 const PROMPT_BASE = `Eres Owlaris, Tu tutor AI. Eres un profesor paciente cuyo objetivo es ayudar a los estudiantes a entender, practicar y aprender por sí mismos. Hablas de forma clara, cercana, motivadora y respetuosa. Tratas al usuario de tú. No usas emoticones.
 
@@ -1155,7 +1157,7 @@ export async function POST(req: NextRequest) {
         entradaVoz: !!body.entrada_voz,
         speechConfidence,
       })
-      const completion = await openai.chat.completions.create({
+      const completion = await withOpenAIRetry(() => openai.chat.completions.create({
         model: 'gpt-4o-mini',
         max_tokens: 85,
         temperature: 0.55,
@@ -1164,7 +1166,7 @@ export async function POST(req: NextRequest) {
           ...historialConv,
           { role: 'user', content: pregunta },
         ],
-      })
+      }), { maxRetries: 1, baseDelayMs: 300 }) // ruta rapida de voz: menos reintentos para no sumar latencia
       const respuesta = completion.choices[0].message.content?.trim() || 'Try saying: “Could you repeat that, please?” What would you like to talk about?'
       await supabase.from('interacciones').insert({
         usuario_id: user.id,
@@ -1174,7 +1176,7 @@ export async function POST(req: NextRequest) {
         pregunta: pregunta.substring(0, 500),
         respuesta: respuesta.substring(0, 1000),
         tokens_usados: completion.usage?.total_tokens || 0,
-        costo_usd: (completion.usage?.total_tokens || 0) * 0.00000015,
+        costo_usd: calcularCostoUSD(completion.usage),
         modelo_usado: 'gpt-4o-mini-conversation-fast',
         sospecha_copia: false,
       })
@@ -1636,7 +1638,7 @@ ${contextoContenido}`
     if (historial?.length > 0) historial.forEach((msg: { rol: string; contenido: string }) => { mensajesOpenAI.push({ role: msg.rol === 'usuario' ? 'user' : 'assistant', content: msg.contenido }) })
     mensajesOpenAI.push({ role: 'user', content: pregunta })
 
-    const completion = await openai.chat.completions.create({ model: 'gpt-4o-mini', messages: mensajesOpenAI, max_tokens: 700, temperature: 0.7 })
+    const completion = await withOpenAIRetry(() => openai.chat.completions.create({ model: 'gpt-4o-mini', messages: mensajesOpenAI, max_tokens: 700, temperature: 0.7 }))
     let respuesta = completion.choices[0].message.content || 'No pude generar una respuesta.'
 
     // CONTRADICTION GUARD FINAL — última línea de defensa
@@ -1682,7 +1684,7 @@ ${contextoContenido}`
     respuesta = externalResourceGuard.text
 
     const tokensUsados = completion.usage?.total_tokens || 0
-    const costoUSD = tokensUsados * 0.00000015
+    const costoUSD = calcularCostoUSD(completion.usage)
 
     // Extraer OP de la respuesta del tutor y limpiar texto visible
     const { visibleText: _respLimpia, operation: _opExtraida } = extractAndCleanOperation(respuesta)

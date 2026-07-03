@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { withOpenAIRetry } from '@/lib/openaiRetry'
 
 export async function POST(req: NextRequest) {
   try {
@@ -21,7 +22,7 @@ export async function POST(req: NextRequest) {
     const OpenAI = (await import('openai')).default
     const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
 
-    const completion = await openai.chat.completions.create({
+    const completion = await withOpenAIRetry(() => openai.chat.completions.create({
       model: 'gpt-4o-mini',
       max_tokens: 300,
       temperature: 0.7,
@@ -32,7 +33,7 @@ export async function POST(req: NextRequest) {
         },
         { role: 'user', content: pregunta }
       ],
-    })
+    }))
 
     return NextResponse.json({
       respuesta: completion.choices[0].message.content || 'No pude generar una respuesta.'

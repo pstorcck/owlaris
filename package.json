@@ -16,7 +16,8 @@
     "test:safety-sensitive": "tsx scripts/sensitive-safety-stress.ts",
     "test:exercise-repetition": "tsx scripts/exercise-repetition-stress.ts",
     "test:sensitive-topics": "tsx scripts/sensitive-topics-stress.ts",
-    "test": "npm run test:math && npm run test:humanistic && npm run test:pedagogy && npm run test:stress && npm run test:escholaris-math && npm run test:practice && npm run test:safety-sensitive && npm run test:exercise-repetition && npm run test:sensitive-topics"
+    "test:openai-reliability": "tsx scripts/openai-reliability-smoke.ts",
+    "test": "npm run test:math && npm run test:humanistic && npm run test:pedagogy && npm run test:stress && npm run test:escholaris-math && npm run test:practice && npm run test:safety-sensitive && npm run test:exercise-repetition && npm run test:sensitive-topics && npm run test:openai-reliability"
   },
   "dependencies": {
     "@supabase/ssr": "^0.5.1",

@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { withOpenAIRetry } from '@/lib/openaiRetry'
+import { calcularCostoUSD } from '@/lib/openaiCost'
 
 // Cache de documentos — se carga una vez
 let docsCache: string | null = null
@@ -78,12 +80,12 @@ REGLAS OBLIGATORIAS:
       { role: 'user', content: pregunta },
     ]
 
-    const completion = await openai.chat.completions.create({
+    const completion = await withOpenAIRetry(() => openai.chat.completions.create({
       model: 'gpt-4o-mini',
       messages,
       max_tokens: 600,
       temperature: 0.7,
-    })
+    }))
 
     const respuesta = completion.choices[0].message.content || 'No pude generar una respuesta.'
 
@@ -95,6 +97,7 @@ REGLAS OBLIGATORIAS:
       respuesta: respuesta.substring(0, 1000),
       modelo_usado: 'gpt-4o-mini-padres',
       tokens_usados: completion.usage?.total_tokens || 0,
+      costo_usd: calcularCostoUSD(completion.usage),
     })
 
     return NextResponse.json({ respuesta })

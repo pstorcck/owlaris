@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { withOpenAIRetry } from '@/lib/openaiRetry'
 
 function hashString(value: string) {
   let hash = 0
@@ -178,7 +179,7 @@ export async function POST(req: NextRequest) {
       `${m.rol === 'usuario' ? 'Alumno' : 'Owlaris'}: ${m.contenido}`
     ).join('\n\n')
 
-    const completion = await openai.chat.completions.create({
+    const completion = await withOpenAIRetry(() => openai.chat.completions.create({
       model: 'gpt-4o-mini',
       max_tokens: 800,
       messages: [{
@@ -200,7 +201,7 @@ REGLAS ESTRICTAS:
         role: 'user',
         content: `Materia: ${materia}\nGrado: ${grado}\nColegio: ${colegio}\nMetricas de hoy calculadas por backend: ${JSON.stringify(metricasHoy)}\nNivel adaptativo final: ${nivelFinal || 'no registrado'}\nAciertos consecutivos actuales: ${aciertos_consecutivos || 0}\nResumen de dificultad calculado por backend: ${lecturaDificultad}\nEventos de dificultad: ${JSON.stringify(adaptaciones)}\n\nConversación:\n${conversacion}`
       }]
-    })
+    }))
 
     const texto = completion.choices[0].message.content || '{}'
     let analisis

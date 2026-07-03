@@ -1,4 +1,5 @@
 import { NextRequest } from 'next/server'
+import { withOpenAIRetry } from '@/lib/openaiRetry'
 
 export async function POST(req: NextRequest) {
   try {
@@ -13,12 +14,12 @@ export async function POST(req: NextRequest) {
       .trim()
       .substring(0, modo === 'conversation' ? 240 : 300)
 
-    const mp3 = await openai.audio.speech.create({
+    const mp3 = await withOpenAIRetry(() => openai.audio.speech.create({
       model: 'tts-1',
       voice: modo === 'conversation' ? 'nova' : 'onyx',
       input: limpio,
       speed: modo === 'conversation' ? 1.08 : 1.0,
-    })
+    }), { maxRetries: 1, baseDelayMs: 300 })
 
     // Streaming directo — el audio empieza a sonar mientras llega
     const stream = mp3.body as ReadableStream

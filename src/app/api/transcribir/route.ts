@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { withOpenAIRetry } from '@/lib/openaiRetry'
 
 export async function POST(req: NextRequest) {
   try {
@@ -9,13 +10,13 @@ export async function POST(req: NextRequest) {
     const OpenAI = (await import('openai')).default
     const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
 
-    const transcripcion = await openai.audio.transcriptions.create({
+    const transcripcion = await withOpenAIRetry(() => openai.audio.transcriptions.create({
       file: audio,
       model: 'whisper-1',
       language: 'en',
       prompt: 'English conversation practice by a student. Transcribe clearly without translating.',
       temperature: 0,
-    })
+    }))
 
     return NextResponse.json({ texto: transcripcion.text })
   } catch (err) {
