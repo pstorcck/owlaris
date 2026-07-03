@@ -23,6 +23,16 @@ type EnviarPreguntaOpciones = {
   speechConfidence?: number | null
 }
 
+type AdaptacionDificultad = {
+  tipo: 'sube' | 'baja' | 'refuerza' | 'mantiene'
+  nivel_anterior: number
+  nivel_nuevo: number
+  aciertos_consecutivos: number
+  fallos_consecutivos: number
+  motivo: string
+  creado_en?: string
+}
+
 type SpeechRecognitionAlternativeLike = { transcript?: string; confidence?: number }
 type SpeechRecognitionResultLike = {
   isFinal?: boolean
@@ -103,6 +113,7 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
   const [generandoPDF, setGenerandoPDF]       = useState(false)
   const [nivelDificultad, setNivelDificultad] = useState(1)
   const [aciertosConsec, setAciertosConsec]   = useState(0)
+  const [adaptacionesDificultad, setAdaptacionesDificultad] = useState<AdaptacionDificultad[]>([])
 
   const [materiaSugerida, setMateriaSugerida] = useState('')
   const TRAD_MATERIAS: Record<string,string> = {
@@ -418,6 +429,12 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
         setMostrandoSubOlimpiadas(false)
       }
       if (data.aciertos_consecutivos !== undefined) setAciertosConsec(data.aciertos_consecutivos)
+      if (data.adaptacion_dificultad && data.adaptacion_dificultad.tipo && data.adaptacion_dificultad.tipo !== 'mantiene') {
+        setAdaptacionesDificultad(prev => [...prev, {
+          ...data.adaptacion_dificultad,
+          creado_en: new Date().toISOString(),
+        }])
+      }
       if (data.materia_sugerida) setMateriaSugerida(data.materia_sugerida)
       // Punto 2 asesor: conservar pendingMathId si incorrecto, limpiar si correcto o null
       if ('pending_math_interaction_id' in data) setPendingMathId(data.pending_math_interaction_id)
@@ -609,12 +626,18 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
     if (mensajes.length < 3) return
     setGenerandoPDF(true)
     try {
+      const adaptacionesParaReporte = adaptacionesDificultad.slice(-8)
       const res = await fetch('/api/reporte', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           historial: mensajes.map(m => ({ rol: m.rol, contenido: m.contenido })),
-          grado: gradoAlumno, materia: materiaAlumno, colegio: usuario.colegio?.nombre
+          grado: gradoAlumno,
+          materia: materiaAlumno,
+          colegio: usuario.colegio?.nombre,
+          adaptaciones_dificultad: adaptacionesParaReporte,
+          nivel_dificultad_final: nivelDificultad,
+          aciertos_consecutivos: aciertosConsec,
         })
       })
       const data = await res.json()
@@ -622,119 +645,186 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
 
       const { jsPDF } = await import('jspdf')
       const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
-      const W = 210, margin = 20, maxW = W - margin * 2
+      const W = 210
+      const H = 297
+      const margin = 16
+      const maxW = W - margin * 2
       let y = 0
+      const palette = {
+        ink: [20, 28, 45],
+        muted: [96, 110, 130],
+        violet: [109, 40, 217],
+        blue: [37, 99, 235],
+        teal: [14, 116, 144],
+        green: [22, 163, 74],
+        amber: [180, 83, 9],
+        line: [226, 232, 240],
+      }
+      const setColor = (color: number[]) => doc.setTextColor(color[0], color[1], color[2])
       const addPage = () => { doc.addPage(); y = 20 }
-      const checkY = (needed = 10) => { if (y + needed > 270) addPage() }
-      const txt = (text: string, x: number, size: number, bold = false, color = [30,27,75]) => {
-        doc.setFontSize(size); doc.setFont('helvetica', bold ? 'bold' : 'normal')
-        doc.setTextColor(color[0], color[1], color[2]); doc.text(text, x, y)
+      const checkY = (needed = 10) => { if (y + needed > 276) addPage() }
+      const text = (value: string, x: number, yy: number, size: number, bold = false, color = palette.ink) => {
+        doc.setFontSize(size); doc.setFont('helvetica', bold ? 'bold' : 'normal'); setColor(color)
+        doc.text(String(value || ''), x, yy)
       }
-      const wrappedTxt = (text: string, x: number, size: number, bold = false, color = [80,80,100]) => {
-        doc.setFontSize(size); doc.setFont('helvetica', bold ? 'bold' : 'normal')
-        doc.setTextColor(color[0], color[1], color[2])
-        const lines = doc.splitTextToSize(text, maxW - (x - margin))
-        checkY(lines.length * (size * 0.4 + 1))
-        doc.text(lines, x, y); y += lines.length * (size * 0.4 + 1) + 2
+      const wrapped = (value: string, x: number, yy: number, width: number, size = 9.5, color = palette.muted, bold = false) => {
+        doc.setFontSize(size); doc.setFont('helvetica', bold ? 'bold' : 'normal'); setColor(color)
+        const lines = doc.splitTextToSize(String(value || ''), width)
+        doc.text(lines, x, yy)
+        return lines.length * (size * 0.38 + 1.6)
       }
-      doc.setFillColor(109, 40, 217); doc.rect(0, 0, W, 60, 'F')
-      doc.setFillColor(124, 58, 237); doc.rect(0, 55, W, 8, 'F')
-      doc.setFontSize(28); doc.setFont('helvetica', 'bold'); doc.setTextColor(255,255,255)
-      doc.text('Owlaris', margin, 28)
-      doc.setFontSize(13); doc.setFont('helvetica', 'normal'); doc.text('Reporte de Sesión Académica', margin, 38)
-      doc.setFontSize(10); doc.text(usuario.colegio?.nombre || '', margin, 48)
-      y = 80
-      const nivelColor: Record<string,number[]> = { 'Excelente':[22,163,74],'Muy bien':[37,99,235],'En progreso':[234,88,12],'Con potencial':[124,58,237] }
-      const nc = nivelColor[data.analisis.nivel] || [109,40,217]
-      doc.setFillColor(248,247,255); doc.roundedRect(margin, y-5, maxW, 42, 4, 4, 'F')
-      doc.setDrawColor(109,40,217); doc.setLineWidth(0.5); doc.roundedRect(margin, y-5, maxW, 42, 4, 4, 'S')
-      txt('Alumno:', margin+6, 10, true, [109,40,217]); y += 7
-      txt(nombreAlumno || usuario.nombre_completo, margin+6, 12, false, [30,27,75]); y += 7
+      const section = (title: string, color = palette.violet) => {
+        checkY(14)
+        doc.setFillColor(color[0], color[1], color[2]); doc.roundedRect(margin, y, 3, 7, 1, 1, 'F')
+        text(title, margin + 7, y + 5.2, 10, true, color)
+        y += 13
+      }
+      const metricCard = (x: number, yy: number, w: number, title: string, value: string, color: number[]) => {
+        doc.setFillColor(255, 255, 255); doc.roundedRect(x, yy, w, 23, 3, 3, 'F')
+        doc.setDrawColor(palette.line[0], palette.line[1], palette.line[2]); doc.roundedRect(x, yy, w, 23, 3, 3, 'S')
+        text(title, x + 5, yy + 7, 7.5, true, palette.muted)
+        text(value, x + 5, yy + 16, 12, true, color)
+      }
+      const bulletList = (items: string[], color: number[], width = maxW - 8) => {
+        for (const item of items.filter(Boolean).slice(0, 5)) {
+          checkY(9)
+          doc.setFillColor(color[0], color[1], color[2]); doc.circle(margin + 2, y - 1.5, 1.3, 'F')
+          y += wrapped(item, margin + 7, y, width, 9.2, palette.ink)
+        }
+        y += 2
+      }
+
       const msgsConFecha = mensajes.filter((m: MensajeChat) => m.timestamp)
       let durStr = ''
       if (msgsConFecha.length >= 2) {
         const ini = new Date(msgsConFecha[0].timestamp).getTime()
-        const fin = new Date(msgsConFecha[msgsConFecha.length-1].timestamp).getTime()
+        const fin = new Date(msgsConFecha[msgsConFecha.length - 1].timestamp).getTime()
         const mins = Math.round((fin - ini) / 60000)
         durStr = mins <= 1 ? '1 min' : mins + ' minutos'
       }
-      txt(`Grado: ${gradoAlumno}   |   Materia: ${materiaAlumno}   |   Fecha: ${new Date().toLocaleDateString('es-GT')}${durStr ? '   |   Duración: ' + durStr : ''}`, margin+6, 9, false, [120,110,160]); y += 7
-      doc.setFillColor(nc[0],nc[1],nc[2]); doc.roundedRect(margin+6, y-4, 60, 10, 3, 3, 'F')
-      doc.setFontSize(9); doc.setFont('helvetica','bold'); doc.setTextColor(255,255,255)
-      doc.text(`Nivel: ${data.analisis.nivel}`, margin+10, y+2); y += 16
-      y += 6
-      doc.setFillColor(237,233,254); doc.roundedRect(margin, y-4, maxW, 6, 2, 2, 'F')
-      txt('RESUMEN DE LA SESIÓN', margin+4, 9, true, [109,40,217]); y += 10
-      wrappedTxt(data.analisis.resumen, margin+4, 10, false, [60,50,100]); y += 4
-      // Felicitación destacada
-      if (data.analisis.felicitacion) {
-        checkY(24)
-        doc.setFillColor(220,252,231); doc.roundedRect(margin, y-4, maxW, 20, 4, 4, 'F')
-        doc.setDrawColor(22,163,74); doc.setLineWidth(0.5); doc.roundedRect(margin, y-4, maxW, 20, 4, 4, 'S')
-        txt('FELICITACIONES', margin+6, 9, true, [22,163,74]); y += 7
-        wrappedTxt(data.analisis.felicitacion, margin+6, 10, false, [20,80,40]); y += 4
+      const alumnoNombre = nombreAlumno || usuario.nombre_completo
+      const estudianteMsgs = mensajes.filter(m => m.rol === 'usuario').length
+      const documentos = Array.from(new Set(mensajes.map(m => m.documento_fuente).filter(Boolean))) as string[]
+      const temas = Array.isArray(data.analisis.temas) ? data.analisis.temas : []
+      const logros = Array.isArray(data.analisis.logros) ? data.analisis.logros : []
+      const mejoras = Array.isArray(data.analisis.areas_mejora) ? data.analisis.areas_mejora : []
+      const familia = Array.isArray(data.analisis.recomendaciones_familia) ? data.analisis.recomendaciones_familia : []
+      const alumnoRecs = Array.isArray(data.analisis.recomendaciones_alumno) ? data.analisis.recomendaciones_alumno : []
+      const resumenDificultad = data.analisis.resumen_dificultad || (
+        adaptacionesParaReporte.length
+          ? adaptacionesParaReporte.map(a => a.motivo).join(' ')
+          : `La sesión se mantuvo en nivel ${nivelDificultad}.`
+      )
+
+      doc.setFillColor(247, 250, 252); doc.rect(0, 0, W, H, 'F')
+      doc.setFillColor(20, 28, 45); doc.roundedRect(10, 10, W - 20, 45, 5, 5, 'F')
+      doc.setFillColor(14, 116, 144); doc.roundedRect(10, 50, W - 20, 5, 2, 2, 'F')
+      text('Owlaris', margin, 28, 23, true, [255, 255, 255])
+      text('Informe Pedagógico Familiar', margin, 39, 12, false, [226, 232, 240])
+      doc.setFontSize(9); doc.setFont('helvetica', 'normal'); doc.setTextColor(226, 232, 240)
+      doc.text(usuario.colegio?.nombre || 'Centro educativo', W - margin, 29, { align: 'right' })
+      doc.text(new Date().toLocaleString('es-GT', { day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' }), W - margin, 39, { align: 'right' })
+
+      y = 68
+      doc.setFillColor(255, 255, 255); doc.roundedRect(margin, y, maxW, 35, 4, 4, 'F')
+      doc.setDrawColor(palette.line[0], palette.line[1], palette.line[2]); doc.roundedRect(margin, y, maxW, 35, 4, 4, 'S')
+      text('Alumno', margin + 6, y + 9, 8, true, palette.muted)
+      text(alumnoNombre, margin + 6, y + 19, 14, true, palette.ink)
+      text(`Grado: ${gradoAlumno || 'No asignado'}  |  Materia: ${materiaAlumno || 'No seleccionada'}`, margin + 6, y + 28, 8.5, false, palette.muted)
+      text(`Nivel adaptativo final: ${nivelDificultad}`, W - margin - 6, y + 14, 9, true, palette.violet)
+      text(`Duración: ${durStr || 'sesión corta'}`, W - margin - 6, y + 24, 8.5, false, palette.muted)
+      y += 46
+
+      const cardW = (maxW - 9) / 4
+      metricCard(margin, y, cardW, 'Interacciones', String(mensajes.length), palette.blue)
+      metricCard(margin + cardW + 3, y, cardW, 'Participación', String(estudianteMsgs), palette.teal)
+      metricCard(margin + (cardW + 3) * 2, y, cardW, 'Fuentes', String(documentos.length), palette.green)
+      metricCard(margin + (cardW + 3) * 3, y, cardW, 'Dificultad', `Nivel ${nivelDificultad}`, palette.violet)
+      y += 35
+
+      section('Lectura pedagógica', palette.violet)
+      doc.setFillColor(255, 255, 255); doc.roundedRect(margin, y - 3, maxW, 30, 4, 4, 'F')
+      doc.setDrawColor(palette.line[0], palette.line[1], palette.line[2]); doc.roundedRect(margin, y - 3, maxW, 30, 4, 4, 'S')
+      wrapped(data.analisis.resumen || 'Sesión registrada con acompañamiento académico.', margin + 6, y + 6, maxW - 12, 9.5, palette.ink)
+      y += 40
+
+      section('Ruta de dificultad adaptativa', palette.teal)
+      const rutaH = adaptacionesParaReporte.length ? 44 : 26
+      doc.setFillColor(236, 253, 245); doc.roundedRect(margin, y - 3, maxW, rutaH, 4, 4, 'F')
+      wrapped(resumenDificultad, margin + 6, y + 5, maxW - 12, 8.8, [22, 101, 52])
+      y += 22
+      for (const a of adaptacionesParaReporte.slice(-3)) {
+        const label = a.tipo === 'sube'
+          ? `Subió de nivel ${a.nivel_anterior} a ${a.nivel_nuevo}`
+          : a.tipo === 'baja'
+            ? `Bajó de nivel ${a.nivel_anterior} a ${a.nivel_nuevo}`
+            : `Reforzó bases en nivel ${a.nivel_nuevo}`
+        text(label, margin + 8, y, 8.3, true, a.tipo === 'sube' ? palette.green : palette.amber)
+        y += 5
       }
-      // Avances
-      if (data.analisis.avances) {
-        checkY(16)
-        doc.setFillColor(237,233,254); doc.roundedRect(margin, y-4, maxW, 6, 2, 2, 'F')
-        txt('TUS AVANCES', margin+4, 9, true, [109,40,217]); y += 10
-        wrappedTxt(data.analisis.avances, margin+4, 10, false, [60,50,100]); y += 4
-      }
-      const secciones = [
-        { titulo: 'MATERIAS ESTUDIADAS', items: data.analisis.materias_estudiadas || [materiaAlumno].filter(Boolean), bg:[224,242,254], c:[14,116,144], tc:[20,80,100] },
-        { titulo: 'TEMAS TRABAJADOS', items: data.analisis.temas || [], bg:[237,233,254], c:[109,40,217], tc:[60,50,100] },
-        { titulo: 'LOGROS DE LA SESIÓN', items: data.analisis.logros || data.analisis.fortalezas || [], bg:[220,252,231], c:[22,163,74], tc:[20,80,40] },
-        { titulo: 'ÁREAS DE MEJORA', items: data.analisis.areas_mejora || data.analisis.areas_refuerzo || [], bg:[219,234,254], c:[37,99,235], tc:[20,50,120] },
-        { titulo: 'CÓMO ACOMPAÑAR EN CASA', items: data.analisis.recomendaciones_familia || [], bg:[255,251,235], c:[180,83,9], tc:[90,60,20] },
-        { titulo: 'RECOMENDACIONES PARA EL ALUMNO', items: data.analisis.recomendaciones_alumno || [], bg:[219,234,254], c:[37,99,235], tc:[20,50,120] },
-        { titulo: 'RECOMENDACIONES PARA EL MAESTRO', items: data.analisis.recomendaciones_maestro || [], bg:[243,232,255], c:[109,40,217], tc:[60,20,120] },
-      ]
-      for (const s of secciones) {
-        checkY(20)
-        doc.setFillColor(s.bg[0],s.bg[1],s.bg[2]); doc.roundedRect(margin, y-4, maxW, 6, 2, 2, 'F')
-        txt(s.titulo, margin+4, 9, true, s.c); y += 10
-        for (const item of s.items) {
-          checkY(8); doc.setFillColor(s.c[0],s.c[1],s.c[2]); doc.circle(margin+7, y-2, 1.5, 'F')
-          wrappedTxt(item, margin+12, 10, false, s.tc)
-        }
-        y += 4
-      }
-      // Frase motivacional de cierre
+      y += 10
+
+      section('Qué estudió', palette.blue)
+      bulletList((data.analisis.materias_estudiadas || [materiaAlumno].filter(Boolean)).slice(0, 4), palette.teal)
+      if (temas.length > 0) bulletList(temas.slice(0, 5), palette.violet)
+
+      section('Logros y próximos pasos', palette.green)
+      const colW = (maxW - 6) / 2
+      const colY = y
+      doc.setFillColor(240, 253, 244); doc.roundedRect(margin, colY, colW, 50, 4, 4, 'F')
+      doc.setFillColor(255, 251, 235); doc.roundedRect(margin + colW + 6, colY, colW, 50, 4, 4, 'F')
+      text('Logros observados', margin + 5, colY + 8, 8.5, true, palette.green)
+      wrapped((logros[0] || data.analisis.avances || 'Participó en la práctica y avanzó con guía.').toString(), margin + 5, colY + 16, colW - 10, 8.4, palette.ink)
+      text('Áreas para reforzar', margin + colW + 11, colY + 8, 8.5, true, palette.amber)
+      wrapped((mejoras[0] || 'Practicar el procedimiento paso a paso y explicar cómo llegó a cada respuesta.').toString(), margin + colW + 11, colY + 16, colW - 10, 8.4, palette.ink)
+      y = colY + 62
+
+      section('Acompañamiento en casa', palette.amber)
+      bulletList(familia.length ? familia : ['Pedirle que explique un ejercicio con sus propias palabras y cerrar con una práctica corta.'], palette.amber)
+
       if (data.analisis.frase_motivacional) {
-        checkY(20)
-        doc.setFillColor(243,232,255); doc.roundedRect(margin, y-4, maxW, 18, 4, 4, 'F')
-        doc.setFontSize(11); doc.setFont('helvetica','italic'); doc.setTextColor(109,40,217)
-        const fmLines = doc.splitTextToSize('"' + data.analisis.frase_motivacional + '"', maxW - 12)
-        doc.text(fmLines, W/2, y+4, { align: 'center' }); y += 18
+        checkY(24)
+        doc.setFillColor(238, 242, 255); doc.roundedRect(margin, y, maxW, 22, 4, 4, 'F')
+        doc.setFontSize(10); doc.setFont('helvetica','italic'); doc.setTextColor(palette.violet[0], palette.violet[1], palette.violet[2])
+        const fmLines = doc.splitTextToSize('"' + data.analisis.frase_motivacional + '"', maxW - 14)
+        doc.text(fmLines, W / 2, y + 8, { align: 'center' }); y += 30
       }
+
       addPage()
-      doc.setFillColor(109,40,217); doc.rect(0, 0, W, 16, 'F')
+      section('Plan sugerido para la próxima sesión', palette.violet)
+      bulletList(alumnoRecs.length ? alumnoRecs : ['Practicar una idea a la vez y explicar el proceso antes de avanzar.'], palette.blue)
+      if (documentos.length > 0) {
+        section('Material consultado', palette.teal)
+        bulletList(documentos.slice(0, 5), palette.teal)
+      }
+
+      addPage()
+      doc.setFillColor(20,28,45); doc.rect(0, 0, W, 16, 'F')
       doc.setFontSize(11); doc.setFont('helvetica','bold'); doc.setTextColor(255,255,255)
-      doc.text('HISTORIAL DE LA SESIÓN', margin, 11); y = 26
+      doc.text('ANEXO: HISTORIAL DE LA SESION', margin, 11); y = 26
       for (const m of mensajes) {
         if (m.id === 'bienvenida') continue
         const esAlumno = m.rol === 'usuario'
         const textLines = doc.splitTextToSize(m.contenido, maxW - 16)
         const boxH = textLines.length * 4.5 + 10
         checkY(boxH)
-        doc.setFillColor(esAlumno ? 237 : 255, esAlumno ? 233 : 255, esAlumno ? 254 : 255)
-        doc.roundedRect(margin, y-5, maxW, boxH, 3, 3, 'F')
+        doc.setFillColor(esAlumno ? 239 : 255, esAlumno ? 246 : 255, esAlumno ? 255 : 255)
+        doc.roundedRect(margin, y - 5, maxW, boxH, 3, 3, 'F')
         doc.setFontSize(8); doc.setFont('helvetica','bold')
-        doc.setTextColor(esAlumno ? 109 : 100, esAlumno ? 40 : 90, esAlumno ? 217 : 160)
-        doc.text(esAlumno ? (nombreAlumno || usuario.nombre_completo.split(' ')[0]) : 'Owlaris Tutor', margin+4, y+1)
-        doc.setFontSize(9); doc.setFont('helvetica','normal'); doc.setTextColor(50,40,90)
-        doc.text(textLines, margin+4, y+7); y += boxH + 4
+        doc.setTextColor(esAlumno ? 37 : 100, esAlumno ? 99 : 90, esAlumno ? 235 : 160)
+        doc.text(esAlumno ? (nombreAlumno || usuario.nombre_completo.split(' ')[0]) : 'Owlaris Tutor', margin + 4, y + 1)
+        doc.setFontSize(9); doc.setFont('helvetica','normal'); doc.setTextColor(30,41,59)
+        doc.text(textLines, margin + 4, y + 7); y += boxH + 4
       }
       const totalPages = doc.getNumberOfPages()
       for (let i = 1; i <= totalPages; i++) {
-        doc.setPage(i); doc.setFillColor(248,247,255); doc.rect(0, 285, W, 12, 'F')
-        doc.setFontSize(7); doc.setFont('helvetica','normal'); doc.setTextColor(160,150,200)
-        doc.text('Owlaris — Tu tutor académico inteligente · owlaris.app', margin, 291)
-        doc.text(`Página ${i} de ${totalPages}`, W-margin, 291, { align:'right' })
+        doc.setPage(i); doc.setFillColor(248,250,252); doc.rect(0, 285, W, 12, 'F')
+        doc.setFontSize(7); doc.setFont('helvetica','normal'); doc.setTextColor(100,116,139)
+        doc.text('Owlaris - Informe pedagogico familiar - owlaris.app', margin, 291)
+        doc.text(`Página ${i} de ${totalPages}`, W - margin, 291, { align:'right' })
       }
       const fecha = new Date().toISOString().split('T')[0]
-      doc.save(`Owlaris-Reporte-${(nombreAlumno||usuario.nombre_completo).replace(/ /g,'-')}-${fecha}.pdf`)
+      doc.save(`Owlaris-Reporte-${(nombreAlumno || usuario.nombre_completo).replace(/ /g,'-')}-${fecha}.pdf`)
     } catch(e) { console.error(e) }
     finally { setGenerandoPDF(false) }
   }

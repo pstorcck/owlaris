@@ -9,6 +9,17 @@ export type MathPracticeExercise = {
   op: string
 }
 
+export type DifficultyAdaptationType = 'sube' | 'baja' | 'refuerza' | 'mantiene'
+
+export type DifficultyAdaptation = {
+  tipo: DifficultyAdaptationType
+  nivel_anterior: number
+  nivel_nuevo: number
+  aciertos_consecutivos: number
+  fallos_consecutivos: number
+  motivo: string
+}
+
 export function normalizePracticeOperation(op?: string | null) {
   return String(op || '')
     .replace(/×/g, '*')
@@ -97,6 +108,67 @@ function exerciseText(op: string, idiomaIngles: boolean) {
   return idiomaIngles
     ? `Try this different exercise: ${visible}. What is the result?`
     : `Intenta este ejercicio distinto: ${visible}. ¿Cual es el resultado?`
+}
+
+export function calculateAdaptiveDifficulty(input: {
+  currentLevel: number
+  correctStreak: number
+  wrongStreak: number
+  idiomaIngles?: boolean
+}): DifficultyAdaptation {
+  const nivelAnterior = Math.min(8, Math.max(1, Number.isFinite(input.currentLevel) ? Math.round(input.currentLevel) : 1))
+  const aciertos = Math.max(0, Math.round(input.correctStreak || 0))
+  const fallos = Math.max(0, Math.round(input.wrongStreak || 0))
+  const english = !!input.idiomaIngles
+
+  if (fallos > 0 && fallos % 4 === 0) {
+    const nivelNuevo = Math.max(1, nivelAnterior - 1)
+    const tipo: DifficultyAdaptationType = nivelNuevo < nivelAnterior ? 'baja' : 'refuerza'
+    return {
+      tipo,
+      nivel_anterior: nivelAnterior,
+      nivel_nuevo: nivelNuevo,
+      aciertos_consecutivos: aciertos,
+      fallos_consecutivos: fallos,
+      motivo: english
+        ? tipo === 'baja'
+          ? `After ${fallos} incorrect attempts in a row, Owlaris lowers the difficulty one level to diagnose the missing base.`
+          : `After ${fallos} incorrect attempts in a row, Owlaris keeps the basic level and reinforces prerequisite skills.`
+        : tipo === 'baja'
+          ? `Después de ${fallos} respuestas en práctica seguidas, Owlaris baja un nivel para diagnosticar la base que falta.`
+          : `Después de ${fallos} respuestas en práctica seguidas, Owlaris mantiene el nivel base y refuerza habilidades previas.`,
+    }
+  }
+
+  if (aciertos > 0 && aciertos % 5 === 0) {
+    const nivelNuevo = Math.min(8, nivelAnterior + 1)
+    const tipo: DifficultyAdaptationType = nivelNuevo > nivelAnterior ? 'sube' : 'mantiene'
+    return {
+      tipo,
+      nivel_anterior: nivelAnterior,
+      nivel_nuevo: nivelNuevo,
+      aciertos_consecutivos: aciertos,
+      fallos_consecutivos: fallos,
+      motivo: english
+        ? tipo === 'sube'
+          ? `After ${aciertos} correct answers in a row, Owlaris raises the difficulty one level.`
+          : `The student reached ${aciertos} correct answers in a row and is already at the highest level.`
+        : tipo === 'sube'
+          ? `Después de ${aciertos} respuestas correctas seguidas, Owlaris sube un nivel la dificultad.`
+          : `El estudiante llegó a ${aciertos} respuestas correctas seguidas y ya está en el nivel más alto.`,
+    }
+  }
+
+  return {
+    tipo: 'mantiene',
+    nivel_anterior: nivelAnterior,
+    nivel_nuevo: nivelAnterior,
+    aciertos_consecutivos: aciertos,
+    fallos_consecutivos: fallos,
+    motivo: english
+      ? `Owlaris keeps level ${nivelAnterior} while it gathers enough evidence to adjust.`
+      : `Owlaris mantiene el nivel ${nivelAnterior} mientras reúne suficiente evidencia para ajustar.`,
+  }
 }
 
 export function buildNextMathExercise(

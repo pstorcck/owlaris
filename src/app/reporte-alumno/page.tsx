@@ -37,6 +37,14 @@ type ResumenMateria = {
   ultimaActividad: string | null
 }
 
+type AdaptacionAcademica = {
+  tipo: 'sube' | 'baja' | 'refuerza'
+  nivelAnterior: number
+  nivelNuevo: number
+  fecha: string
+  motivo: string
+}
+
 function normalizarTexto(texto: string) {
   return String(texto || '')
     .normalize('NFD')
@@ -108,6 +116,48 @@ function lecturaPedagogica(input: {
   if (input.tasa !== null && input.tasa < 65) return `El estudiante está en una etapa de refuerzo. Conviene trabajar ${input.materiaPrioritaria || 'la materia prioritaria'} con pasos cortos, ejemplos análogos y comprobación frecuente.`
   if (input.incorrectos >= 3) return `Hay oportunidades de práctica acumuladas. Lo recomendable es bajar temporalmente la dificultad y confirmar bases antes de continuar.`
   return 'El avance es estable. Mantener sesiones breves y constantes ayudará a consolidar lo aprendido.'
+}
+
+function calcularRutaDificultad(interacciones: Interaccion[]) {
+  const eventos: AdaptacionAcademica[] = []
+  let nivel = 1
+  let aciertos = 0
+  let fallos = 0
+  const ordenadas = [...interacciones].sort((a, b) => new Date(a.creado_en).getTime() - new Date(b.creado_en).getTime())
+
+  for (const int of ordenadas) {
+    if (int.estado_evaluacion === 'correcto' || int.estado_evaluacion === 'equivalente') {
+      aciertos += 1
+      fallos = 0
+      if (aciertos > 0 && aciertos % 5 === 0) {
+        const anterior = nivel
+        nivel = Math.min(8, nivel + 1)
+        eventos.push({
+          tipo: nivel > anterior ? 'sube' : 'refuerza',
+          nivelAnterior: anterior,
+          nivelNuevo: nivel,
+          fecha: int.creado_en,
+          motivo: `Al llegar a ${aciertos} respuestas correctas seguidas, Owlaris aumentó gradualmente el reto.`,
+        })
+      }
+    } else if (int.estado_evaluacion === 'incorrecto') {
+      fallos += 1
+      aciertos = 0
+      if (fallos > 0 && fallos % 4 === 0) {
+        const anterior = nivel
+        nivel = Math.max(1, nivel - 1)
+        eventos.push({
+          tipo: nivel < anterior ? 'baja' : 'refuerza',
+          nivelAnterior: anterior,
+          nivelNuevo: nivel,
+          fecha: int.creado_en,
+          motivo: `Después de ${fallos} respuestas en práctica seguidas, Owlaris bajó el reto para reforzar bases.`,
+        })
+      }
+    }
+  }
+
+  return { eventos: eventos.slice(-6), nivelFinal: nivel }
 }
 
 export default async function ReporteAlumnoPage({ searchParams }: { searchParams: { id?: string } }) {
@@ -214,6 +264,7 @@ export default async function ReporteAlumnoPage({ searchParams }: { searchParams
     alertas: alertas.length,
     materiaPrioritaria: materiaPrioritaria?.nombre,
   })
+  const rutaDificultad = calcularRutaDificultad(lista)
   const recomendaciones = [
     hayAlertaSeguridad
       ? 'Revisar hoy las alertas sensibles y dar seguimiento con un adulto responsable del colegio.'
@@ -315,6 +366,27 @@ export default async function ReporteAlumnoPage({ searchParams }: { searchParams
           <div style={{background:'linear-gradient(135deg,#EEF2FF,#ECFEFF)',border:'1px solid #DBEAFE',borderRadius:'12px',padding:'16px',marginBottom:'18px'}}>
             <p style={{fontSize:'11px',fontWeight:800,color:'#2563EB',margin:'0 0 6px',textTransform:'uppercase',letterSpacing:'.5px'}}>Mensaje para acompañar</p>
             <p style={{fontSize:'14px',fontWeight:650,color:'#1E3A5F',margin:0,lineHeight:1.55}}>{fraseMotivacional}</p>
+          </div>
+          <div style={{background:'#F0FDFA',border:'1px solid #CCFBF1',borderRadius:'12px',padding:'16px',marginBottom:'18px'}}>
+            <div style={{display:'flex',justifyContent:'space-between',gap:'12px',alignItems:'center',flexWrap:'wrap',marginBottom:'8px'}}>
+              <div>
+                <p style={{fontSize:'11px',fontWeight:800,color:'#0F766E',margin:'0 0 4px',textTransform:'uppercase',letterSpacing:'.5px'}}>Ruta adaptativa</p>
+                <h3 style={{fontSize:'14px',fontWeight:850,color:'#134E4A',margin:0}}>Dificultad final estimada: nivel {rutaDificultad.nivelFinal}</h3>
+              </div>
+              <span style={{fontSize:'11px',fontWeight:800,color:'#0F766E',background:'white',border:'1px solid #99F6E4',borderRadius:'999px',padding:'5px 9px'}}>+5 aciertos sube · 4 en práctica refuerza</span>
+            </div>
+            {rutaDificultad.eventos.length > 0 ? (
+              <div style={{display:'grid',gap:'8px'}}>
+                {rutaDificultad.eventos.map((ev, idx) => (
+                  <div key={`${ev.fecha}-${idx}`} style={{display:'flex',gap:'10px',alignItems:'flex-start',background:'rgba(255,255,255,.72)',borderRadius:'10px',padding:'9px 10px'}}>
+                    <span style={{fontSize:'11px',fontWeight:850,color:ev.tipo === 'sube' ? '#047857' : '#B45309',minWidth:'66px'}}>{ev.tipo === 'sube' ? 'Subió' : ev.tipo === 'baja' ? 'Bajó' : 'Reforzó'}</span>
+                    <p style={{fontSize:'12px',color:'#334155',lineHeight:1.45,margin:0}}>Nivel {ev.nivelAnterior} → {ev.nivelNuevo}. {ev.motivo}</p>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p style={{fontSize:'12px',color:'#475569',lineHeight:1.55,margin:0}}>Aún no se detectó un punto de ajuste automático. El tutor mantiene el nivel hasta tener suficiente evidencia de avance o necesidad de refuerzo.</p>
+            )}
           </div>
           <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(240px,1fr))',gap:'16px'}}>
             <div>

@@ -33,6 +33,7 @@ import {
 import {
   buildAnalogousWorkedExample,
   buildNextMathExercise,
+  calculateAdaptiveDifficulty,
   collectRecentMathOperations,
   isRepeatedMathOperation,
   isWorkedExampleRequest,
@@ -118,11 +119,12 @@ Nivel 5: Ecuaciones con coeficiente (2x-4=10)
 Nivel 6: Ecuaciones con paréntesis (2(x+3)=18)
 Nivel 7: Ecuaciones con x en ambos lados (5x+3=2x+15)
 Nivel 8: Ecuaciones combinadas (4(x-2)+3=2(x+1)+9)
-Si el estudiante acumula 3 respuestas incorrectas seguidas, baja la dificultad como diagnóstico, nunca como castigo.
+Si el estudiante acumula 4 respuestas en práctica seguidas, baja la dificultad como diagnóstico, nunca como castigo.
 Al bajar, busca qué concepto previo, definición, procedimiento o habilidad elemental no está comprendiendo, aunque sea muy básico.
 Cuando entienda esa base, vuelve gradualmente al tema original.
-Si el estudiante tiene más de 3 respuestas correctas seguidas, puedes subir gradualmente la dificultad con ejercicios un poco más complejos, menos pistas, más pasos o preguntas de razonamiento.
+Si el estudiante tiene 5 respuestas correctas seguidas, puedes subir gradualmente la dificultad con ejercicios un poco más complejos, menos pistas, más pasos o preguntas de razonamiento.
 Antes de subir demasiado, confirma que entiende el proceso y no solo acertó por memoria o azar.
+No repitas exactamente un ejercicio que el estudiante ya resolvió bien. Puedes reutilizar el mismo tipo de ejercicio del documento oficial, pero cambia números, variables o contexto para que sea una práctica nueva.
 
 OPCIÓN MÚLTIPLE — REGLA CRÍTICA:
 Cuando plantees opción múltiple, SIEMPRE incluye [OP:] con la operación correcta.
@@ -730,15 +732,15 @@ async function obtenerRachaAprendizaje(
 
 function construirContextoAdaptativo(input: { correctas: number; incorrectas: number; nivel: number; idiomaIngles: boolean }) {
   const nivel = Math.min(8, Math.max(1, Number.isFinite(input.nivel) ? input.nivel : 1))
-  if (input.incorrectas >= 3) {
+  if (input.incorrectas >= 4) {
     return input.idiomaIngles
       ? `\n\nADAPTIVE DIFFICULTY: The student has ${input.incorrectas} incorrect answers in a row. Lower the difficulty from level ${nivel} as a diagnosis. Find the missing prerequisite concept, explain one basic step, and then return gradually to the original topic. Do not frame this as failure or punishment.`
-      : `\n\nDIFICULTAD ADAPTATIVA: El estudiante acumula ${input.incorrectas} respuestas incorrectas seguidas. Baja la dificultad desde el nivel ${nivel} como diagnóstico. Busca el concepto previo que falta, explica una base concreta y vuelve gradualmente al tema original. No lo presentes como castigo ni fracaso.`
+      : `\n\nDIFICULTAD ADAPTATIVA: El estudiante acumula ${input.incorrectas} respuestas en práctica seguidas. Baja la dificultad desde el nivel ${nivel} como diagnóstico. Busca el concepto previo que falta, explica una base concreta y vuelve gradualmente al tema original. No lo presentes como castigo ni fracaso.`
   }
-  if (input.correctas > 3) {
+  if (input.correctas >= 5) {
     return input.idiomaIngles
-      ? `\n\nADAPTIVE DIFFICULTY: The student has ${input.correctas} correct answers in a row. You may raise the difficulty gradually from level ${nivel}, but first confirm they understand the process and are not guessing.`
-      : `\n\nDIFICULTAD ADAPTATIVA: El estudiante lleva ${input.correctas} respuestas correctas seguidas. Puedes subir gradualmente la dificultad desde el nivel ${nivel}, pero confirma que entiende el proceso y no está adivinando.`
+      ? `\n\nADAPTIVE DIFFICULTY: The student has ${input.correctas} correct answers in a row. Raise the difficulty only at controlled checkpoints of 5 correct answers, with a slightly harder exercise and without skipping conceptual checks.`
+      : `\n\nDIFICULTAD ADAPTATIVA: El estudiante lleva ${input.correctas} respuestas correctas seguidas. Sube la dificultad solo en puntos controlados de 5 aciertos, con un ejercicio un poco más retador y sin saltarte la verificación conceptual.`
   }
   return input.idiomaIngles
     ? `\n\nADAPTIVE DIFFICULTY: Current working level ${nivel}. Keep the exercise appropriate to the student's grade and the selected subject.`
@@ -746,7 +748,7 @@ function construirContextoAdaptativo(input: { correctas: number; incorrectas: nu
 }
 
 function reforzarDiagnosticoPorFallos(respuesta: string, idiomaIngles: boolean, fallosConsecutivos: number) {
-  if (fallosConsecutivos < 3) return respuesta
+  if (fallosConsecutivos < 4) return respuesta
   const refuerzo = idiomaIngles
     ? 'Let us lower the difficulty for a moment, not as a punishment, but to find the missing base. First, let us review the simplest step involved here.'
     : 'Vamos a bajar la dificultad por un momento, no como castigo, sino para encontrar la base que falta. Primero revisemos el paso más simple de este procedimiento.'
@@ -1279,6 +1281,12 @@ export async function POST(req: NextRequest) {
         nivel_dificultad: nivelDificultadActual,
         aciertos_consecutivos: rachaAprendizaje.correctas,
         fallos_consecutivos: rachaAprendizaje.incorrectas,
+        adaptacion_dificultad: calculateAdaptiveDifficulty({
+          currentLevel: nivelDificultadActual,
+          correctStreak: rachaAprendizaje.correctas,
+          wrongStreak: rachaAprendizaje.incorrectas,
+          idiomaIngles,
+        }),
       })
     }
 
@@ -1305,11 +1313,13 @@ export async function POST(req: NextRequest) {
       const fallosConsecutivos = evaluacionProtocolo.estado === 'incorrecto'
         ? rachaAprendizaje.incorrectas + 1
         : esPasoIntermedio ? rachaAprendizaje.incorrectas : 0
-      const nivelSiguiente = fallosConsecutivos >= 3
-        ? Math.max(1, nivelDificultadActual - 1)
-        : aciertosConsecutivos > 3
-          ? Math.min(8, nivelDificultadActual + 1)
-          : nivelDificultadActual
+      const adaptacionDificultad = calculateAdaptiveDifficulty({
+        currentLevel: nivelDificultadActual,
+        correctStreak: aciertosConsecutivos,
+        wrongStreak: fallosConsecutivos,
+        idiomaIngles,
+      })
+      const nivelSiguiente = adaptacionDificultad.nivel_nuevo
       const operacionesHistorial = collectRecentMathOperations([
         ...(Array.isArray(historial) ? historial.map((msg: { contenido?: string }) => msg.contenido || '') : []),
       ])
@@ -1331,10 +1341,15 @@ export async function POST(req: NextRequest) {
             fallbackArchivo: pendingMathDocumentoFuente,
           })
         : { contenido: '', archivo: pendingMathDocumentoFuente }
+      const avisoSubida = adaptacionDificultad.tipo === 'sube'
+        ? idiomaIngles
+          ? 'You have built a strong streak, so I will raise the challenge a little.'
+          : 'Ya llevas una buena racha, así que voy a subir un poco el reto.'
+        : ''
       const respuestaCorrectaConSiguiente = siguienteEjercicio
         ? idiomaIngles
-          ? `Correct. Your answer is right. Let's try a different exercise now.\n\n${siguienteEjercicio.text}`
-          : `¡Correcto! Tu respuesta está bien. Vamos con un ejercicio distinto.\n\n${siguienteEjercicio.text}`
+          ? `Correct. Your answer is right. Let's try a different exercise now.${avisoSubida ? '\n\n' + avisoSubida : ''}\n\n${siguienteEjercicio.text}`
+          : `¡Correcto! Tu respuesta está bien. Vamos con un ejercicio distinto.${avisoSubida ? '\n\n' + avisoSubida : ''}\n\n${siguienteEjercicio.text}`
         : evaluacionProtocolo.feedback
       const respuesta = esRespuestaCorrecta
         ? respuestaCorrectaConSiguiente
@@ -1372,6 +1387,7 @@ export async function POST(req: NextRequest) {
         nivel_dificultad: nivelSiguiente,
         aciertos_consecutivos: aciertosConsecutivos,
         fallos_consecutivos: fallosConsecutivos,
+        adaptacion_dificultad: adaptacionDificultad,
       })
     }
 
@@ -1607,6 +1623,15 @@ ${contextoContenido}`
       respuesta, tokens: tokensUsados, documento_fuente: documentoFuente,
       interaction_id: insertedId,
       pending_math_interaction_id: opValidaEnRespuesta ? insertedId : null,
+      nivel_dificultad: nivelDificultadActual,
+      aciertos_consecutivos: rachaAprendizaje.correctas,
+      fallos_consecutivos: rachaAprendizaje.incorrectas,
+      adaptacion_dificultad: calculateAdaptiveDifficulty({
+        currentLevel: nivelDificultadActual,
+        correctStreak: rachaAprendizaje.correctas,
+        wrongStreak: rachaAprendizaje.incorrectas,
+        idiomaIngles,
+      }),
     })
 
   } catch (err) {

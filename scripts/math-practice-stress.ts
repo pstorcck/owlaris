@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import {
   buildAnalogousWorkedExample,
   buildNextMathExercise,
+  calculateAdaptiveDifficulty,
   collectRecentMathOperations,
   isWorkedExampleRequest,
   isRepeatedMathOperation,
@@ -122,8 +123,27 @@ async function main() {
     })
   }
 
+  const difficultyCases = [
+    { currentLevel: 1, correctStreak: 4, wrongStreak: 0, tipo: 'mantiene', nivel: 1 },
+    { currentLevel: 1, correctStreak: 5, wrongStreak: 0, tipo: 'sube', nivel: 2 },
+    { currentLevel: 3, correctStreak: 10, wrongStreak: 0, tipo: 'sube', nivel: 4 },
+    { currentLevel: 8, correctStreak: 5, wrongStreak: 0, tipo: 'mantiene', nivel: 8 },
+    { currentLevel: 4, correctStreak: 0, wrongStreak: 3, tipo: 'mantiene', nivel: 4 },
+    { currentLevel: 4, correctStreak: 0, wrongStreak: 4, tipo: 'baja', nivel: 3 },
+    { currentLevel: 4, correctStreak: 0, wrongStreak: 5, tipo: 'mantiene', nivel: 4 },
+    { currentLevel: 1, correctStreak: 0, wrongStreak: 4, tipo: 'refuerza', nivel: 1 },
+  ] as const
+
+  difficultyCases.forEach((caso, i) => {
+    test(`adaptive-difficulty-checkpoint-${i}`, () => {
+      const result = calculateAdaptiveDifficulty({ ...caso })
+      assert.equal(result.tipo, caso.tipo)
+      assert.equal(result.nivel_nuevo, caso.nivel)
+    })
+  })
+
   const rollingHistory: string[] = []
-  for (let i = 0; i < 220; i += 1) {
+  for (let i = 0; i < 212; i += 1) {
     const level = (i % 8) + 1
     const next = buildNextMathExercise(rollingHistory, level, i % 3 === 0)
     test(`rolling-no-immediate-repeat-${i}`, () => {

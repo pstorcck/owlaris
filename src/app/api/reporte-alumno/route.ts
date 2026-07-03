@@ -19,6 +19,34 @@ function temaLegible(interaccion: { tema_detectado?: string | null; pregunta?: s
   return String(interaccion.tema_detectado || 'Acompañamiento académico').replace(/\s+/g, ' ').trim().slice(0, 80)
 }
 
+function calcularRutaDificultad(interacciones: Array<{ estado_evaluacion?: string | null; creado_en?: string | null }>) {
+  let nivel = 1
+  let aciertos = 0
+  let fallos = 0
+  let ajustes = 0
+  const ordenadas = [...interacciones].sort((a, b) => new Date(a.creado_en || 0).getTime() - new Date(b.creado_en || 0).getTime())
+  for (const int of ordenadas) {
+    if (int.estado_evaluacion === 'correcto' || int.estado_evaluacion === 'equivalente') {
+      aciertos += 1
+      fallos = 0
+      if (aciertos > 0 && aciertos % 5 === 0) {
+        const previo = nivel
+        nivel = Math.min(8, nivel + 1)
+        if (nivel !== previo) ajustes += 1
+      }
+    } else if (int.estado_evaluacion === 'incorrecto') {
+      fallos += 1
+      aciertos = 0
+      if (fallos > 0 && fallos % 4 === 0) {
+        const previo = nivel
+        nivel = Math.max(1, nivel - 1)
+        if (nivel !== previo) ajustes += 1
+      }
+    }
+  }
+  return { nivelFinal: nivel, ajustes }
+}
+
 export async function GET(req: NextRequest) {
   try {
     const supabase = createClient()
@@ -57,12 +85,14 @@ export async function GET(req: NextRequest) {
     const evaluables = correctos + incorrectos
     const tasaAcierto = evaluables > 0 ? Math.round((correctos / evaluables) * 100) : null
     const materias = Array.from(new Set((interacciones || []).map((i:any) => i.materia?.nombre || 'Materia no clasificada')))
+    const rutaDificultad = calcularRutaDificultad(interacciones || [])
     const resumenPedagogico = {
       materias,
       temas,
       correctos,
       enPractica: incorrectos,
       tasaAcierto,
+      rutaDificultad,
       lectura: totalSesiones === 0
         ? 'Aún no hay actividad suficiente para emitir una lectura académica.'
         : tasaAcierto !== null && tasaAcierto < 65
