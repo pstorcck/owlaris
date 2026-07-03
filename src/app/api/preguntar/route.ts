@@ -771,15 +771,18 @@ function reforzarDiagnosticoPorFallos(respuesta: string, idiomaIngles: boolean, 
 
 async function cargarOperacionesEvaluadas(
   supabase: ReturnType<typeof createClient>,
-  userId: string
+  userId: string,
+  materiaUuid?: string | null
 ) {
   try {
-    const { data, error } = await supabase
+    let query = supabase
       .from('interacciones')
       .select('operacion_canonica')
       .eq('usuario_id', userId)
       .eq('op_estado', 'evaluada')
       .not('operacion_canonica', 'is', null)
+    if (materiaUuid) query = query.eq('materia_id', materiaUuid)
+    const { data, error } = await query
       .order('creado_en', { ascending: false })
       .limit(1000)
     if (error) throw error
@@ -1227,13 +1230,17 @@ export async function POST(req: NextRequest) {
 
     if (pendingMathId) {
       try {
-        const { data: preguntaPendiente } = await supabase
+        let preguntaPendienteQuery = supabase
           .from('interacciones')
           .select('id, respuesta, operacion_canonica, op_estado, op_evaluada_en, documento_fuente')
           .eq('id', pendingMathId)
           .eq('usuario_id', user.id)
           .eq('op_estado', 'pendiente')
           .is('op_evaluada_en', null)
+        // Defensa adicional: un ejercicio pendiente de otra materia nunca debe
+        // reutilizarse, sin importar qué ID mande el cliente.
+        if (materia_uuid) preguntaPendienteQuery = preguntaPendienteQuery.eq('materia_id', materia_uuid)
+        const { data: preguntaPendiente } = await preguntaPendienteQuery
           .maybeSingle()
 
         if (preguntaPendiente?.operacion_canonica && isSafeCanonicalOperation(preguntaPendiente.operacion_canonica)) {
@@ -1388,7 +1395,7 @@ export async function POST(req: NextRequest) {
       const operacionesHistorial = collectRecentMathOperations([
         ...(Array.isArray(historial) ? historial.map((msg: { contenido?: string }) => msg.contenido || '') : []),
       ])
-      const operacionesEvaluadas = esRespuestaCorrecta ? await cargarOperacionesEvaluadas(supabase, user.id) : []
+      const operacionesEvaluadas = esRespuestaCorrecta ? await cargarOperacionesEvaluadas(supabase, user.id, materia_uuid) : []
       const operacionesBloqueadas = combinarOperacionesBloqueadas(
         operacionesHistorial,
         operacionesEvaluadas,
@@ -1700,7 +1707,7 @@ ${contextoContenido}`
         Array.isArray(historial) ? historial.map((msg: { contenido?: string }) => msg.contenido || '') : []
       )
       try {
-        const operacionesEvaluadas = await cargarOperacionesEvaluadas(supabase, user.id)
+        const operacionesEvaluadas = await cargarOperacionesEvaluadas(supabase, user.id, materia_uuid)
         const operacionesBloqueadas = combinarOperacionesBloqueadas(operacionesHistorial, operacionesEvaluadas)
         if (isRepeatedMathOperation(opValidaEnRespuesta, operacionesBloqueadas)) {
           const ejercicioFresco = buildNextMathExercise([...operacionesBloqueadas, opValidaEnRespuesta], nivelDificultadActual, idiomaIngles)
