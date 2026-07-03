@@ -1750,6 +1750,20 @@ ${contextoContenido}`
       }
     }
 
+    // La alerta de baja comprensión y las métricas del reporte para padres dependen
+    // de "estado_evaluacion". Para materias humanísticas evaluacionProtocolo siempre
+    // es null (esa evaluación determinística solo corre para materias numéricas), y
+    // el guard humanístico de abajo reemplaza "Incorrecto"/"Correcto" por lenguaje
+    // más suave — si no se captura la señal ANTES de ese reemplazo, ambas quedan
+    // ciegas para historia, español, literatura, etc.
+    const estadoEvaluacionHumanistico = (() => {
+      if (evaluacionProtocolo) return null
+      const baja = respuesta.toLowerCase()
+      if (/\bincorrecto\b|\bno es correcto\b|\bincorrect\b|\bnot correct\b/.test(baja)) return 'incorrecto'
+      if (/\bcorrecto\b|\bcorrect\b/.test(baja)) return 'correcto'
+      return null
+    })()
+
     const pedagogicalGuard = guardNoFinalAnswer(respuesta, {
       pregunta,
       tipoPregunta,
@@ -1831,7 +1845,7 @@ ${contextoContenido}`
       sospecha_copia: detectarCopia(pregunta),
       operacion_canonica: opValidaEnRespuesta || null,
       op_estado: opValidaEnRespuesta ? 'pendiente' : null,
-      estado_evaluacion: evaluacionProtocolo?.estado || null,
+      estado_evaluacion: evaluacionProtocolo?.estado || estadoEvaluacionHumanistico,
       guard_activado: evaluacionProtocolo?.guardActivado || pedagogicalGuard.guardActivado || guardiaHumanistica.guardActivado || externalResourceGuard.guardActivado || externalResourceGuardFinal.guardActivado || false,
     }).select('id').single()
     const insertedId = insertedRow?.id || null
@@ -1840,7 +1854,7 @@ ${contextoContenido}`
     if (tipoPregunta === 'academica' && !contenidoCurricular && materia) await registrarPendiente(supabase, perfil, materia, pregunta)
 
     // Alertas pedagógicas
-    await verificarAlertasBajaComprension(supabase, user.id, perfil, gradoEfectivo, materia, respuesta, documentoFuente, evaluacionProtocolo?.estado || null)
+    await verificarAlertasBajaComprension(supabase, user.id, perfil, gradoEfectivo, materia, respuesta, documentoFuente, evaluacionProtocolo?.estado || estadoEvaluacionHumanistico)
 
     supabase.from('usuarios').update({ ultimo_acceso: new Date().toISOString() }).eq('id', user.id).then(() => {})
 
