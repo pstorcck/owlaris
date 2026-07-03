@@ -84,6 +84,14 @@ function ventanaHoyGuatemala() {
   }
 }
 
+function inicioReporte(sessionStartedAt?: unknown) {
+  if (typeof sessionStartedAt === 'string') {
+    const parsed = new Date(sessionStartedAt)
+    if (!Number.isNaN(parsed.getTime())) return parsed
+  }
+  return ventanaHoyGuatemala().start
+}
+
 function calcularMetricasHoy(interacciones: InteraccionReporte[]) {
   const correctas = interacciones.filter(i => i.estado_evaluacion === 'correcto' || i.estado_evaluacion === 'equivalente').length
   const incorrectas = interacciones.filter(i => i.estado_evaluacion === 'incorrecto').length
@@ -158,6 +166,7 @@ export async function POST(req: NextRequest) {
       grado,
       materia,
       colegio,
+      session_started_at,
       adaptaciones_dificultad = [],
       nivel_dificultad_final = null,
       aciertos_consecutivos = 0,
@@ -168,13 +177,14 @@ export async function POST(req: NextRequest) {
       : []
     const nivelFinal = Number.isFinite(Number(nivel_dificultad_final)) ? Number(nivel_dificultad_final) : null
     const lecturaDificultad = resumenDificultad(adaptaciones, nivelFinal)
-    const ventana = ventanaHoyGuatemala()
+    const inicioSesion = inicioReporte(session_started_at)
+    const finSesion = new Date()
     const { data: interaccionesHoy } = await supabase
       .from('interacciones')
       .select('pregunta,respuesta,tema_detectado,estado_evaluacion,documento_fuente,operacion_canonica,op_respuesta_alumno,op_estado,creado_en')
       .eq('usuario_id', user.id)
-      .gte('creado_en', ventana.start.toISOString())
-      .lt('creado_en', ventana.end.toISOString())
+      .gte('creado_en', inicioSesion.toISOString())
+      .lte('creado_en', finSesion.toISOString())
       .order('creado_en', { ascending: true })
     const metricasHoy = calcularMetricasHoy((interaccionesHoy || []) as InteraccionReporte[])
     const evidenciaHoy = construirEvidenciaHoy((interaccionesHoy || []) as InteraccionReporte[])

@@ -6,6 +6,10 @@ import {
   looksLikeMathPracticePrompt,
   solveOperation,
 } from '../src/lib/mathSafety'
+import {
+  buildPendingContextResponse,
+  isPendingContextQuestion,
+} from '../src/lib/tutorContext'
 
 async function main() {
   const tutorPrompt = 'La pregunta es: ¿Cuánto es 25 - 9? Intenta resolverlo y dame tu respuesta.'
@@ -63,6 +67,10 @@ Respuesta: 13`,
   const simpleEquation = await handleMathEvaluation('Resuelve: x + 5 = 12 [OP: x+5=12]', 'x = 7', false)
   assert.equal(simpleEquation?.estado, 'correcto')
   assert.equal(simpleEquation?.correctAnswer, 7)
+
+  const simpleEquationBareAnswer = await handleMathEvaluation('Muy bien, resuelve: x + 5 = 12. ¿Qué valor tiene x? [OP: x+5=12]', '7', false)
+  assert.equal(simpleEquationBareAnswer?.estado, 'correcto')
+  assert.equal(simpleEquationBareAnswer?.correctAnswer, 7)
 
   const parenthesisEquation = await handleMathEvaluation('Resuelve: 2(x + 3) = 18 [OP: 2(x+3)=18]', '6', false)
   assert.equal(parenthesisEquation?.estado, 'correcto')
@@ -148,6 +156,16 @@ D) 10
   assert.equal(decimalWrong?.estado, 'incorrecto')
   assert.match(decimalWrong?.feedback || '', /decimal|15\/100|porcentaje/i)
   assert.doesNotMatch(decimalWrong?.feedback || '', /grupos iguales/i)
+
+  assert.equal(isPendingContextQuestion('puedo usar calculadora para esa?'), true)
+  const calculatorResponse = buildPendingContextResponse({
+    studentQuestion: 'puedo usar calculadora para esa?',
+    activeOperation: '48-19',
+    activePrompt: 'Intenta este ejercicio distinto: 48 - 19. ¿Cual es el resultado?',
+    idiomaIngles: false,
+  })
+  assert.match(calculatorResponse, /comprobar al final/i)
+  assert.match(calculatorResponse, /48 - 19/i)
 
   console.log('math-safety smoke passed')
 }

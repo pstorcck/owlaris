@@ -40,6 +40,7 @@ import {
   buildNextMathExercise,
   calculateAdaptiveDifficulty,
   collectRecentMathOperations,
+  inferMathPracticeFocus,
   isRepeatedMathOperation,
   isWorkedExampleRequest,
 } from '@/lib/mathPractice'
@@ -1228,10 +1229,30 @@ export async function POST(req: NextRequest) {
 
     // ── PROTOCOLO ANTI-ERRORES — evaluación por backend ─────────────
     let evaluacionProtocolo: MathEvaluation | null = null
-    const pendingMathId: string | null = body.pending_math_interaction_id || null
+    let pendingMathId: string | null = body.pending_math_interaction_id || null
     let pendingMathOperation: string | null = null
     let pendingMathDocumentoFuente: string | null = null
     let pendingMathPrompt: string | null = null
+
+    if (!pendingMathId && (isLikelyMathAnswerText(pregunta) || isPendingContextQuestion(pregunta) || isWorkedExampleRequest(pregunta))) {
+      try {
+        let pendingQuery = supabase
+          .from('interacciones')
+          .select('id')
+          .eq('usuario_id', user.id)
+          .eq('op_estado', 'pendiente')
+          .is('op_evaluada_en', null)
+          .not('operacion_canonica', 'is', null)
+          .order('creado_en', { ascending: false })
+          .limit(1)
+        if (materia_uuid) pendingQuery = pendingQuery.eq('materia_id', materia_uuid)
+        if (gradoEfectivo) pendingQuery = pendingQuery.eq('grado', gradoEfectivo)
+        const { data: latestPendingMath } = await pendingQuery.maybeSingle()
+        if (latestPendingMath?.id) pendingMathId = latestPendingMath.id
+      } catch (error) {
+        console.error('No se pudo recuperar OP pendiente reciente:', error)
+      }
+    }
 
     if (pendingMathId) {
       try {
@@ -1406,8 +1427,16 @@ export async function POST(req: NextRequest) {
         operacionesEvaluadas,
         [evaluacionProtocolo.op || '']
       )
+      const enfoquePractica = inferMathPracticeFocus([
+        pregunta,
+        materia_id,
+        materia?.nombre,
+        pendingMathOperation,
+        pendingMathPrompt,
+        ultimoMensajeAsistente(historial),
+      ])
       const siguienteEjercicio = esRespuestaCorrecta
-        ? buildNextMathExercise(operacionesBloqueadas, nivelSiguiente, idiomaIngles)
+        ? buildNextMathExercise(operacionesBloqueadas, nivelSiguiente, idiomaIngles, enfoquePractica)
         : null
       const fuentePractica = siguienteEjercicio
         ? await obtenerFuenteCurricularParaPractica({
@@ -1715,7 +1744,15 @@ ${contextoContenido}`
         const operacionesEvaluadas = await cargarOperacionesEvaluadas(supabase, user.id, materia_uuid)
         const operacionesBloqueadas = combinarOperacionesBloqueadas(operacionesHistorial, operacionesEvaluadas)
         if (isRepeatedMathOperation(opValidaEnRespuesta, operacionesBloqueadas)) {
-          const ejercicioFresco = buildNextMathExercise([...operacionesBloqueadas, opValidaEnRespuesta], nivelDificultadActual, idiomaIngles)
+          const enfoquePractica = inferMathPracticeFocus([
+            pregunta,
+            respuesta,
+            materia_id,
+            materia?.nombre,
+            ultimoMensajeAsistente(historial),
+            opValidaEnRespuesta,
+          ])
+          const ejercicioFresco = buildNextMathExercise([...operacionesBloqueadas, opValidaEnRespuesta], nivelDificultadActual, idiomaIngles, enfoquePractica)
           respuesta = idiomaIngles
             ? `Let's use a different exercise so we do not repeat the same one.\n\n${ejercicioFresco.text}`
             : `Usemos un ejercicio distinto para no repetir el mismo.\n\n${ejercicioFresco.text}`

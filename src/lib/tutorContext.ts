@@ -37,6 +37,9 @@ export function isPendingContextQuestion(value: string) {
   return isNoAnswerComplaint(value) || [
     'sin calculadora',
     'sin usar calculadora',
+    'puedo usar calculadora',
+    'puedo usar la calculadora',
+    'usar calculadora para',
     'puedo lograr',
     'puedo hacerlo',
     'puedo resolverlo',
@@ -67,8 +70,14 @@ function extractActiveFraction(operation?: string | null, prompt?: string | null
 function formatOperation(operation?: string | null) {
   if (!operation) return ''
   return operation
-    .replace(/\*/g, ' x ')
+    .replace(/\*/g, ' * ')
+    .replace(/\+/g, ' + ')
+    .replace(/-/g, ' - ')
+    .replace(/\//g, ' / ')
+    .replace(/=/g, ' = ')
     .replace(/\s+/g, ' ')
+    .replace('( ', '(')
+    .replace(' )', ')')
     .trim()
 }
 
@@ -89,6 +98,17 @@ export function buildPendingContextResponse(input: PendingContextResponseInput) 
   const fraction = extractActiveFraction(input.activeOperation, input.activePrompt)
   const operation = formatOperation(input.activeOperation)
   const asksCalculator = question.includes('calculadora') || question.includes('calculator') || question.includes('puedo lograr') || question.includes('puedo hacerlo')
+  const asksToUseCalculator = (
+    /puedo usar(?: la)? calculadora/.test(question) ||
+    /usar(?: la)? calculadora para/.test(question) ||
+    /can i use (?:a )?calculator/.test(question)
+  ) && !question.includes('sin usar calculadora') && !question.includes('without')
+
+  if (operation && asksToUseCalculator) {
+    return input.idiomaIngles
+      ? `${complaintPrefix}You can use a calculator to check at the end, but let us first practice the reasoning. Stay with the active exercise: ${operation}. What first step can you do without the calculator?`
+      : `${complaintPrefix}Puedes usar calculadora para comprobar al final, pero primero practiquemos el razonamiento. Sigamos con el ejercicio activo: ${operation}. ¿Qué primer paso puedes hacer sin calculadora?`
+  }
 
   if (fraction && asksCalculator) {
     return input.idiomaIngles

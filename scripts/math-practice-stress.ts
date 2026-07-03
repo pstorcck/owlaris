@@ -4,6 +4,7 @@ import {
   buildNextMathExercise,
   calculateAdaptiveDifficulty,
   collectRecentMathOperations,
+  inferMathPracticeFocus,
   isWorkedExampleRequest,
   isRepeatedMathOperation,
   normalizePracticeOperation,
@@ -99,6 +100,20 @@ async function main() {
     productionSessionOps.push(next.op)
   }
 
+  const algebraSessionOps = ['x+5=12']
+  for (let i = 0; i < 30; i += 1) {
+    const focus = inferMathPracticeFocus(['Matemática', 'álgebra', 'Resuelve: x + 5 = 12', algebraSessionOps[algebraSessionOps.length - 1]])
+    const next = buildNextMathExercise(algebraSessionOps, (i % 4) + 1, false, focus)
+    test(`algebra-session-stays-on-equations-${i}`, () => {
+      assert.equal(focus, 'equation')
+      assert.match(next.op, /x/i)
+      assert.match(next.op, /=/)
+      assert.equal(isRepeatedMathOperation(next.op, algebraSessionOps), false, `repeated ${next.op}`)
+      assert.notEqual(solveOperation(next.op), null, `unsolved ${next.op}`)
+    })
+    algebraSessionOps.push(next.op)
+  }
+
   for (let i = 0; i < 20; i += 1) {
     const activeOp = i % 2 === 0 ? '2*(x+3)=18' : '2*x-4=10'
     const example = buildAnalogousWorkedExample(activeOp, i % 3 === 0)
@@ -153,7 +168,7 @@ async function main() {
     if (rollingHistory.length > 12) rollingHistory.shift()
   }
 
-  for (let i = 0; i < 200; i += 1) {
+  for (let i = 0; i < 170; i += 1) {
     const level = (i % 8) + 1
     const next = buildNextMathExercise(rollingHistory, level, i % 2 === 1)
     const answer = solveOperation(next.op)

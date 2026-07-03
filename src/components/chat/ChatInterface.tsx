@@ -114,6 +114,7 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
   const [nivelDificultad, setNivelDificultad] = useState(1)
   const [aciertosConsec, setAciertosConsec]   = useState(0)
   const [adaptacionesDificultad, setAdaptacionesDificultad] = useState<AdaptacionDificultad[]>([])
+  const sessionStartedAtRef = useRef<string>(new Date().toISOString())
 
   const [materiaSugerida, setMateriaSugerida] = useState('')
   const TRAD_MATERIAS: Record<string,string> = {
@@ -178,6 +179,14 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
   const iniciales = usuario.nombre_completo.split(' ').map((n:string) => n[0]).join('').substring(0,2).toUpperCase()
 
   useEffect(() => { finalRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [mensajes, cargando])
+
+  function reiniciarVentanaReporte() {
+    sessionStartedAtRef.current = new Date().toISOString()
+    setAdaptacionesDificultad([])
+    setNivelDificultad(1)
+    setAciertosConsec(0)
+    setPendingMathId(null)
+  }
 
   useEffect(() => {
     if (estadoChat === 'esperando_grado' && !gradoGuardado && !gradoAlumno && gradosDisponibles.length > 0) {
@@ -354,6 +363,7 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
 
   function iniciarConversacionIngles() {
     asegurarAudioDesbloqueado()
+    reiniciarVentanaReporte()
     setModoConversacion(true)
     setIdiomaIngles(true)
     setMateriaAlumno('Inglés')
@@ -375,6 +385,9 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
     const modoConversacionActivo = opciones.forceConversation ?? modoConversacion
     const estadoActivo = opciones.forceEstado ?? estadoChat
     const materiaActiva = opciones.forceMateria ?? materiaAlumno
+    if (estadoActivo === 'esperando_materia' || estadoActivo === 'esperando_materia_olimpiadas') {
+      reiniciarVentanaReporte()
+    }
     setPregunta(''); setError(''); setSugerencias([])
 
     const msgU: MensajeChat = { id: Date.now().toString(), rol: 'usuario', contenido: tp, timestamp: new Date() }
@@ -626,18 +639,29 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
   }
 
   async function generarReporte() {
-    if (mensajes.length < 3) {
+    const sessionStartedAt = sessionStartedAtRef.current
+    const sessionStartedAtMs = new Date(sessionStartedAt).getTime()
+    const mensajesDeReporte = mensajes.filter((m: MensajeChat) => {
+      if (!m.timestamp || !Number.isFinite(sessionStartedAtMs)) return true
+      return new Date(m.timestamp).getTime() >= sessionStartedAtMs - 1000
+    })
+
+    if (mensajesDeReporte.length < 3) {
       setError('Todavía no hay suficiente actividad para generar el reporte de hoy.')
       return
     }
     setGenerandoPDF(true)
     try {
-      const adaptacionesParaReporte = adaptacionesDificultad.slice(-8)
+      const adaptacionesParaReporte = adaptacionesDificultad.slice(-8).filter((adaptacion, index, all) => {
+        const key = `${adaptacion.tipo}-${adaptacion.nivel_anterior}-${adaptacion.nivel_nuevo}-${adaptacion.motivo}`
+        return all.findIndex((item) => `${item.tipo}-${item.nivel_anterior}-${item.nivel_nuevo}-${item.motivo}` === key) === index
+      })
       const res = await fetch('/api/reporte', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          historial: mensajes.map(m => ({ rol: m.rol, contenido: m.contenido })),
+          historial: mensajesDeReporte.map(m => ({ rol: m.rol, contenido: m.contenido })),
+          session_started_at: sessionStartedAt,
           grado: gradoAlumno,
           materia: materiaAlumno,
           colegio: usuario.colegio?.nombre,
@@ -673,10 +697,6 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
         doc.setFontSize(size); doc.setFont('helvetica', bold ? 'bold' : 'normal'); setColor(color)
         doc.text(String(value || ''), x, yy)
       }
-      const textRight = (value: string, x: number, yy: number, size: number, bold = false, color = palette.ink) => {
-        doc.setFontSize(size); doc.setFont('helvetica', bold ? 'bold' : 'normal'); setColor(color)
-        doc.text(String(value || ''), x, yy, { align: 'right' })
-      }
       const wrapped = (value: string, x: number, yy: number, width: number, size = 9.5, color = palette.muted, bold = false) => {
         doc.setFontSize(size); doc.setFont('helvetica', bold ? 'bold' : 'normal'); setColor(color)
         const lines = doc.splitTextToSize(String(value || ''), width)
@@ -704,7 +724,7 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
         y += 2
       }
 
-      const msgsConFecha = mensajes.filter((m: MensajeChat) => m.timestamp)
+      const msgsConFecha = mensajesDeReporte.filter((m: MensajeChat) => m.timestamp)
       let durStr = ''
       if (msgsConFecha.length >= 2) {
         const ini = new Date(msgsConFecha[0].timestamp).getTime()
@@ -713,11 +733,11 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
         durStr = mins <= 1 ? '1 min' : mins + ' minutos'
       }
       const alumnoNombre = nombreAlumno || usuario.nombre_completo
-      const estudianteMsgs = mensajes.filter(m => m.rol === 'usuario').length
+      const estudianteMsgs = mensajesDeReporte.filter(m => m.rol === 'usuario').length
       const metricasHoy = data.analisis.metricas_hoy || {}
       const evidenciaHoy = Array.isArray(data.analisis.evidencia_hoy) ? data.analisis.evidencia_hoy : []
       const documentos = Array.from(new Set([
-        ...mensajes.map(m => m.documento_fuente).filter(Boolean),
+        ...mensajesDeReporte.map(m => m.documento_fuente).filter(Boolean),
         ...(Array.isArray(metricasHoy.fuentes) ? metricasHoy.fuentes : []),
       ])) as string[]
       const temas = Array.isArray(data.analisis.temas) ? data.analisis.temas : []
@@ -725,6 +745,7 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
       const mejoras = Array.isArray(data.analisis.areas_mejora) ? data.analisis.areas_mejora : []
       const familia = Array.isArray(data.analisis.recomendaciones_familia) ? data.analisis.recomendaciones_familia : []
       const alumnoRecs = Array.isArray(data.analisis.recomendaciones_alumno) ? data.analisis.recomendaciones_alumno : []
+      const duracionSesion = metricasHoy.duracion_minutos ? `${metricasHoy.duracion_minutos} minutos` : durStr || 'sesión corta'
       const resumenDificultad = data.analisis.resumen_dificultad || (
         adaptacionesParaReporte.length
           ? adaptacionesParaReporte.map(a => a.motivo).join(' ')
@@ -741,17 +762,16 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
       doc.text(new Date().toLocaleString('es-GT', { day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' }), W - margin, 39, { align: 'right' })
 
       y = 68
-      doc.setFillColor(255, 255, 255); doc.roundedRect(margin, y, maxW, 35, 4, 4, 'F')
-      doc.setDrawColor(palette.line[0], palette.line[1], palette.line[2]); doc.roundedRect(margin, y, maxW, 35, 4, 4, 'S')
+      doc.setFillColor(255, 255, 255); doc.roundedRect(margin, y, maxW, 42, 4, 4, 'F')
+      doc.setDrawColor(palette.line[0], palette.line[1], palette.line[2]); doc.roundedRect(margin, y, maxW, 42, 4, 4, 'S')
       text('Alumno', margin + 6, y + 9, 8, true, palette.muted)
       text(alumnoNombre, margin + 6, y + 19, 14, true, palette.ink)
       text(`Grado: ${gradoAlumno || 'No asignado'}  |  Materia: ${materiaAlumno || 'No seleccionada'}`, margin + 6, y + 28, 8.5, false, palette.muted)
-      textRight(`Nivel adaptativo final: ${nivelDificultad}`, W - margin - 6, y + 14, 9, true, palette.violet)
-      textRight(`Duración: ${metricasHoy.duracion_minutos ? `${metricasHoy.duracion_minutos} minutos` : durStr || 'sesión corta'}`, W - margin - 6, y + 24, 8.5, false, palette.muted)
-      y += 46
+      text(`Duración: ${duracionSesion}`, margin + 6, y + 36, 8.3, false, palette.muted)
+      y += 53
 
       const cardW = (maxW - 9) / 4
-      metricCard(margin, y, cardW, 'Interacciones', String(metricasHoy.interacciones || mensajes.length), palette.blue)
+      metricCard(margin, y, cardW, 'Interacciones', String(metricasHoy.interacciones || mensajesDeReporte.length), palette.blue)
       metricCard(margin + cardW + 3, y, cardW, 'Ejercicios', String(metricasHoy.ejercicios || estudianteMsgs), palette.teal)
       metricCard(margin + (cardW + 3) * 2, y, cardW, 'Precisión', metricasHoy.precision !== null && metricasHoy.precision !== undefined ? `${metricasHoy.precision}%` : 'En curso', palette.green)
       metricCard(margin + (cardW + 3) * 3, y, cardW, 'Dificultad', `Nivel ${nivelDificultad}`, palette.violet)
@@ -931,6 +951,7 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
             setMateriaAlumno('')
             setSugerencias([])
             setEstadoChat('esperando_materia')
+            reiniciarVentanaReporte()
             await supabase.from('usuarios').update({ grado }).eq('id', usuario.id)
             const res: Response = await fetch('/api/preguntar', {
               method: 'POST',
