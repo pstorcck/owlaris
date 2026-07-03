@@ -1241,6 +1241,10 @@ export async function POST(req: NextRequest) {
     let pendingMathOperation: string | null = null
     let pendingMathDocumentoFuente: string | null = null
     let pendingMathPrompt: string | null = null
+    // Se activa si dos peticiones casi simultaneas (doble clic, reintento de red)
+    // intentan resolver el mismo ejercicio pendiente: solo una debe generar el
+    // siguiente ejercicio, la otra no debe duplicarlo.
+    let respuestaDuplicadaPorConcurrencia = false
 
     if (!pendingMathId && (isLikelyMathAnswerText(pregunta) || isPendingContextQuestion(pregunta) || isWorkedExampleRequest(pregunta))) {
       try {
@@ -1332,9 +1336,17 @@ export async function POST(req: NextRequest) {
           evaluacionProtocolo = await handleMathEvaluation(textoConOP, pregunta, idiomaIngles, process.env.WOLFRAM_APP_ID)
           // Si acertó el valor final: marcar como evaluada. Un paso intermedio válido conserva la OP pendiente.
           if (evaluacionProtocolo && !evaluacionProtocolo.pasoIntermedio && (evaluacionProtocolo.estado === 'correcto' || evaluacionProtocolo.estado === 'equivalente')) {
-            await supabase.from('interacciones')
+            // Update condicionado a que SIGA pendiente (compare-and-swap): si dos
+            // peticiones llegan casi al mismo tiempo, solo la primera consigue
+            // filasActualizadas.length > 0 y solo esa debe generar el siguiente
+            // ejercicio. La segunda detecta que perdio la carrera.
+            const { data: filasActualizadas } = await supabase.from('interacciones')
               .update({ op_estado: 'evaluada', op_evaluada_en: new Date().toISOString(), op_respuesta_alumno: pregunta })
-              .eq('id', pendingMathId).eq('usuario_id', user.id)
+              .eq('id', pendingMathId).eq('usuario_id', user.id).eq('op_estado', 'pendiente')
+              .select('id')
+            if (!filasActualizadas || filasActualizadas.length === 0) {
+              respuestaDuplicadaPorConcurrencia = true
+            }
           }
           // Si incorrecto: mantener pendiente — no actualizar, el frontend conserva el mismo ID
         } else {
@@ -1412,6 +1424,30 @@ export async function POST(req: NextRequest) {
     }
 
     // Si el protocolo evaluó y tiene resultado definitivo, responder directo
+    if (respuestaDuplicadaPorConcurrencia) {
+      // Otra peticion casi simultanea ya proceso este mismo ejercicio pendiente
+      // y ya genero el siguiente. No insertamos una fila duplicada ni sumamos
+      // dos veces a la racha de aciertos.
+      return NextResponse.json({
+        respuesta: idiomaIngles
+          ? 'Got it, your answer was already recorded.'
+          : 'Listo, tu respuesta ya quedó registrada.',
+        tokens: 0,
+        documento_fuente: pendingMathDocumentoFuente,
+        pending_math_interaction_id: null,
+        nivel_dificultad: nivelDificultadActual,
+        aciertos_consecutivos: rachaAprendizaje.correctas,
+        fallos_consecutivos: rachaAprendizaje.incorrectas,
+        practica_enfoque: practicaEnfoqueEstable,
+        adaptacion_dificultad: calculateAdaptiveDifficulty({
+          currentLevel: nivelDificultadActual,
+          correctStreak: rachaAprendizaje.correctas,
+          wrongStreak: rachaAprendizaje.incorrectas,
+          idiomaIngles,
+        }),
+      })
+    }
+
     if (evaluacionProtocolo && evaluacionProtocolo.estado !== 'no_evaluable') {
       const esRespuestaCorrecta = evaluacionProtocolo.estado === 'correcto' || evaluacionProtocolo.estado === 'equivalente'
       const esPasoIntermedio = evaluacionProtocolo.estado === 'paso_correcto' || evaluacionProtocolo.pasoIntermedio
