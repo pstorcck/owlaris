@@ -4,6 +4,21 @@ import { canStaffAccessStudent } from '@/lib/guideAccess'
 
 export const dynamic = 'force-dynamic'
 
+function temaLegible(interaccion: { tema_detectado?: string | null; pregunta?: string | null; respuesta?: string | null; operacion_canonica?: string | null }) {
+  const base = `${interaccion.tema_detectado || ''} ${interaccion.pregunta || ''} ${interaccion.respuesta || ''} ${interaccion.operacion_canonica || ''}`
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+  if (/english|pronunciation|speaking|conversacion en ingles/.test(base)) return 'Conversación y pronunciación en inglés'
+  if (/ecuaci|despej|x\s*[+\-*/=]/.test(base) || String(interaccion.operacion_canonica || '').includes('=')) return 'Ecuaciones y despeje de variables'
+  if (/decimal|porcentaje|percent|0\.\d+|%/.test(base)) return 'Decimales y porcentajes'
+  if (/orden de operaciones|[*/].*[+\-]|[+\-].*[*/]/.test(base)) return 'Orden de operaciones'
+  if (/lectura|comprension|texto|redaccion|gramatica/.test(base)) return 'Lectura y comunicación escrita'
+  if (/biolog|ciencias|quimica|fisica|environmental/.test(base)) return 'Ciencias y comprensión de conceptos'
+  if (/practic|repas|ejercicio/.test(base)) return 'Práctica guiada'
+  return String(interaccion.tema_detectado || 'Acompañamiento académico').replace(/\s+/g, ' ').trim().slice(0, 80)
+}
+
 export async function GET(req: NextRequest) {
   try {
     const supabase = createClient()
@@ -28,17 +43,34 @@ export async function GET(req: NextRequest) {
     if (!puedeVer) return NextResponse.json({ error: 'Sin permisos para este alumno' }, { status: 403 })
 
     const { data: interacciones } = await admin
-      .from('interacciones').select('*')
+      .from('interacciones').select('*, materia:materias(nombre)')
       .eq('usuario_id', alumnoId)
       .order('creado_en', { ascending: false })
       .limit(50)
 
-    const temasSet = new Set((interacciones||[]).map((i:any) => i.tema_detectado).filter(Boolean))
+    const temasSet = new Set((interacciones||[]).map((i:any) => temaLegible(i)).filter(Boolean))
     const temas = Array.from(temasSet)
     const totalSesiones = interacciones?.length || 0
     const ultimaActividad = interacciones?.[0]?.creado_en || null
+    const correctos = (interacciones || []).filter((i:any) => i.estado_evaluacion === 'correcto' || i.estado_evaluacion === 'equivalente').length
+    const incorrectos = (interacciones || []).filter((i:any) => i.estado_evaluacion === 'incorrecto').length
+    const evaluables = correctos + incorrectos
+    const tasaAcierto = evaluables > 0 ? Math.round((correctos / evaluables) * 100) : null
+    const materias = Array.from(new Set((interacciones || []).map((i:any) => i.materia?.nombre || 'Materia no clasificada')))
+    const resumenPedagogico = {
+      materias,
+      temas,
+      correctos,
+      enPractica: incorrectos,
+      tasaAcierto,
+      lectura: totalSesiones === 0
+        ? 'Aún no hay actividad suficiente para emitir una lectura académica.'
+        : tasaAcierto !== null && tasaAcierto < 65
+          ? 'Conviene reforzar bases con pasos cortos y acompañamiento cercano.'
+          : 'El estudiante muestra avance que puede consolidarse con práctica breve y constante.',
+    }
 
-    return NextResponse.json({ alumno, totalSesiones, temas, ultimaActividad, interacciones })
+    return NextResponse.json({ alumno, totalSesiones, temas, ultimaActividad, interacciones, resumenPedagogico })
   } catch (err) {
     console.error(err)
     return NextResponse.json({ error: 'Error interno' }, { status: 500 })

@@ -682,9 +682,11 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
         wrappedTxt(data.analisis.avances, margin+4, 10, false, [60,50,100]); y += 4
       }
       const secciones = [
+        { titulo: 'MATERIAS ESTUDIADAS', items: data.analisis.materias_estudiadas || [materiaAlumno].filter(Boolean), bg:[224,242,254], c:[14,116,144], tc:[20,80,100] },
         { titulo: 'TEMAS TRABAJADOS', items: data.analisis.temas || [], bg:[237,233,254], c:[109,40,217], tc:[60,50,100] },
         { titulo: 'LOGROS DE LA SESIÓN', items: data.analisis.logros || data.analisis.fortalezas || [], bg:[220,252,231], c:[22,163,74], tc:[20,80,40] },
         { titulo: 'ÁREAS DE MEJORA', items: data.analisis.areas_mejora || data.analisis.areas_refuerzo || [], bg:[219,234,254], c:[37,99,235], tc:[20,50,120] },
+        { titulo: 'CÓMO ACOMPAÑAR EN CASA', items: data.analisis.recomendaciones_familia || [], bg:[255,251,235], c:[180,83,9], tc:[90,60,20] },
         { titulo: 'RECOMENDACIONES PARA EL ALUMNO', items: data.analisis.recomendaciones_alumno || [], bg:[219,234,254], c:[37,99,235], tc:[20,50,120] },
         { titulo: 'RECOMENDACIONES PARA EL MAESTRO', items: data.analisis.recomendaciones_maestro || [], bg:[243,232,255], c:[109,40,217], tc:[60,20,120] },
       ]
