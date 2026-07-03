@@ -780,6 +780,7 @@ async function cargarOperacionesEvaluadas(
       .eq('usuario_id', userId)
       .eq('op_estado', 'evaluada')
       .not('operacion_canonica', 'is', null)
+      .order('creado_en', { ascending: false })
       .limit(1000)
     if (error) throw error
     return (data || [])
