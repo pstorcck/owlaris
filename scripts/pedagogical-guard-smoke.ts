@@ -56,7 +56,7 @@ function main() {
     activeOperation: '3/8',
     activePrompt: 'Convierte la fracción 3/8 a decimal.',
   })
-  assert.match(fractionContext, /Volvamos a 3\/8/)
+  assert.match(fractionContext, /Usemos el ejemplo que veníamos trabajando: 3\/8/)
   assert.match(fractionContext, /3 ÷ 8/)
   assert.doesNotMatch(fractionContext, /0\.375/)
 

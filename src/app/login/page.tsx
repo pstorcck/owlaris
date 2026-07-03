@@ -30,22 +30,52 @@ export default function LoginPage() {
           justify-content: center;
           padding: 24px;
           font-family: system-ui, -apple-system, sans-serif;
+          position: relative;
+          overflow: hidden;
           background: linear-gradient(160deg,#F8F7FF 0%,#F5FAFF 52%,#EEF2FF 100%);
         }
+        .lr::before {
+          content: "";
+          position: absolute;
+          inset: 0;
+          background-image:
+            linear-gradient(rgba(109,40,217,.055) 1px, transparent 1px),
+            linear-gradient(90deg, rgba(14,116,144,.045) 1px, transparent 1px);
+          background-size: 46px 46px;
+          opacity: .55;
+          pointer-events: none;
+        }
         .lc {
+          position: relative;
+          z-index: 1;
           width: 100%;
-          max-width: 420px;
-          background: rgba(255,255,255,.94);
-          border-radius: 24px;
-          padding: 44px 40px;
+          max-width: 440px;
+          background: rgba(255,255,255,.88);
+          backdrop-filter: blur(22px);
+          border-radius: 22px;
+          padding: 36px 38px;
+          border: 1px solid rgba(109,40,217,.14);
+          box-shadow: 0 28px 80px rgba(30,27,75,.14), 0 2px 22px rgba(14,116,144,.08);
+        }
+        .access-badge {
+          display: inline-flex;
+          align-items: center;
+          gap: 7px;
+          margin: 0 auto 18px;
+          padding: 7px 12px;
+          border-radius: 999px;
+          background: #F8FAFC;
           border: 1px solid rgba(109,40,217,.12);
-          box-shadow: 0 28px 70px rgba(30,27,75,.12), 0 2px 18px rgba(109,40,217,.08);
+          color: #5B21B6;
+          font-size: 11px;
+          font-weight: 750;
+          letter-spacing: .3px;
         }
         .logo-wrap {
-          width: 72px; height: 72px;
-          margin: 0 auto 20px;
+          width: 76px; height: 76px;
+          margin: 0 auto 16px;
           background: linear-gradient(135deg,#FFFFFF,#F3F0FF);
-          border-radius: 20px;
+          border-radius: 22px;
           display: flex; align-items: center; justify-content: center;
           border: 1px solid rgba(124,58,237,.18);
           box-shadow: 0 12px 32px rgba(124,58,237,.14);
@@ -59,7 +89,7 @@ export default function LoginPage() {
           width: 100%;
           background: #FFFFFF;
           border: 1.5px solid rgba(109,40,217,.13);
-          border-radius: 12px;
+          border-radius: 14px;
           padding: 13px 16px;
           font-size: 14px;
           color: #1E1B4B;
@@ -73,7 +103,7 @@ export default function LoginPage() {
           width: 100%;
           background: linear-gradient(135deg,#7C3AED,#6D28D9);
           border: none;
-          border-radius: 12px;
+          border-radius: 14px;
           padding: 14px;
           font-size: 15px;
           font-weight: 700;
@@ -93,7 +123,7 @@ export default function LoginPage() {
           gap: 8px;
           background: #F8FAFC;
           border: 1px solid rgba(37,99,235,.12);
-          border-radius: 12px;
+          border-radius: 14px;
           padding: 13px;
           text-decoration: none;
           transition: all .2s;
@@ -106,6 +136,9 @@ export default function LoginPage() {
 
       <div className="lr">
         <div className="lc">
+          <div style={{display:'flex',justifyContent:'center'}}>
+            <div className="access-badge">Acceso institucional</div>
+          </div>
           <div className="logo-wrap">
             <img src="/buho.png" alt="Owlaris" style={{width:'44px',height:'44px',objectFit:'contain'}}/>
           </div>
@@ -113,7 +146,7 @@ export default function LoginPage() {
           <h1 style={{fontFamily:'system-ui',fontSize:'28px',fontWeight:800,color:'#1E1B4B',letterSpacing:'-0.5px',textAlign:'center',marginBottom:'6px'}}>
             Owlaris
           </h1>
-          <p style={{fontSize:'13px',color:'#6B658C',textAlign:'center',marginBottom:'32px',fontWeight:400}}>
+          <p style={{fontSize:'13px',color:'#6B658C',textAlign:'center',marginBottom:'28px',fontWeight:500}}>
             Tu tutor académico inteligente
           </p>
 
@@ -158,7 +191,7 @@ export default function LoginPage() {
             </div>
           </div>
 
-          <p style={{textAlign:'center',fontSize:'11px',color:'#B6B1D6',marginTop:'28px'}}>
+          <p style={{textAlign:'center',fontSize:'11px',color:'#9490B8',marginTop:'24px'}}>
             © 2026 Owlaris · Todos los derechos reservados
           </p>
         </div>

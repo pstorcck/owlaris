@@ -49,16 +49,21 @@ export default function SignupPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4" style={{background:'linear-gradient(160deg,#F8F7FF 0%,#F5FAFF 52%,#EEF2FF 100%)'}}>
+    <div className="min-h-screen flex items-center justify-center p-4 relative overflow-hidden" style={{background:'linear-gradient(160deg,#F8F7FF 0%,#F5FAFF 52%,#EEF2FF 100%)'}}>
+      <div className="absolute inset-0 pointer-events-none opacity-50"
+        style={{backgroundImage:'linear-gradient(rgba(109,40,217,.055) 1px, transparent 1px), linear-gradient(90deg, rgba(14,116,144,.045) 1px, transparent 1px)',backgroundSize:'46px 46px'}}/>
       <div className="relative w-full max-w-md">
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-24 h-24 rounded-2xl mb-4 shadow-lg overflow-hidden border border-violet-100 bg-white">
+        <div className="text-center mb-7">
+          <div className="inline-flex items-center justify-center rounded-full mb-4 px-3 py-1.5 bg-slate-50 border border-violet-100 text-[#5B21B6] text-[11px] font-bold tracking-wide">
+            Registro institucional
+          </div>
+          <div className="mx-auto flex items-center justify-center w-24 h-24 rounded-[22px] mb-4 shadow-lg shadow-violet-100/80 overflow-hidden border border-violet-100 bg-white">
             <Image src="/buho.png" alt="Owlaris" width={96} height={96} className="object-contain p-1"/>
           </div>
           <h1 className="text-3xl font-bold text-[#1E1B4B]">Owlaris</h1>
-          <p className="text-[#6B658C] mt-1">Tu tutor académico inteligente</p>
+          <p className="text-[#6B658C] mt-1 font-medium">Tu tutor académico inteligente</p>
         </div>
-        <div className="bg-white/95 rounded-2xl shadow-2xl shadow-violet-100/70 p-8 border border-violet-100">
+        <div className="bg-white/90 backdrop-blur-xl rounded-[22px] shadow-2xl shadow-violet-100/70 p-8 border border-violet-100">
           <h2 className="text-xl font-semibold text-gray-800 mb-2">Crear cuenta</h2>
           <p className="text-xs text-gray-400 mb-6">
             Solo para correos <strong>@colegiomontano.edu.gt</strong> y <strong>@escolaris.edu.gt</strong>

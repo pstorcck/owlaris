@@ -92,8 +92,8 @@ export function buildPendingContextResponse(input: PendingContextResponseInput) 
 
   if (fraction && asksCalculator) {
     return input.idiomaIngles
-      ? `${complaintPrefix}Yes, you can do it without a calculator. Let us return to ${fraction.display}. To convert a fraction to a decimal, divide the numerator by the denominator: ${fraction.numerator} divided by ${fraction.denominator}. We will go step by step: since ${fraction.denominator} does not fit into ${fraction.numerator}, we use decimals. If we write ${fraction.numerator}.0, how many times does ${fraction.denominator} fit into ${Number(fraction.numerator) * 10}?`
-      : `${complaintPrefix}Sí, puedes hacerlo sin calculadora. Volvamos a ${fraction.display}. Para convertir una fracción a decimal, dividimos el numerador entre el denominador: ${fraction.numerator} ÷ ${fraction.denominator}. Vamos paso a paso: como ${fraction.denominator} no cabe en ${fraction.numerator}, usamos decimales. Si escribimos ${fraction.numerator}.0, ¿cuántas veces cabe ${fraction.denominator} en ${Number(fraction.numerator) * 10}?`
+      ? `${complaintPrefix}Yes, you can do it without a calculator. Let us use the example we were working with: ${fraction.display}. To convert a fraction to a decimal, divide the numerator by the denominator: ${fraction.numerator} divided by ${fraction.denominator}. We will go step by step: since ${fraction.denominator} does not fit into ${fraction.numerator}, we use decimals. If we write ${fraction.numerator}.0, how many times does ${fraction.denominator} fit into ${Number(fraction.numerator) * 10}?`
+      : `${complaintPrefix}Sí, puedes hacerlo sin calculadora. Usemos el ejemplo que veníamos trabajando: ${fraction.display}. Para convertir una fracción a decimal, dividimos el numerador entre el denominador: ${fraction.numerator} ÷ ${fraction.denominator}. Vamos paso a paso: como ${fraction.denominator} no cabe en ${fraction.numerator}, usamos decimales. Si escribimos ${fraction.numerator}.0, ¿cuántas veces cabe ${fraction.denominator} en ${Number(fraction.numerator) * 10}?`
   }
 
   if (operation && /x/i.test(operation) && operation.includes('=')) {
