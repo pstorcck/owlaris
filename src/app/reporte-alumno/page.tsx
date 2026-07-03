@@ -64,8 +64,8 @@ export default async function ReporteAlumnoPage({ searchParams }: { searchParams
   const fmtFecha = (f: string) => new Date(f).toLocaleString('es-GT', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
 
   const badgeEval = (estado: string | null) => {
-    if (estado === 'correcto' || estado === 'equivalente') return { txt: 'Correcto', bg: '#DCFCE7', color: '#059669' }
-    if (estado === 'incorrecto') return { txt: 'Incorrecto', bg: '#FEE2E2', color: '#DC2626' }
+    if (estado === 'correcto' || estado === 'equivalente') return { txt: 'Logrado', bg: '#DCFCE7', color: '#059669' }
+    if (estado === 'incorrecto') return { txt: 'En práctica', bg: '#EDE9FE', color: '#7C3AED' }
     return null
   }
 
@@ -100,8 +100,8 @@ export default async function ReporteAlumnoPage({ searchParams }: { searchParams
             { label: 'Interacciones', value: totalSesiones, color: '#2C3E6B' },
             { label: 'Materias', value: materias.length, color: '#7C3AED' },
             { label: 'Temas únicos', value: temas.length, color: '#0D9488' },
-            { label: 'Correctas', value: correctos, color: '#059669' },
-            { label: 'Incorrectas', value: incorrectos, color: incorrectos > 0 ? '#DC2626' : '#94A3B8' },
+            { label: 'Logrados', value: correctos, color: '#059669' },
+            { label: 'En práctica', value: incorrectos, color: '#7C3AED' },
             { label: 'Sospechas copia', value: sospechas, color: sospechas > 0 ? '#DC2626' : '#059669' },
           ].map((m,i) => (
             <div key={i} style={{background:'white',borderRadius:'12px',padding:'16px',border:'1px solid rgba(15,28,46,.06)',textAlign:'center'}}>
@@ -133,13 +133,13 @@ export default async function ReporteAlumnoPage({ searchParams }: { searchParams
             <div key={nombreMateria} style={{background:'white',borderRadius:'12px',padding:'20px 24px',marginBottom:'20px',border:'1px solid rgba(15,28,46,.06)'}}>
               <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'16px',borderBottom:'2px solid #F1F5F9',paddingBottom:'12px'}}>
                 <h3 style={{fontSize:'16px',fontWeight:700,color:'#2C3E6B',margin:0}}>{nombreMateria}</h3>
-                <span style={{fontSize:'12px',color:'#94A3B8'}}>{ints.length} interacciones{errsMateria > 0 ? ` · ${errsMateria} incorrectas` : ''}</span>
+                <span style={{fontSize:'12px',color:'#94A3B8'}}>{ints.length} interacciones{errsMateria > 0 ? ` · ${errsMateria} en práctica` : ''}</span>
               </div>
               <div style={{display:'flex',flexDirection:'column',gap:'16px'}}>
                 {ints.map(int => {
                   const badge = badgeEval(int.estado_evaluacion)
                   return (
-                    <div key={int.id} style={{borderLeft:`3px solid ${badge?.color === '#DC2626' ? '#DC2626' : '#E2E8F0'}`,paddingLeft:'16px'}}>
+                    <div key={int.id} style={{borderLeft:'3px solid #E2E8F0',paddingLeft:'16px'}}>
                       <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'6px',flexWrap:'wrap',gap:'6px'}}>
                         <div style={{display:'flex',gap:'8px',alignItems:'center'}}>
                           {int.tema_detectado && <span style={{fontSize:'11px',fontWeight:600,color:'#2C3E6B'}}>{int.tema_detectado}</span>}

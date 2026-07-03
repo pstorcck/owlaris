@@ -22,8 +22,16 @@ export async function POST(req: NextRequest) {
       max_tokens: 800,
       messages: [{
         role: 'system',
-        content: `Eres un analizador pedagógico. Analiza la sesión de tutoría y devuelve SOLO un JSON válido sin markdown con esta estructura:
-{"nivel":"Excelente|Bueno|En proceso|Necesita refuerzo","temas":["tema1"],"fortalezas":["fortaleza1"],"areas_refuerzo":["area1"],"recomendaciones_alumno":["rec1"],"recomendaciones_maestro":["rec1"],"resumen":"Resumen en 2-3 oraciones."}`
+        content: `Eres un analizador pedagógico POSITIVO y MOTIVACIONAL. Analiza la sesión de tutoría y devuelve SOLO un JSON válido sin markdown con esta estructura:
+{"nivel":"Excelente|Muy bien|En progreso|Con potencial","temas":["Materia - Tema (ej: Matemática - Ecuaciones)"],"logros":["logro concreto de la sesión"],"areas_mejora":["área expresada de forma constructiva y motivadora, NUNCA como error o fallo"],"felicitacion":"Frase de felicitación personalizada por lo que hizo bien","frase_motivacional":"Frase motivadora para seguir practicando","avances":"Descripción del avance del alumno en 1-2 oraciones","recomendaciones_alumno":["rec positiva"],"recomendaciones_maestro":["rec pedagógica"],"resumen":"Resumen en 2-3 oraciones con tono positivo."}
+
+REGLAS ESTRICTAS:
+- NUNCA uses palabras como: error, incorrecto, falló, se equivocó, mal, fracaso, deficiente
+- Los errores se expresan como "oportunidades de práctica" o "temas para reforzar"
+- Si el alumno tuvo dificultades, la frase_motivacional debe animarlo sin evidenciar el fallo
+- Si el alumno lo hizo bien, la felicitacion debe ser específica y genuina
+- El nivel más bajo es "Con potencial", nunca "Necesita refuerzo"
+- Tono cálido, cercano, como un mentor que cree en el alumno`
       }, {
         role: 'user',
         content: `Materia: ${materia}\nGrado: ${grado}\nColegio: ${colegio}\n\nConversación:\n${conversacion}`
@@ -36,13 +44,16 @@ export async function POST(req: NextRequest) {
       analisis = JSON.parse(texto.replace(/```json|```/g, '').trim())
     } catch {
       analisis = {
-        nivel: 'Bueno',
+        nivel: 'Muy bien',
         temas: [materia],
-        fortalezas: ['Participación activa en la sesión'],
-        areas_refuerzo: ['Continuar practicando los temas vistos'],
+        logros: ['Participación activa y constante en la sesión'],
+        areas_mejora: ['Seguir explorando nuevos temas para crecer aún más'],
+        felicitacion: '¡Excelente trabajo hoy! Tu dedicación se nota en cada respuesta.',
+        frase_motivacional: 'Cada sesión de práctica te acerca más a dominar el tema. ¡Sigue así!',
+        avances: 'El alumno mostró compromiso y avance constante durante la sesión.',
         recomendaciones_alumno: ['Practica más con Owlaris', 'Repasa los apuntes de clase'],
         recomendaciones_maestro: ['Revisar los temas de la sesión con el alumno'],
-        resumen: 'El alumno participó en una sesión de tutoría con Owlaris.'
+        resumen: 'El alumno participó activamente en una sesión de tutoría con Owlaris.'
       }
     }
 

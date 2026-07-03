@@ -151,7 +151,7 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
   // Estado onboarding
   const gradoGuardado = usuario.grado || ''
   const nombreInicial = usuario.nombre_completo.split(' ')[0]
-  const estadoInicial: EstadoChat = gradoGuardado ? 'esperando_materia' : 'esperando_nombre'
+  const estadoInicial: EstadoChat = gradoGuardado ? 'esperando_materia' : 'esperando_grado'
   const [estadoChat, setEstadoChat]       = useState<EstadoChat>(estadoInicial)
   const [nombreAlumno, setNombreAlumno]   = useState(gradoGuardado ? nombreInicial : '')
   const [gradoAlumno, setGradoAlumno]     = useState(gradoGuardado)
@@ -213,18 +213,20 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
     const nombre = usuario.nombre_completo.split(' ')[0]
     const msg = gradoGuardado
       ? (idiomaIngles
-          ? `Hi, ${nombre}! What do you want to study today?`
-          : `¡Hola, ${nombre}! ¿Qué quieres estudiar hoy?`)
+          ? `Hi, ${nombre}! What subject are we studying today?`
+          : `¡Hola, ${nombre}! ¿Qué materia vamos a estudiar hoy?`)
       : (idiomaIngles
-          ? "Hi! I'm Owlaris, your intelligent academic tutor. What's your name?"
-          : '¡Hola! Soy Owlaris, tu tutor académico inteligente. ¿Cómo te llamas?')
+          ? `Hi, ${nombre}! I'm Owlaris, your academic tutor. First, select your grade.`
+          : `¡Hola, ${nombre}! Soy Owlaris, tu tutor académico. Primero, selecciona tu grado.`)
     setMensajes([{
       id: 'bienvenida',
       rol: 'asistente',
       contenido: msg,
       timestamp: new Date(),
     }])
-    if (gradoGuardado) setNombreAlumno(nombre)
+    setNombreAlumno(nombre)
+    // Sin grado guardado: abrir modal de grados automáticamente
+    if (!gradoGuardado) setMostrandoGrados(true)
   }, [idiomaIngles])
 
   // Traducir chips cuando cambia idioma
@@ -642,7 +644,7 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
       doc.setFontSize(13); doc.setFont('helvetica', 'normal'); doc.text('Reporte de Sesión Académica', margin, 38)
       doc.setFontSize(10); doc.text(usuario.colegio?.nombre || '', margin, 48)
       y = 80
-      const nivelColor: Record<string,number[]> = { 'Excelente':[22,163,74],'Bueno':[37,99,235],'En proceso':[234,88,12],'Necesita refuerzo':[220,38,38] }
+      const nivelColor: Record<string,number[]> = { 'Excelente':[22,163,74],'Muy bien':[37,99,235],'En progreso':[234,88,12],'Con potencial':[124,58,237] }
       const nc = nivelColor[data.analisis.nivel] || [109,40,217]
       doc.setFillColor(248,247,255); doc.roundedRect(margin, y-5, maxW, 42, 4, 4, 'F')
       doc.setDrawColor(109,40,217); doc.setLineWidth(0.5); doc.roundedRect(margin, y-5, maxW, 42, 4, 4, 'S')
@@ -664,12 +666,27 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
       doc.setFillColor(237,233,254); doc.roundedRect(margin, y-4, maxW, 6, 2, 2, 'F')
       txt('RESUMEN DE LA SESIÓN', margin+4, 9, true, [109,40,217]); y += 10
       wrappedTxt(data.analisis.resumen, margin+4, 10, false, [60,50,100]); y += 4
+      // Felicitación destacada
+      if (data.analisis.felicitacion) {
+        checkY(24)
+        doc.setFillColor(220,252,231); doc.roundedRect(margin, y-4, maxW, 20, 4, 4, 'F')
+        doc.setDrawColor(22,163,74); doc.setLineWidth(0.5); doc.roundedRect(margin, y-4, maxW, 20, 4, 4, 'S')
+        txt('FELICITACIONES', margin+6, 9, true, [22,163,74]); y += 7
+        wrappedTxt(data.analisis.felicitacion, margin+6, 10, false, [20,80,40]); y += 4
+      }
+      // Avances
+      if (data.analisis.avances) {
+        checkY(16)
+        doc.setFillColor(237,233,254); doc.roundedRect(margin, y-4, maxW, 6, 2, 2, 'F')
+        txt('TUS AVANCES', margin+4, 9, true, [109,40,217]); y += 10
+        wrappedTxt(data.analisis.avances, margin+4, 10, false, [60,50,100]); y += 4
+      }
       const secciones = [
-        { titulo: 'TEMAS TRABAJADOS', items: data.analisis.temas, bg:[237,233,254], c:[109,40,217], tc:[60,50,100] },
-        { titulo: 'FORTALEZAS DETECTADAS', items: data.analisis.fortalezas, bg:[220,252,231], c:[22,163,74], tc:[20,80,40] },
-        { titulo: 'ÁREAS DE REFUERZO', items: data.analisis.areas_refuerzo, bg:[255,237,213], c:[234,88,12], tc:[120,60,20] },
-        { titulo: 'RECOMENDACIONES PARA EL ALUMNO', items: data.analisis.recomendaciones_alumno, bg:[219,234,254], c:[37,99,235], tc:[20,50,120] },
-        { titulo: 'RECOMENDACIONES PARA EL MAESTRO', items: data.analisis.recomendaciones_maestro, bg:[243,232,255], c:[109,40,217], tc:[60,20,120] },
+        { titulo: 'TEMAS TRABAJADOS', items: data.analisis.temas || [], bg:[237,233,254], c:[109,40,217], tc:[60,50,100] },
+        { titulo: 'LOGROS DE LA SESIÓN', items: data.analisis.logros || data.analisis.fortalezas || [], bg:[220,252,231], c:[22,163,74], tc:[20,80,40] },
+        { titulo: 'ÁREAS DE MEJORA', items: data.analisis.areas_mejora || data.analisis.areas_refuerzo || [], bg:[219,234,254], c:[37,99,235], tc:[20,50,120] },
+        { titulo: 'RECOMENDACIONES PARA EL ALUMNO', items: data.analisis.recomendaciones_alumno || [], bg:[219,234,254], c:[37,99,235], tc:[20,50,120] },
+        { titulo: 'RECOMENDACIONES PARA EL MAESTRO', items: data.analisis.recomendaciones_maestro || [], bg:[243,232,255], c:[109,40,217], tc:[60,20,120] },
       ]
       for (const s of secciones) {
         checkY(20)
@@ -680,6 +697,14 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
           wrappedTxt(item, margin+12, 10, false, s.tc)
         }
         y += 4
+      }
+      // Frase motivacional de cierre
+      if (data.analisis.frase_motivacional) {
+        checkY(20)
+        doc.setFillColor(243,232,255); doc.roundedRect(margin, y-4, maxW, 18, 4, 4, 'F')
+        doc.setFontSize(11); doc.setFont('helvetica','italic'); doc.setTextColor(109,40,217)
+        const fmLines = doc.splitTextToSize('"' + data.analisis.frase_motivacional + '"', maxW - 12)
+        doc.text(fmLines, W/2, y+4, { align: 'center' }); y += 18
       }
       addPage()
       doc.setFillColor(109,40,217); doc.rect(0, 0, W, 16, 'F')

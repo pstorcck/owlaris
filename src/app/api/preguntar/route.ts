@@ -1387,7 +1387,46 @@ ${contextoContenido}`
       ? inferCanonicalOperationFromText(respuesta)
       : null
     const opFinalRespuesta = _opExtraida || opInferida
-    const opValidaEnRespuesta = isSafeCanonicalOperation(opFinalRespuesta) ? opFinalRespuesta : null
+    let opValidaEnRespuesta = isSafeCanonicalOperation(opFinalRespuesta) ? opFinalRespuesta : null
+
+    // ANTI-REPETICIÓN: nunca repetir un ejercicio que el alumno YA respondió correctamente
+    if (opValidaEnRespuesta) {
+      try {
+        const opNormalizada = opValidaEnRespuesta.replace(/\s+/g, '')
+        const { data: yaRespondida } = await supabase
+          .from('interacciones')
+          .select('id')
+          .eq('usuario_id', user.id)
+          .eq('op_estado', 'evaluada')
+          .not('operacion_canonica', 'is', null)
+          .limit(500)
+        const opsEvaluadas = new Set((yaRespondida || []).map((r: {id: string}) => r.id))
+        // Verificar contra las operaciones ya evaluadas (comparación normalizada)
+        const { data: opsPrevias } = await supabase
+          .from('interacciones')
+          .select('operacion_canonica')
+          .eq('usuario_id', user.id)
+          .eq('op_estado', 'evaluada')
+          .not('operacion_canonica', 'is', null)
+          .limit(500)
+        const setPrevias = new Set((opsPrevias || []).map((r: {operacion_canonica: string}) => (r.operacion_canonica || '').replace(/\s+/g, '')))
+        if (setPrevias.has(opNormalizada)) {
+          // Ejercicio repetido — mutar la operación ligeramente para variar
+          const mutada = opNormalizada.replace(/\d+/, (n) => String(Number(n) + 1 + Math.floor(Math.random() * 3)))
+          const solNueva = solveOperation(mutada)
+          if (solNueva !== null && !setPrevias.has(mutada)) {
+            // Reemplazar los números en el texto visible también
+            const numViejo = opNormalizada.match(/\d+/)?.[0]
+            const numNuevo = mutada.match(/\d+/)?.[0]
+            if (numViejo && numNuevo && numViejo !== numNuevo) {
+              respuesta = respuesta.replace(new RegExp('\\b' + numViejo + '\\b'), numNuevo)
+              opValidaEnRespuesta = mutada
+            }
+          }
+          console.log('ANTI-REPETICION: ejercicio ya respondido, variado a', opValidaEnRespuesta)
+        }
+      } catch (e) { console.error('Error anti-repetición:', e) }
+    }
     const guardiaHumanistica = guardHumanisticResponse(respuesta, {
       materia: materia?.nombre || materia_id,
       tipoPregunta,
