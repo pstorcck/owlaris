@@ -89,6 +89,42 @@ Respuesta: 13`,
   assert.equal(inferredEquation, '2*x-4=10')
   assert.equal(solveOperation(inferredEquation), 7)
 
+  const equationPrompt = 'Resuelve la ecuación: 2x - 4 = 10 [OP: 2*x-4=10]'
+  const equationAnswers = [
+    '7',
+    '7?',
+    '¿7?',
+    '7.',
+    'es 7',
+    'creo que es 7',
+    'la respuesta es 7',
+    'x=7',
+    'x = 7',
+    'Para resolver: 2x - 4 = 10. Sumamos 4 a ambos lados: 2x = 14. Dividimos entre 2: x = 7',
+  ]
+  for (const answer of equationAnswers) {
+    const result = await handleMathEvaluation(equationPrompt, answer, false)
+    assert.equal(result?.estado, 'correcto', `falló con ${answer}`)
+    assert.equal(result?.correctAnswer, 7)
+    assert.doesNotMatch(result?.feedback || '', /\b7[?.]/, `feedback crudo con ${answer}`)
+  }
+
+  const intermediatePrompt = 'Suma 4 a ambos lados. ¿Qué obtienes? [OP: 2*x-4=10]'
+  const intermediateExpression = await handleMathEvaluation(intermediatePrompt, '2x = 10 + 4', false)
+  assert.equal(intermediateExpression?.estado, 'paso_correcto')
+  assert.equal(intermediateExpression?.pasoIntermedio, true)
+  assert.doesNotMatch(intermediateExpression?.feedback || '', /incorrect/i)
+  assert.doesNotMatch(intermediateExpression?.feedback || '', /\b7\b/)
+
+  const intermediateSimplified = await handleMathEvaluation(intermediatePrompt, '2x = 14', false)
+  assert.equal(intermediateSimplified?.estado, 'paso_correcto')
+  assert.equal(intermediateSimplified?.pasoIntermedio, true)
+  assert.doesNotMatch(intermediateSimplified?.feedback || '', /incorrect/i)
+  assert.doesNotMatch(intermediateSimplified?.feedback || '', /\b7\b/)
+
+  const studentProvidedEquation = inferCanonicalOperationFromText('quiero resolver esta ecuación 2x - 4 = 10')
+  assert.equal(studentProvidedEquation, '2x-4=10')
+
   assert.equal(isLikelyNumericSubject('Math'), true)
   assert.equal(isLikelyNumericSubject('Owlaris - Math Grade 8.md'), true)
   assert.equal(isLikelyNumericSubject('Environmental Systems'), false)

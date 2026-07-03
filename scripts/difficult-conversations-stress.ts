@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { checkContentSafety } from '../src/lib/contentSafety'
 import { guardHumanisticResponse } from '../src/lib/humanisticSafety'
-import { handleMathEvaluation, solveOperation } from '../src/lib/mathSafety'
+import { handleMathEvaluation, inferCanonicalOperationFromText, solveOperation } from '../src/lib/mathSafety'
 
 type Failure = {
   name: string
@@ -173,6 +173,52 @@ async function main() {
     })
   }
 
+  const equationPrompt = 'Resuelve la ecuación: 2x - 4 = 10 [OP: 2*x-4=10]'
+  const correctEquationAnswers = [
+    '7',
+    '7?',
+    '¿7?',
+    '7.',
+    'es 7',
+    'creo que es 7',
+    'la respuesta es 7',
+    'x=7',
+    'x = 7',
+    'Para resolver: 2x - 4 = 10. Sumamos 4 a ambos lados: 2x = 14. Dividimos entre 2: x = 7',
+  ]
+  for (const answer of correctEquationAnswers) {
+    await testAsync(`equation-final-answer-${answer}`, async () => {
+      const result = await handleMathEvaluation(equationPrompt, answer, false)
+      assert.equal(result?.estado, 'correcto')
+      assert.equal(result?.correctAnswer, 7)
+      assert.doesNotMatch(result?.feedback || '', /\b7[?.]/)
+      assert.doesNotMatch(result?.feedback || '', /\bIncorrecto\b/i)
+    })
+  }
+
+  const intermediatePrompt = 'Suma 4 a ambos lados. ¿Qué obtienes? [OP: 2*x-4=10]'
+  for (const answer of ['2x = 10 + 4', '2x = 14']) {
+    await testAsync(`equation-intermediate-step-${answer}`, async () => {
+      const result = await handleMathEvaluation(intermediatePrompt, answer, false)
+      assert.equal(result?.estado, 'paso_correcto')
+      assert.equal(result?.pasoIntermedio, true)
+      assert.doesNotMatch(result?.feedback || '', /\bIncorrecto\b/i)
+      assert.doesNotMatch(result?.feedback || '', /\b7\b/)
+    })
+  }
+
+  await testAsync('feedback-normalizes-punctuation', async () => {
+    const result = await handleMathEvaluation('¿Cuánto es 2 + 2? [OP: 2+2]', '4?', false)
+    assert.equal(result?.estado, 'correcto')
+    assert.doesNotMatch(result?.feedback || '', /4\?/)
+  })
+
+  test('student-provided-equation-is-inferable', () => {
+    const inferred = inferCanonicalOperationFromText('quiero resolver esta ecuación 2x - 4 = 10')
+    assert.equal(inferred, '2x-4=10')
+    assert.equal(solveOperation(inferred), 7)
+  })
+
   const humanisticBadResponses = [
     'Incorrecto. La respuesta correcta es que la independencia ocurrió por una sola causa.',
     'Correcto. La única respuesta correcta es que el poema significa tristeza.',
@@ -186,7 +232,7 @@ async function main() {
     { materia: 'Biología', tipoPregunta: 'academica', materiaNumerica: true, hasVerifiedOperation: false },
   ]
 
-  for (let i = 0; i < 180; i++) {
+  for (let i = 0; i < 166; i++) {
     test(`humanistic-guard-${i}`, () => {
       const result = guardHumanisticResponse(
         humanisticBadResponses[i % humanisticBadResponses.length],

@@ -1154,8 +1154,8 @@ export async function POST(req: NextRequest) {
         if (preguntaPendiente?.operacion_canonica && isSafeCanonicalOperation(preguntaPendiente.operacion_canonica)) {
           const textoConOP = preguntaPendiente.respuesta + '\n[OP: ' + preguntaPendiente.operacion_canonica + ']'
           evaluacionProtocolo = await handleMathEvaluation(textoConOP, pregunta, idiomaIngles, process.env.WOLFRAM_APP_ID)
-          // Si acertó: marcar como evaluada
-          if (evaluacionProtocolo && (evaluacionProtocolo.estado === 'correcto' || evaluacionProtocolo.estado === 'equivalente')) {
+          // Si acertó el valor final: marcar como evaluada. Un paso intermedio válido conserva la OP pendiente.
+          if (evaluacionProtocolo && !evaluacionProtocolo.pasoIntermedio && (evaluacionProtocolo.estado === 'correcto' || evaluacionProtocolo.estado === 'equivalente')) {
             await supabase.from('interacciones')
               .update({ op_estado: 'evaluada', op_evaluada_en: new Date().toISOString(), op_respuesta_alumno: pregunta })
               .eq('id', pendingMathId).eq('usuario_id', user.id)
@@ -1184,12 +1184,13 @@ export async function POST(req: NextRequest) {
     // Si el protocolo evaluó y tiene resultado definitivo, responder directo
     if (evaluacionProtocolo && evaluacionProtocolo.estado !== 'no_evaluable') {
       const esRespuestaCorrecta = evaluacionProtocolo.estado === 'correcto' || evaluacionProtocolo.estado === 'equivalente'
+      const esPasoIntermedio = evaluacionProtocolo.estado === 'paso_correcto' || evaluacionProtocolo.pasoIntermedio
       const aciertosConsecutivos = evaluacionProtocolo.estado === 'correcto' || evaluacionProtocolo.estado === 'equivalente'
         ? rachaAprendizaje.correctas + 1
-        : 0
+        : esPasoIntermedio ? rachaAprendizaje.correctas : 0
       const fallosConsecutivos = evaluacionProtocolo.estado === 'incorrecto'
         ? rachaAprendizaje.incorrectas + 1
-        : 0
+        : esPasoIntermedio ? rachaAprendizaje.incorrectas : 0
       const nivelSiguiente = fallosConsecutivos >= 3
         ? Math.max(1, nivelDificultadActual - 1)
         : aciertosConsecutivos > 3
@@ -1209,15 +1210,17 @@ export async function POST(req: NextRequest) {
         : evaluacionProtocolo.feedback
       const respuesta = esRespuestaCorrecta
         ? respuestaCorrectaConSiguiente
-        : reforzarDiagnosticoPorFallos(evaluacionProtocolo.feedback, idiomaIngles, fallosConsecutivos)
+        : esPasoIntermedio
+          ? evaluacionProtocolo.feedback
+          : reforzarDiagnosticoPorFallos(evaluacionProtocolo.feedback, idiomaIngles, fallosConsecutivos)
       const { data: evaluacionInsertada } = await supabase.from('interacciones').insert({
         usuario_id: user.id, colegio_id: perfil.colegio_id, materia_id: materia_uuid,
         grado: gradoEfectivo, tema_detectado: pregunta.substring(0, 100),
         pregunta, respuesta, tokens_usados: 0, costo_usd: 0,
         modelo_usado: 'calculadora', documento_fuente: null, sospecha_copia: false,
         operacion_canonica: siguienteEjercicio?.op || evaluacionProtocolo?.op || null,
-        op_estado: siguienteEjercicio ? 'pendiente' : evaluacionProtocolo?.estado === 'incorrecto' ? 'pendiente' : 'evaluada',
-        op_evaluada_en: siguienteEjercicio || evaluacionProtocolo?.estado === 'incorrecto' ? null : new Date().toISOString(),
+        op_estado: siguienteEjercicio ? 'pendiente' : evaluacionProtocolo?.estado === 'incorrecto' || (esPasoIntermedio && !pendingMathId) ? 'pendiente' : 'evaluada',
+        op_evaluada_en: siguienteEjercicio || evaluacionProtocolo?.estado === 'incorrecto' || (esPasoIntermedio && !pendingMathId) ? null : new Date().toISOString(),
         op_respuesta_alumno: siguienteEjercicio ? null : pregunta,
         estado_evaluacion: evaluacionProtocolo?.estado || null,
         guard_activado: evaluacionProtocolo?.guardActivado || false,
@@ -1230,7 +1233,9 @@ export async function POST(req: NextRequest) {
       // Si incorrecto conservar pendingMathId para reintento; si correcto, la nueva pregunta queda pendiente.
       const returnPendingId = siguienteEjercicio
         ? (evaluacionInsertada?.id || null)
-        : (evaluacionProtocolo?.estado === 'incorrecto') ? (pendingMathId || evaluacionInsertada?.id || null) : null
+        : esPasoIntermedio
+          ? (pendingMathId || evaluacionInsertada?.id || null)
+          : (evaluacionProtocolo?.estado === 'incorrecto') ? (pendingMathId || evaluacionInsertada?.id || null) : null
       return NextResponse.json({
         respuesta,
         tokens: 0,
@@ -1408,7 +1413,17 @@ ${contextoContenido}`
     const opInferida = !_opExtraida && looksLikeMathPracticePrompt(respuesta)
       ? inferCanonicalOperationFromText(respuesta)
       : null
-    let opFinalRespuesta = _opExtraida || opInferida
+    const opAlumno = inferCanonicalOperationFromText(pregunta)
+    const respuestaGuiaEcuacion = /(?:suma|sumar|resta|restar|divide|dividir|multiplica|multiplicar|ambos lados|despej|aisla|a[ií]sla|both sides|isolate|add|subtract|divide|multiply)/i.test(respuesta)
+    const opDesdeAlumno = opAlumno &&
+      /x/i.test(opAlumno) &&
+      opAlumno.includes('=') &&
+      solveOperation(opAlumno) !== null &&
+      normalizeStudentAnswer(pregunta) === null &&
+      respuestaGuiaEcuacion
+      ? opAlumno
+      : null
+    let opFinalRespuesta = _opExtraida || opInferida || opDesdeAlumno
     let opValidaEnRespuesta = isSafeCanonicalOperation(opFinalRespuesta) ? opFinalRespuesta : null
     if (opValidaEnRespuesta) {
       const operacionesRecientes = collectRecentMathOperations(

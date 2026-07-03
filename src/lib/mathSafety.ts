@@ -6,6 +6,7 @@ export type MathEvaluation = {
   correctAnswer: number | null
   op: string | null
   guardActivado: boolean
+  pasoIntermedio?: boolean
 }
 
 export function extractAndCleanOperation(rawText: string): { visibleText: string; operation: string | null } {
@@ -63,16 +64,25 @@ export function validateOperation(op: string): { ok: boolean; reason?: string } 
 }
 
 export function normalizeStudentAnswer(respuesta: string): number | null {
-  const s = String(respuesta).trim().toLowerCase()
+  const s = String(respuesta)
+    .trim()
+    .toLowerCase()
+    .replace(/[¿?¡!]+$/g, '')
+    .trim()
 
-  const direct = s.match(/^(?:x\s*=\s*)?(-?\d+(?:[.,]\d+)?(?:\s*\/\s*-?\d+(?:[.,]\d+)?)?)$/i)
+  const variableAssignments = Array.from(s.matchAll(/(?:^|[^\d])x\s*=\s*(-?\d+(?:[.,]\d+)?(?:\s*\/\s*-?\d+(?:[.,]\d+)?)?)/gi))
+  if (variableAssignments.length > 0) return parseNumericAnswerToken(variableAssignments[variableAssignments.length - 1][1])
+
+  const direct = s.match(/^(?:x\s*=\s*)?(-?\d+(?:[.,]\d+)?(?:\s*\/\s*-?\d+(?:[.,]\d+)?)?)[\s.]*$/i)
   if (direct) return parseNumericAnswerToken(direct[1])
 
   const labeled = Array.from(s.matchAll(/\b(?:respuesta|resultado|answer|result)\s*(?:final|correcta|correct)?\s*(?:es|is|:|=)?\s*(-?\d+(?:[.,]\d+)?(?:\s*\/\s*-?\d+(?:[.,]\d+)?)?)/gi))
   if (labeled.length > 0) return parseNumericAnswerToken(labeled[labeled.length - 1][1])
 
-  const equations = Array.from(s.matchAll(/=\s*(-?\d+(?:[.,]\d+)?(?:\s*\/\s*-?\d+(?:[.,]\d+)?)?)/g))
-  if (equations.length > 0) return parseNumericAnswerToken(equations[equations.length - 1][1])
+  if (!/[x]/i.test(s)) {
+    const equations = Array.from(s.matchAll(/=\s*(-?\d+(?:[.,]\d+)?(?:\s*\/\s*-?\d+(?:[.,]\d+)?)?)/g))
+    if (equations.length > 0) return parseNumericAnswerToken(equations[equations.length - 1][1])
+  }
 
   const numbers = Array.from(s.matchAll(/-?\d+(?:[.,]\d+)?(?:\s*\/\s*-?\d+(?:[.,]\d+)?)?/g))
   if (numbers.length === 1) return parseNumericAnswerToken(numbers[0][0])
@@ -192,6 +202,44 @@ function contradictionGuard(
   return { feedback, guardActivado: false }
 }
 
+function formatNumberForFeedback(n: number): string {
+  const rounded = Math.round(n)
+  const value = Math.abs(n - rounded) < 0.000001 ? rounded : n
+  return Number(value.toFixed(6)).toString()
+}
+
+function evaluateEquivalentEquationStep(
+  originalOp: string | null,
+  studentAnswer: string,
+  correctAnswer: number | null,
+): { stepOp: string; stepSolution: number } | null {
+  if (!originalOp || correctAnswer === null) return null
+  const original = normalizeOperation(originalOp)
+  if (!original.includes('=') || !/[x]/i.test(original)) return null
+
+  const stepOp = inferCanonicalOperationFromText(studentAnswer)
+  if (!stepOp || !stepOp.includes('=') || !/[x]/i.test(stepOp)) return null
+
+  const stepSolution = solveOperation(stepOp)
+  if (stepSolution === null) return null
+
+  return Math.abs(stepSolution - correctAnswer) < 0.001
+    ? { stepOp, stepSolution }
+    : null
+}
+
+function generateIntermediateStepFeedback(studentAnswer: string, idiomaIngles: boolean): string {
+  const hasUnsimplifiedRightSide = /=\s*[^=\n]*[+\-*/]/.test(studentAnswer.replace(/−/g, '-'))
+  if (idiomaIngles) {
+    return hasUnsimplifiedRightSide
+      ? 'That step is valid. You kept an equivalent equation. Now simplify the right side and continue isolating x. What value of x do you get?'
+      : 'That step is valid. You kept an equivalent equation. Now use the inverse operation to isolate x. What value of x do you get?'
+  }
+  return hasUnsimplifiedRightSide
+    ? 'Ese paso es válido. Mantienes una ecuación equivalente. Ahora simplifica el lado derecho y continúa despejando x. ¿Qué valor de x obtienes?'
+    : 'Ese paso es válido. Mantienes una ecuación equivalente. Ahora usa la operación inversa para despejar x. ¿Qué valor de x obtienes?'
+}
+
 function generatePedagogicalFeedback(
   estado: string,
   studentAnswer: string,
@@ -305,13 +353,20 @@ export async function handleMathEvaluation(
 
   const studentN = normalizeStudentAnswer(studentAnswer) ?? extractMultipleChoiceValue(tutorQuestion, studentAnswer)
   const comparison = compareAnswers(studentN, correctAnswer)
-  const estado = buildEvaluationState(comparison, correctAnswer !== null)
-  const feedbackBase = generatePedagogicalFeedback(estado, studentAnswer, correctAnswer, idiomaIngles, op)
+  let estado = buildEvaluationState(comparison, correctAnswer !== null)
+  const pasoIntermedio = estado !== 'correcto' && estado !== 'equivalente'
+    ? evaluateEquivalentEquationStep(op, studentAnswer, correctAnswer)
+    : null
+  if (pasoIntermedio) estado = 'paso_correcto'
+  const studentFeedbackValue = studentN !== null ? formatNumberForFeedback(studentN) : studentAnswer
+  const feedbackBase = pasoIntermedio
+    ? generateIntermediateStepFeedback(studentAnswer, idiomaIngles)
+    : generatePedagogicalFeedback(estado, studentFeedbackValue, correctAnswer, idiomaIngles, op)
   const { feedback, guardActivado } = contradictionGuard(feedbackBase, estado, studentN, correctAnswer, idiomaIngles)
 
-  logEvaluation({ op, correctAnswer, studentAnswer, studentN, estado, guardActivado })
+  logEvaluation({ op, correctAnswer, studentAnswer, studentN, estado, pasoIntermedio: !!pasoIntermedio, guardActivado })
 
-  return { estado, feedback, correctAnswer, op, guardActivado }
+  return { estado, feedback, correctAnswer, op, guardActivado, pasoIntermedio: !!pasoIntermedio }
 }
 
 function selectRelevantMathText(text: string): string {
