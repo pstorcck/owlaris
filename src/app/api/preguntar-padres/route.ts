@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { createAdminClient, createClient } from '@/lib/supabase/server'
 import { withOpenAIRetry } from '@/lib/openaiRetry'
 import { calcularCostoUSD } from '@/lib/openaiCost'
+import { registrarAlertaTecnica } from '@/lib/technicalAlerts'
 
 // Cache de documentos — se carga una vez
 let docsCache: string | null = null
@@ -43,6 +44,7 @@ async function getDocsPadres(query?: string): Promise<string> {
 }
 
 export async function POST(req: NextRequest) {
+  let colegioIdParaAlerta: string | null = null
   try {
     const supabase = createClient()
     const { data: { user } } = await supabase.auth.getUser()
@@ -50,6 +52,9 @@ export async function POST(req: NextRequest) {
 
     const { pregunta, historial } = await req.json()
     if (!pregunta?.trim()) return NextResponse.json({ error: 'Pregunta vacía' }, { status: 400 })
+
+    const { data: perfil } = await supabase.from('usuarios').select('colegio_id').eq('id', user.id).single()
+    colegioIdParaAlerta = perfil?.colegio_id || null
 
     const docs = await getDocsPadres(pregunta)
     const OpenAI = (await import('openai')).default
@@ -89,7 +94,6 @@ REGLAS OBLIGATORIAS:
 
     const respuesta = completion.choices[0].message.content || 'No pude generar una respuesta.'
 
-    const { data: perfil } = await supabase.from('usuarios').select('colegio_id').eq('id', user.id).single()
     await supabase.from('interacciones').insert({
       usuario_id: user.id,
       colegio_id: perfil?.colegio_id,
@@ -103,6 +107,9 @@ REGLAS OBLIGATORIAS:
     return NextResponse.json({ respuesta })
   } catch (err) {
     console.error('Error agente padres:', err)
+    const status = (err as { status?: number } | null)?.status
+    const tipoError = status === 429 || (typeof status === 'number' && status >= 500) ? 'openai_agotado' : 'error_interno'
+    await registrarAlertaTecnica(createAdminClient(), colegioIdParaAlerta, tipoError, `Ruta:/api/preguntar-padres | ${err instanceof Error ? err.message : String(err)}`.substring(0, 280))
     return NextResponse.json({ error: 'Error interno' }, { status: 500 })
   }
 }

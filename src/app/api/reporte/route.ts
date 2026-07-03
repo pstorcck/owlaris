@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { createAdminClient, createClient } from '@/lib/supabase/server'
 import { withOpenAIRetry } from '@/lib/openaiRetry'
+import { registrarAlertaTecnica } from '@/lib/technicalAlerts'
 
 function hashString(value: string) {
   let hash = 0
@@ -141,6 +142,7 @@ function construirEvidenciaHoy(interacciones: InteraccionReporte[]) {
 }
 
 export async function POST(req: NextRequest) {
+  let colegioIdParaAlerta: string | null = null
   try {
     const OpenAI = (await import('openai')).default
     const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
@@ -148,6 +150,8 @@ export async function POST(req: NextRequest) {
     const supabase = createClient()
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+    const { data: perfilAlerta } = await supabase.from('usuarios').select('colegio_id').eq('id', user.id).single()
+    colegioIdParaAlerta = perfilAlerta?.colegio_id || null
 
     const {
       historial,
@@ -250,6 +254,9 @@ REGLAS ESTRICTAS:
 
   } catch (err) {
     console.error('Error reporte:', err)
+    const status = (err as { status?: number } | null)?.status
+    const tipoError = status === 429 || (typeof status === 'number' && status >= 500) ? 'openai_agotado' : 'error_interno'
+    await registrarAlertaTecnica(createAdminClient(), colegioIdParaAlerta, tipoError, `Ruta:/api/reporte | ${err instanceof Error ? err.message : String(err)}`.substring(0, 280))
     return NextResponse.json({ error: 'Error generando reporte' }, { status: 500 })
   }
 }

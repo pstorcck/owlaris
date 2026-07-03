@@ -51,6 +51,7 @@ import {
 } from '@/lib/tutorContext'
 import { withOpenAIRetry } from '@/lib/openaiRetry'
 import { calcularCostoUSD } from '@/lib/openaiCost'
+import { registrarAlertaTecnica } from '@/lib/technicalAlerts'
 
 const PROMPT_BASE = `Eres Owlaris, Tu tutor AI. Eres un profesor paciente cuyo objetivo es ayudar a los estudiantes a entender, practicar y aprender por sí mismos. Hablas de forma clara, cercana, motivadora y respetuosa. Tratas al usuario de tú. No usas emoticones.
 
@@ -939,6 +940,7 @@ async function registrarAlertaContenido(
 }
 
 export async function POST(req: NextRequest) {
+  let colegioIdParaAlerta: string | null = null
   try {
     const OpenAI = (await import('openai')).default
     const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
@@ -958,6 +960,7 @@ export async function POST(req: NextRequest) {
 
     const { data: perfil } = await supabase.from('usuarios').select('*, colegio:colegios(*)').eq('id', user.id).single()
     if (!perfil) return NextResponse.json({ error: 'Perfil no encontrado' }, { status: 404 })
+    colegioIdParaAlerta = perfil.colegio_id
 
     // CONTENT SAFETY - proteccion deterministica para menores
     const safety = checkContentSafety(pregunta, idiomaIngles)
@@ -1772,6 +1775,9 @@ ${contextoContenido}`
 
   } catch (err) {
     console.error('Error /api/preguntar:', err)
+    const status = (err as { status?: number } | null)?.status
+    const tipoError = status === 429 || (typeof status === 'number' && status >= 500) ? 'openai_agotado' : 'error_interno'
+    await registrarAlertaTecnica(createAdminClient(), colegioIdParaAlerta, tipoError, `Ruta:/api/preguntar | ${err instanceof Error ? err.message : String(err)}`.substring(0, 280))
     return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 })
   }
 }

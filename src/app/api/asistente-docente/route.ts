@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { createAdminClient, createClient } from '@/lib/supabase/server'
 import { withOpenAIRetry } from '@/lib/openaiRetry'
+import { registrarAlertaTecnica } from '@/lib/technicalAlerts'
 
 export async function POST(req: NextRequest) {
+  let colegioIdParaAlerta: string | null = null
   try {
     const supabase = createClient()
     const { data: { user } } = await supabase.auth.getUser()
@@ -10,12 +12,13 @@ export async function POST(req: NextRequest) {
 
     const { data: perfil } = await supabase
       .from('usuarios')
-      .select('rol')
+      .select('rol, colegio_id')
       .eq('id', user.id)
       .single()
     if (!perfil || !['maestro', 'director', 'admin', 'superadmin'].includes(perfil.rol)) {
       return NextResponse.json({ error: 'Sin permiso' }, { status: 403 })
     }
+    colegioIdParaAlerta = perfil.colegio_id
 
     const { pregunta, contexto } = await req.json()
 
@@ -40,6 +43,9 @@ export async function POST(req: NextRequest) {
     })
   } catch (err) {
     console.error('Asistente docente error:', err)
+    const status = (err as { status?: number } | null)?.status
+    const tipoError = status === 429 || (typeof status === 'number' && status >= 500) ? 'openai_agotado' : 'error_interno'
+    await registrarAlertaTecnica(createAdminClient(), colegioIdParaAlerta, tipoError, `Ruta:/api/asistente-docente | ${err instanceof Error ? err.message : String(err)}`.substring(0, 280))
     return NextResponse.json({ error: 'Error interno' }, { status: 500 })
   }
 }
