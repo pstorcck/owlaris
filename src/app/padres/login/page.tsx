@@ -1,8 +1,9 @@
 'use client'
 
 import { useState } from 'react'
-import { createClient } from '@/lib/supabase/client'
+import Image from 'next/image'
 import Link from 'next/link'
+import { createClient } from '@/lib/supabase/client'
 
 export default function PadresLoginPage() {
   const [email, setEmail]       = useState('')
@@ -12,7 +13,12 @@ export default function PadresLoginPage() {
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault()
-    setLoading(true); setError('')
+    setLoading(true)
+    setError('')
+    // Se crea aqui, no al inicio del componente: Next.js sigue renderizando
+    // este componente 'use client' una vez en el servidor durante el build
+    // para generar el HTML inicial, y createClient() lanza si faltan las
+    // variables de entorno de Supabase en ese momento.
     const supabase = createClient()
     const { data, error } = await supabase.auth.signInWithPassword({ email, password })
     if (error) { setError('Correo o contraseña incorrectos.'); setLoading(false); return }
@@ -22,111 +28,259 @@ export default function PadresLoginPage() {
   return (
     <>
       <style suppressHydrationWarning>{`
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        .pl {
+        * { box-sizing: border-box; }
+        body { margin: 0; }
+        .ow-page {
           min-height: 100vh;
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif;
+        }
+        .ow-hero {
+          position: relative;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          gap: 26px;
+          padding: 48px;
+          overflow: hidden;
+          background: linear-gradient(155deg, #0F9C8C 0%, #0F766E 55%, #0B5A54 100%);
+        }
+        .ow-hero::before, .ow-hero::after {
+          content: "";
+          position: absolute;
+          border-radius: 50%;
+          background: rgba(255,255,255,.07);
+        }
+        .ow-hero::before { width: 340px; height: 340px; top: -120px; left: -100px; }
+        .ow-hero::after { width: 260px; height: 260px; bottom: -90px; right: -60px; background: rgba(124,58,237,.16); }
+        .ow-owl-badge {
+          position: relative;
+          z-index: 1;
+          width: 176px;
+          height: 176px;
+          border-radius: 50%;
+          display: grid;
+          place-items: center;
+          background: #FFFFFF;
+          box-shadow: 0 20px 0 rgba(11,90,84,.4), 0 30px 60px rgba(0,0,0,.22);
+          animation: ow-bob 3.4s ease-in-out infinite;
+        }
+        @keyframes ow-bob {
+          0%, 100% { transform: translateY(0) rotate(-1.5deg); }
+          50% { transform: translateY(-10px) rotate(1.5deg); }
+        }
+        .ow-hero-text { position: relative; z-index: 1; text-align: center; }
+        .ow-hero-name {
+          margin: 0;
+          color: #FFFFFF;
+          font-size: 40px;
+          font-weight: 900;
+          letter-spacing: -.02em;
+        }
+        .ow-hero-tagline {
+          margin: 10px 0 0;
+          color: rgba(255,255,255,.88);
+          font-size: 17px;
+          font-weight: 600;
+          max-width: 320px;
+          line-height: 1.5;
+        }
+        .ow-hero-chips {
+          position: relative;
+          z-index: 1;
+          display: flex;
+          gap: 10px;
+          flex-wrap: wrap;
+          justify-content: center;
+          max-width: 340px;
+        }
+        .ow-chip {
+          background: rgba(255,255,255,.14);
+          border: 1px solid rgba(255,255,255,.22);
+          color: #FFFFFF;
+          font-size: 12.5px;
+          font-weight: 800;
+          padding: 8px 14px;
+          border-radius: 999px;
+        }
+        .ow-formside {
           display: flex;
           align-items: center;
           justify-content: center;
-          padding: 24px;
-          font-family: system-ui, -apple-system, sans-serif;
-          background: #F5F7FA;
-          background-image:
-            radial-gradient(ellipse at 15% 15%, rgba(44,62,107,.08) 0%, transparent 55%),
-            radial-gradient(ellipse at 85% 85%, rgba(91,141,184,.06) 0%, transparent 50%);
+          padding: 32px 24px;
+          background: #F8FBFA;
         }
-        .pc {
-          width: 100%;
-          max-width: 420px;
-          background: white;
-          border-radius: 28px;
-          padding: 44px 40px;
-          border: 1px solid rgba(44,62,107,.1);
-          box-shadow: 0 20px 60px rgba(44,62,107,.1), 0 4px 6px rgba(44,62,107,.04);
+        .ow-card { width: 100%; max-width: 380px; }
+        .ow-card-head { margin-bottom: 24px; }
+        .ow-card-head h2 {
+          margin: 0;
+          font-size: 26px;
+          font-weight: 900;
+          color: #0F2E2A;
+          letter-spacing: -.01em;
         }
-        .fi {
+        .ow-card-head p {
+          margin: 8px 0 0;
+          font-size: 14.5px;
+          font-weight: 600;
+          color: #5E756F;
+        }
+        .ow-form { display: grid; gap: 16px; }
+        .ow-field { display: grid; gap: 7px; }
+        .ow-field label {
+          font-size: 12px;
+          font-weight: 800;
+          color: #5E756F;
+          text-transform: uppercase;
+          letter-spacing: .04em;
+        }
+        .ow-input {
           width: 100%;
-          background: #F5F7FA;
-          border: 1.5px solid rgba(44,62,107,.12);
-          border-radius: 14px;
-          padding: 13px 16px;
-          font-size: 14px;
-          color: #1A2744;
+          height: 52px;
+          border-radius: 16px;
+          border: 2px solid #DCEDE9;
+          background: #FFFFFF;
+          color: #0F2E2A;
           outline: none;
-          transition: all .2s;
-          font-family: system-ui, sans-serif;
-        }
-        .fi::placeholder { color: #94A3B8; }
-        .fi:focus { border-color: #2C3E6B; background: white; box-shadow: 0 0 0 4px rgba(44,62,107,.08); }
-        .lb {
-          width: 100%;
-          background: linear-gradient(135deg,#2C3E6B,#3D5A9E);
-          border: none;
-          border-radius: 14px;
-          padding: 15px;
+          padding: 0 16px;
           font-size: 15px;
-          font-weight: 700;
-          font-family: system-ui, sans-serif;
-          color: white;
-          cursor: pointer;
-          transition: all .25s;
-          box-shadow: 0 6px 24px rgba(44,62,107,.35);
+          font-weight: 600;
+          transition: border-color .15s ease, box-shadow .15s ease;
         }
-        .lb:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 12px 32px rgba(44,62,107,.45); }
-        .lb:disabled { opacity: .6; cursor: not-allowed; }
+        .ow-input::placeholder { color: #9FB8B3; }
+        .ow-input:focus {
+          border-color: #0F9C8C;
+          box-shadow: 0 0 0 4px rgba(15,156,140,.14);
+        }
+        .ow-error {
+          border: 1.5px solid #FFCDD2;
+          background: #FFF1F2;
+          color: #C0362C;
+          border-radius: 12px;
+          padding: 10px 13px;
+          font-size: 13px;
+          font-weight: 700;
+        }
+        .ow-btn {
+          -webkit-appearance: none;
+          appearance: none;
+          width: 100%;
+          height: 54px;
+          border-radius: 16px;
+          border: 0;
+          font-size: 15.5px;
+          font-weight: 900;
+          letter-spacing: .01em;
+          cursor: pointer;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 8px;
+          text-decoration: none;
+          transition: transform .12s ease, box-shadow .12s ease, opacity .12s ease;
+        }
+        .ow-btn-primary {
+          margin-top: 4px;
+          background: #0F9C8C;
+          color: #FFFFFF;
+          box-shadow: 0 6px 0 #0B5A54;
+        }
+        .ow-btn-primary:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 7px 0 #0B5A54; }
+        .ow-btn-primary:active:not(:disabled) { transform: translateY(3px); box-shadow: 0 2px 0 #0B5A54; }
+        .ow-btn-primary:disabled { opacity: .6; cursor: not-allowed; transform: none; }
+        .ow-help-line {
+          margin: 18px 0 0;
+          text-align: center;
+          font-size: 13px;
+          font-weight: 600;
+          color: #8A9793;
+        }
+        .ow-signup-line {
+          margin: 10px 0 0;
+          text-align: center;
+          font-size: 13.5px;
+          font-weight: 600;
+          color: #8A9793;
+        }
+        .ow-signup-line a { color: #0F9C8C; font-weight: 900; text-decoration: none; }
+        .ow-signup-line a:hover { text-decoration: underline; }
+        @media (max-width: 860px) {
+          .ow-page { grid-template-columns: 1fr; }
+          .ow-hero { padding: 40px 24px 44px; gap: 18px; }
+          .ow-owl-badge { width: 132px; height: 132px; }
+          .ow-hero-name { font-size: 32px; }
+          .ow-hero-tagline { font-size: 15px; }
+          .ow-formside { padding: 30px 22px 44px; }
+        }
       `}</style>
 
-      <div className="pl">
-        <div className="pc">
-          <div style={{textAlign:'center',marginBottom:'32px'}}>
-            <div style={{width:'72px',height:'72px',margin:'0 auto 16px',background:'linear-gradient(135deg,#2C3E6B,#3D5A9E)',borderRadius:'20px',display:'flex',alignItems:'center',justifyContent:'center',boxShadow:'0 8px 32px rgba(44,62,107,.3)'}}>
-              <img src="/buho.png" alt="Owlaris" style={{width:'44px',height:'44px',objectFit:'contain'}}/>
-            </div>
-            <h1 style={{fontSize:'28px',fontWeight:800,color:'#1A2744',letterSpacing:'-0.5px',marginBottom:'6px'}}>Owlaris</h1>
-            <p style={{fontSize:'13px',color:'#5B8DB8',fontWeight:500}}>Portal para padres de familia</p>
+      <main className="ow-page">
+        <section className="ow-hero">
+          <div className="ow-owl-badge">
+            <Image src="/buho.png" alt="Owlaris" width={124} height={124} priority style={{ objectFit: 'contain' }} />
           </div>
+          <div className="ow-hero-text">
+            <h1 className="ow-hero-name">Owlaris</h1>
+            <p className="ow-hero-tagline">Reportes claros y acompañamiento para el aprendizaje de tu hijo o hija.</p>
+          </div>
+          <div className="ow-hero-chips">
+            <span className="ow-chip">Reportes pedagógicos</span>
+            <span className="ow-chip">Logros y áreas de mejora</span>
+            <span className="ow-chip">Acompañamiento en casa</span>
+          </div>
+        </section>
 
-          <form onSubmit={handleLogin} style={{display:'flex',flexDirection:'column',gap:'16px'}}>
-            <div>
-              <label style={{display:'block',fontSize:'11px',fontWeight:700,color:'#2C3E6B',letterSpacing:'.8px',textTransform:'uppercase',marginBottom:'8px'}}>
-                Correo electrónico
-              </label>
-              <input type="email" value={email} onChange={e=>setEmail(e.target.value)}
-                placeholder="tu@correo.com" required className="fi"/>
-            </div>
-            <div>
-              <label style={{display:'block',fontSize:'11px',fontWeight:700,color:'#2C3E6B',letterSpacing:'.8px',textTransform:'uppercase',marginBottom:'8px'}}>
-                Contraseña
-              </label>
-              <input type="password" value={password} onChange={e=>setPassword(e.target.value)}
-                placeholder="••••••••" required className="fi"/>
+        <section className="ow-formside">
+          <div className="ow-card">
+            <div className="ow-card-head">
+              <h2>Portal para padres</h2>
+              <p>Ingresa con tu cuenta para ver el progreso de tu hijo o hija.</p>
             </div>
 
-            {error && (
-              <div style={{background:'rgba(239,68,68,.05)',border:'1px solid rgba(239,68,68,.15)',borderRadius:'12px',padding:'11px 14px'}}>
-                <p style={{fontSize:'13px',color:'#DC2626',fontWeight:500}}>{error}</p>
+            <form onSubmit={handleLogin} className="ow-form">
+              <div className="ow-field">
+                <label htmlFor="email">Correo electrónico</label>
+                <input
+                  id="email"
+                  type="email"
+                  value={email}
+                  onChange={e => setEmail(e.target.value)}
+                  placeholder="tu@correo.com"
+                  required
+                  className="ow-input"
+                  autoComplete="email"
+                />
               </div>
-            )}
+              <div className="ow-field">
+                <label htmlFor="password">Contraseña</label>
+                <input
+                  id="password"
+                  type="password"
+                  value={password}
+                  onChange={e => setPassword(e.target.value)}
+                  placeholder="••••••••"
+                  required
+                  className="ow-input"
+                  autoComplete="current-password"
+                />
+              </div>
 
-            <button type="submit" disabled={loading} className="lb" style={{marginTop:'4px'}}>
-              {loading ? 'Entrando...' : 'Entrar →'}
-            </button>
-          </form>
+              {error && <div className="ow-error">{error}</div>}
 
-          <div style={{height:'1px',background:'linear-gradient(90deg,transparent,rgba(44,62,107,.1),transparent)',margin:'24px 0'}}/>
+              <button type="submit" disabled={loading} className="ow-btn ow-btn-primary">
+                {loading ? 'Entrando...' : 'Entrar'}
+              </button>
+            </form>
 
-          <div style={{textAlign:'center',display:'flex',flexDirection:'column',gap:'8px'}}>
-            <p style={{fontSize:'12px',color:'#94A3B8'}}>¿Olvidaste tu contraseña? Contacta al administrador.</p>
-            <Link href="/login" style={{fontSize:'13px',color:'#5B8DB8',textDecoration:'none',fontWeight:500}}>
-              ← Volver al login principal
-            </Link>
+            <p className="ow-help-line">¿Olvidaste tu contraseña? Contacta al administrador de tu colegio.</p>
+            <p className="ow-signup-line">
+              <Link href="/login">← Volver al login principal</Link>
+            </p>
           </div>
-
-          <p style={{textAlign:'center',fontSize:'11px',color:'#CBD5E1',marginTop:'24px'}}>
-            © 2026 Owlaris · Todos los derechos reservados
-          </p>
-        </div>
-      </div>
+        </section>
+      </main>
     </>
   )
 }
