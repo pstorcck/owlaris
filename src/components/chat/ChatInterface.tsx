@@ -546,7 +546,7 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
         audio.onended = () => setReproduciendo(false)
         audio.onerror = () => setReproduciendo(false)
       }
-      audio.playbackRate = 1.04
+      audio.playbackRate = 1.0
       
       setReproduciendo(true)
       const playPromise = audio.play()

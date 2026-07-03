@@ -18,7 +18,10 @@ export async function POST(req: NextRequest) {
       model: 'tts-1',
       voice: modo === 'conversation' ? 'nova' : 'onyx',
       input: limpio,
-      speed: modo === 'conversation' ? 1.08 : 1.0,
+      // La conversacion en ingles es para practicar pronunciacion con alumnos
+      // que estan aprendiendo el idioma: mas lento que el habla normal ayuda
+      // a entender, en vez de mas rapido (antes 1.08, mas rapido de lo normal).
+      speed: modo === 'conversation' ? 0.88 : 1.0,
     }), { maxRetries: 1, baseDelayMs: 300 })
 
     // Streaming directo — el audio empieza a sonar mientras llega
