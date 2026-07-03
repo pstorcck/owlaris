@@ -67,9 +67,13 @@ const ABUSE = [
   'me estan violando', 'me intentaron violar', 'me tocaron sin permiso',
   'un familiar me toca', 'mi padrastro me toca', 'mi madrastra me toca',
   'me obligaron a tener sexo', 'me forzaron',
+  'me han violado', 'me han tocado', 'me han tocado sin permiso',
+  'me han abusado', 'me han obligado a tener sexo', 'me han forzado',
   'sexual abuse', 'i was abused', 'i was raped', 'someone raped me',
   'an adult touched me', 'someone touched my private parts',
   'they touched me without permission', 'i was forced to have sex',
+  'they have touched me', 'they have raped me', 'i have been abused',
+  'i have been raped', 'i have been forced to have sex',
 ]
 
 const VIOLENCE = [
@@ -79,6 +83,9 @@ const VIOLENCE = [
   'me estan golpeando', 'me estan maltratando', 'me hacen daño en casa',
   'me hacen dano en casa', 'i am being hit', 'they hit me at home',
   'domestic violence', 'violence at home', 'i am afraid at home',
+  'me han golpeado', 'me han pegado', 'me han maltratado',
+  'me han amenazado', 'me han hecho daño', 'me han hecho dano',
+  'they have hit me', 'they have hurt me',
 ]
 
 const HARM_OTHERS = [

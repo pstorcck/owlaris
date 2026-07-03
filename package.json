@@ -13,7 +13,10 @@
     "test:stress": "tsx scripts/difficult-conversations-stress.ts",
     "test:escholaris-math": "tsx scripts/escholaris-math-stress.ts",
     "test:practice": "tsx scripts/math-practice-stress.ts",
-    "test:safety-sensitive": "tsx scripts/sensitive-safety-stress.ts"
+    "test:safety-sensitive": "tsx scripts/sensitive-safety-stress.ts",
+    "test:exercise-repetition": "tsx scripts/exercise-repetition-stress.ts",
+    "test:sensitive-topics": "tsx scripts/sensitive-topics-stress.ts",
+    "test": "npm run test:math && npm run test:humanistic && npm run test:pedagogy && npm run test:stress && npm run test:escholaris-math && npm run test:practice && npm run test:safety-sensitive && npm run test:exercise-repetition && npm run test:sensitive-topics"
   },
   "dependencies": {
     "@supabase/ssr": "^0.5.1",
