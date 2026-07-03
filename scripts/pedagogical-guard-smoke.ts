@@ -1,5 +1,11 @@
 import assert from 'node:assert/strict'
 import { guardNoFinalAnswer, shouldGuideWithoutFinalAnswer } from '../src/lib/pedagogicalGuard'
+import {
+  buildPendingContextResponse,
+  isLikelyMathAnswerText,
+  isPendingContextQuestion,
+  stripUnapprovedExternalResources,
+} from '../src/lib/tutorContext'
 
 function main() {
   assert.equal(shouldGuideWithoutFinalAnswer({
@@ -42,6 +48,33 @@ function main() {
   )
   assert.equal(verifiedCorrect.guardActivado, false)
   assert.match(verifiedCorrect.text, /16/)
+
+  assert.equal(isPendingContextQuestion('lo puedo lograr sin usar calculadora?'), true)
+  assert.equal(isLikelyMathAnswerText('lo puedo lograr sin usar calculadora?'), false)
+  const fractionContext = buildPendingContextResponse({
+    studentQuestion: 'lo puedo lograr sin usar calculadora?',
+    activeOperation: '3/8',
+    activePrompt: 'Convierte la fracción 3/8 a decimal.',
+  })
+  assert.match(fractionContext, /Volvamos a 3\/8/)
+  assert.match(fractionContext, /3 ÷ 8/)
+  assert.doesNotMatch(fractionContext, /0\.375/)
+
+  const complaintContext = buildPendingContextResponse({
+    studentQuestion: 'te pregunté esto pero no me respondiste',
+    activeOperation: '3/8',
+    activePrompt: 'Convierte la fracción 3/8 a decimal.',
+  })
+  assert.match(complaintContext, /Tienes razón/)
+  assert.match(complaintContext, /3\/8/)
+
+  const strippedResource = stripUnapprovedExternalResources(
+    'Te comparto este recurso de Eduardo Montano que puede ayudarte: https://www.youtube.com/c/EduardoMontano',
+    false
+  )
+  assert.equal(strippedResource.guardActivado, true)
+  assert.doesNotMatch(strippedResource.text, /youtube|Eduardo/i)
+  assert.match(strippedResource.text, /material oficial/)
 
   console.log('pedagogical-guard smoke passed')
 }

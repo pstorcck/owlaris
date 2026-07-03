@@ -38,6 +38,12 @@ import {
   isRepeatedMathOperation,
   isWorkedExampleRequest,
 } from '@/lib/mathPractice'
+import {
+  buildPendingContextResponse,
+  isLikelyMathAnswerText,
+  isPendingContextQuestion,
+  stripUnapprovedExternalResources,
+} from '@/lib/tutorContext'
 
 const PROMPT_BASE = `Eres Owlaris, Tu tutor AI. Eres un profesor paciente cuyo objetivo es ayudar a los estudiantes a entender, practicar y aprender por sí mismos. Hablas de forma clara, cercana, motivadora y respetuosa. Tratas al usuario de tú. No usas emoticones.
 
@@ -55,6 +61,8 @@ El alumno entra a Owlaris para resolver dudas, estudiar, practicar, repasar, ent
 No asumas que solo puede preguntar sobre la lección actual. Puede preguntar sobre cualquier tema de la materia seleccionada siempre que esté respaldado por el contenido académico disponible.
 El contenido no tendrá números de lección asociados. Busca y relaciona la pregunta por tema, concepto, habilidad, competencia, tipo de ejercicio o contenido equivalente dentro de la materia, no por número de lección.
 Si el alumno dice que no entiende una lección por número, pero no indica el tema, pregúntale qué tema, concepto o ejercicio quiere trabajar antes de avanzar.
+Mantén el contexto activo: si hay un ejercicio pendiente y el alumno pregunta si puede resolverlo sin calculadora, pide ayuda, dice que no entiende o reclama que no respondiste, NO cambies de ejercicio ni de tema. Responde esa duda y vuelve al mismo ejercicio pendiente.
+No compartas enlaces, videos, canales o recursos externos no autorizados. Trabaja con el contenido oficial de Owlaris y SharePoint.
 
 REGLA DE PROFUNDIDAD:
 No respondas demasiado corto cuando el alumno necesite entender. Desarrolla la explicación. Usa ejemplos breves. Busca que la respuesta no solo conteste, sino que enseñe.
@@ -1221,6 +1229,52 @@ export async function POST(req: NextRequest) {
           pendingMathOperation = preguntaPendiente.operacion_canonica
           pendingMathDocumentoFuente = preguntaPendiente.documento_fuente || null
           pendingMathPrompt = preguntaPendiente.respuesta || null
+
+          if (isPendingContextQuestion(pregunta) && !isLikelyMathAnswerText(pregunta)) {
+            const respuesta = buildPendingContextResponse({
+              studentQuestion: pregunta,
+              activeOperation: pendingMathOperation,
+              activePrompt: pendingMathPrompt,
+              idiomaIngles,
+            })
+            const { data: insertedRow } = await supabase.from('interacciones').insert({
+              usuario_id: user.id,
+              colegio_id: perfil.colegio_id,
+              materia_id: materia_uuid,
+              grado: gradoEfectivo,
+              tema_detectado: 'Apoyo sobre ejercicio activo',
+              pregunta,
+              respuesta,
+              tokens_usados: 0,
+              costo_usd: 0,
+              modelo_usado: 'context_repair_guard',
+              documento_fuente: pendingMathDocumentoFuente,
+              sospecha_copia: false,
+              operacion_canonica: null,
+              op_estado: null,
+              estado_evaluacion: 'contexto_pendiente',
+              guard_activado: true,
+            }).select('id').single()
+            supabase.from('usuarios').update({ ultimo_acceso: new Date().toISOString() }).eq('id', user.id).then(() => {})
+            return NextResponse.json({
+              respuesta,
+              source: 'context_repair_guard',
+              tokens: 0,
+              documento_fuente: pendingMathDocumentoFuente,
+              interaction_id: insertedRow?.id || null,
+              pending_math_interaction_id: pendingMathId,
+              nivel_dificultad: nivelDificultadActual,
+              aciertos_consecutivos: rachaAprendizaje.correctas,
+              fallos_consecutivos: rachaAprendizaje.incorrectas,
+              adaptacion_dificultad: calculateAdaptiveDifficulty({
+                currentLevel: nivelDificultadActual,
+                correctStreak: rachaAprendizaje.correctas,
+                wrongStreak: rachaAprendizaje.incorrectas,
+                idiomaIngles,
+              }),
+            })
+          }
+
           const textoConOP = preguntaPendiente.respuesta + '\n[OP: ' + preguntaPendiente.operacion_canonica + ']'
           evaluacionProtocolo = await handleMathEvaluation(textoConOP, pregunta, idiomaIngles, process.env.WOLFRAM_APP_ID)
           // Si acertó el valor final: marcar como evaluada. Un paso intermedio válido conserva la OP pendiente.
@@ -1545,9 +1599,8 @@ ${contextoContenido}`
     })
     respuesta = pedagogicalGuard.text
 
-    if (tipoPregunta === 'formativa') {
-      respuesta += '\n\nTe comparto este recurso de Eduardo Montano que puede ayudarte: https://www.youtube.com/c/EduardoMontano'
-    }
+    const externalResourceGuard = stripUnapprovedExternalResources(respuesta, idiomaIngles)
+    respuesta = externalResourceGuard.text
 
     const tokensUsados = completion.usage?.total_tokens || 0
     const costoUSD = tokensUsados * 0.00000015
@@ -1597,6 +1650,8 @@ ${contextoContenido}`
       idiomaIngles,
     })
     respuesta = guardiaHumanistica.text
+    const externalResourceGuardFinal = stripUnapprovedExternalResources(respuesta, idiomaIngles)
+    respuesta = externalResourceGuardFinal.text
 
     const { data: insertedRow, error: insertErr } = await supabase.from('interacciones').insert({
       usuario_id: user.id, colegio_id: perfil.colegio_id, materia_id: materia_uuid,
@@ -1607,7 +1662,7 @@ ${contextoContenido}`
       operacion_canonica: opValidaEnRespuesta || null,
       op_estado: opValidaEnRespuesta ? 'pendiente' : null,
       estado_evaluacion: evaluacionProtocolo?.estado || null,
-      guard_activado: evaluacionProtocolo?.guardActivado || pedagogicalGuard.guardActivado || guardiaHumanistica.guardActivado || false,
+      guard_activado: evaluacionProtocolo?.guardActivado || pedagogicalGuard.guardActivado || guardiaHumanistica.guardActivado || externalResourceGuard.guardActivado || externalResourceGuardFinal.guardActivado || false,
     }).select('id').single()
     const insertedId = insertedRow?.id || null
     if (insertErr) console.error('INSERT interaccion ERROR:', insertErr.message)

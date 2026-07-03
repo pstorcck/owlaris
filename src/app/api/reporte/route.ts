@@ -39,6 +39,16 @@ type AdaptacionDificultadReporte = {
   motivo?: string
 }
 
+type InteraccionReporte = {
+  pregunta?: string | null
+  respuesta?: string | null
+  tema_detectado?: string | null
+  estado_evaluacion?: string | null
+  documento_fuente?: string | null
+  operacion_canonica?: string | null
+  creado_en?: string | null
+}
+
 function resumenDificultad(
   adaptaciones: AdaptacionDificultadReporte[],
   nivelFinal: number | null
@@ -57,6 +67,47 @@ function resumenDificultad(
   if (bajadas > 0) partes.push(`reforzó bases o bajó dificultad ${bajadas} vez${bajadas === 1 ? '' : 'es'}`)
   const cierre = ultimo?.nivel_nuevo ? ` Terminó trabajando en nivel ${ultimo.nivel_nuevo}.` : ''
   return `Durante la sesión, Owlaris ${partes.join(' y ')} según la racha del estudiante.${cierre}`
+}
+
+function ventanaHoyGuatemala() {
+  const now = new Date()
+  const guatemalaOffsetMs = 6 * 60 * 60 * 1000
+  const gtNow = new Date(now.getTime() - guatemalaOffsetMs)
+  const startUtc = new Date(Date.UTC(gtNow.getUTCFullYear(), gtNow.getUTCMonth(), gtNow.getUTCDate(), 6, 0, 0, 0))
+  return {
+    start: startUtc,
+    end: new Date(startUtc.getTime() + 24 * 60 * 60 * 1000),
+  }
+}
+
+function calcularMetricasHoy(interacciones: InteraccionReporte[]) {
+  const correctas = interacciones.filter(i => i.estado_evaluacion === 'correcto' || i.estado_evaluacion === 'equivalente').length
+  const incorrectas = interacciones.filter(i => i.estado_evaluacion === 'incorrecto').length
+  const pasosCorrectos = interacciones.filter(i => i.estado_evaluacion === 'paso_correcto').length
+  const ejercicios = interacciones.filter(i => i.operacion_canonica || i.estado_evaluacion).length
+  const evaluadas = correctas + incorrectas
+  const precision = evaluadas > 0 ? Math.round((correctas / evaluadas) * 100) : null
+  const fuentes = Array.from(new Set(interacciones.map(i => i.documento_fuente).filter(Boolean))) as string[]
+  const temas = Array.from(new Set(interacciones.map(i => (i.tema_detectado || '').trim()).filter(Boolean))).slice(0, 8)
+  const inicio = interacciones[0]?.creado_en || null
+  const fin = interacciones[interacciones.length - 1]?.creado_en || null
+  const duracionMinutos = inicio && fin
+    ? Math.max(1, Math.round((new Date(fin).getTime() - new Date(inicio).getTime()) / 60000))
+    : null
+
+  return {
+    interacciones: interacciones.length,
+    ejercicios,
+    correctas,
+    incorrectas,
+    pasos_correctos: pasosCorrectos,
+    precision,
+    fuentes,
+    temas,
+    inicio,
+    fin,
+    duracion_minutos: duracionMinutos,
+  }
 }
 
 export async function POST(req: NextRequest) {
@@ -83,6 +134,15 @@ export async function POST(req: NextRequest) {
       : []
     const nivelFinal = Number.isFinite(Number(nivel_dificultad_final)) ? Number(nivel_dificultad_final) : null
     const lecturaDificultad = resumenDificultad(adaptaciones, nivelFinal)
+    const ventana = ventanaHoyGuatemala()
+    const { data: interaccionesHoy } = await supabase
+      .from('interacciones')
+      .select('pregunta,respuesta,tema_detectado,estado_evaluacion,documento_fuente,operacion_canonica,creado_en')
+      .eq('usuario_id', user.id)
+      .gte('creado_en', ventana.start.toISOString())
+      .lt('creado_en', ventana.end.toISOString())
+      .order('creado_en', { ascending: true })
+    const metricasHoy = calcularMetricasHoy((interaccionesHoy || []) as InteraccionReporte[])
 
     const conversacion = historial.map((m: {rol:string; contenido:string}) =>
       `${m.rol === 'usuario' ? 'Alumno' : 'Owlaris'}: ${m.contenido}`
@@ -108,7 +168,7 @@ REGLAS ESTRICTAS:
 - Tono cálido, profesional y claro para padres.`
       }, {
         role: 'user',
-        content: `Materia: ${materia}\nGrado: ${grado}\nColegio: ${colegio}\nNivel adaptativo final: ${nivelFinal || 'no registrado'}\nAciertos consecutivos actuales: ${aciertos_consecutivos || 0}\nResumen de dificultad calculado por backend: ${lecturaDificultad}\nEventos de dificultad: ${JSON.stringify(adaptaciones)}\n\nConversación:\n${conversacion}`
+        content: `Materia: ${materia}\nGrado: ${grado}\nColegio: ${colegio}\nMetricas de hoy calculadas por backend: ${JSON.stringify(metricasHoy)}\nNivel adaptativo final: ${nivelFinal || 'no registrado'}\nAciertos consecutivos actuales: ${aciertos_consecutivos || 0}\nResumen de dificultad calculado por backend: ${lecturaDificultad}\nEventos de dificultad: ${JSON.stringify(adaptaciones)}\n\nConversación:\n${conversacion}`
       }]
     })
 
@@ -148,6 +208,7 @@ REGLAS ESTRICTAS:
     if (!analisis.resumen_dificultad) analisis.resumen_dificultad = lecturaDificultad
     analisis.adaptaciones_dificultad = adaptaciones
     analisis.nivel_dificultad_final = nivelFinal
+    analisis.metricas_hoy = metricasHoy
     analisis.frase_motivacional = fraseMotivacionalSesion(seed)
     analisis.fecha_generacion = new Date().toISOString()
     analisis.grado = grado

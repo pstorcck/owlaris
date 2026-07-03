@@ -49,20 +49,16 @@ export default function SignupPage() {
   }
 
   return (
-    <div className="min-h-screen bg-owlaris-dark flex items-center justify-center p-4">
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute -top-40 -right-40 w-96 h-96 bg-owlaris-primary opacity-10 rounded-full blur-3xl"/>
-        <div className="absolute -bottom-40 -left-40 w-96 h-96 bg-owlaris-secondary opacity-10 rounded-full blur-3xl"/>
-      </div>
+    <div className="min-h-screen flex items-center justify-center p-4" style={{background:'linear-gradient(160deg,#F8F7FF 0%,#F5FAFF 52%,#EEF2FF 100%)'}}>
       <div className="relative w-full max-w-md">
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-24 h-24 bg-owlaris-primary rounded-2xl mb-4 shadow-lg overflow-hidden">
+          <div className="inline-flex items-center justify-center w-24 h-24 rounded-2xl mb-4 shadow-lg overflow-hidden border border-violet-100 bg-white">
             <Image src="/buho.png" alt="Owlaris" width={96} height={96} className="object-contain p-1"/>
           </div>
-          <h1 className="text-3xl font-bold text-white">Owlaris</h1>
-          <p className="text-gray-400 mt-1">Tu tutor académico inteligente</p>
+          <h1 className="text-3xl font-bold text-[#1E1B4B]">Owlaris</h1>
+          <p className="text-[#6B658C] mt-1">Tu tutor académico inteligente</p>
         </div>
-        <div className="bg-white rounded-2xl shadow-2xl p-8">
+        <div className="bg-white/95 rounded-2xl shadow-2xl shadow-violet-100/70 p-8 border border-violet-100">
           <h2 className="text-xl font-semibold text-gray-800 mb-2">Crear cuenta</h2>
           <p className="text-xs text-gray-400 mb-6">
             Solo para correos <strong>@colegiomontano.edu.gt</strong> y <strong>@escolaris.edu.gt</strong>
@@ -116,7 +112,7 @@ export default function SignupPage() {
             <Link href="/login" className="text-owlaris-primary font-medium hover:underline">Inicia sesión</Link>
           </p>
         </div>
-        <p className="text-center text-gray-600 text-xs mt-6">
+        <p className="text-center text-[#9490B8] text-xs mt-6">
           © {new Date().getFullYear()} Owlaris · Todos los derechos reservados
         </p>
       </div>

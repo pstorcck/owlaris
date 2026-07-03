@@ -30,49 +30,45 @@ export default function LoginPage() {
           justify-content: center;
           padding: 24px;
           font-family: system-ui, -apple-system, sans-serif;
-          background: #0F0E17;
-          background-image:
-            radial-gradient(ellipse at 20% 20%, rgba(124,58,237,.15) 0%, transparent 50%),
-            radial-gradient(ellipse at 80% 80%, rgba(109,40,217,.1) 0%, transparent 50%),
-            radial-gradient(ellipse at 50% 0%, rgba(139,92,246,.08) 0%, transparent 40%);
+          background: linear-gradient(160deg,#F8F7FF 0%,#F5FAFF 52%,#EEF2FF 100%);
         }
         .lc {
           width: 100%;
           max-width: 420px;
-          background: #17151F;
+          background: rgba(255,255,255,.94);
           border-radius: 24px;
           padding: 44px 40px;
-          border: 1px solid rgba(124,58,237,.2);
-          box-shadow: 0 0 0 1px rgba(124,58,237,.05), 0 32px 80px rgba(0,0,0,.5), 0 0 60px rgba(124,58,237,.08);
+          border: 1px solid rgba(109,40,217,.12);
+          box-shadow: 0 28px 70px rgba(30,27,75,.12), 0 2px 18px rgba(109,40,217,.08);
         }
         .logo-wrap {
           width: 72px; height: 72px;
           margin: 0 auto 20px;
-          background: linear-gradient(135deg,rgba(124,58,237,.2),rgba(109,40,217,.1));
+          background: linear-gradient(135deg,#FFFFFF,#F3F0FF);
           border-radius: 20px;
           display: flex; align-items: center; justify-content: center;
-          border: 1px solid rgba(124,58,237,.3);
-          box-shadow: 0 0 32px rgba(124,58,237,.2);
+          border: 1px solid rgba(124,58,237,.18);
+          box-shadow: 0 12px 32px rgba(124,58,237,.14);
           animation: glow 3s ease-in-out infinite;
         }
         @keyframes glow {
-          0%,100% { box-shadow: 0 0 32px rgba(124,58,237,.2); }
-          50% { box-shadow: 0 0 48px rgba(124,58,237,.35); }
+          0%,100% { box-shadow: 0 12px 32px rgba(124,58,237,.14); }
+          50% { box-shadow: 0 16px 42px rgba(124,58,237,.22); }
         }
         .fi {
           width: 100%;
-          background: rgba(255,255,255,.04);
-          border: 1.5px solid rgba(124,58,237,.15);
+          background: #FFFFFF;
+          border: 1.5px solid rgba(109,40,217,.13);
           border-radius: 12px;
           padding: 13px 16px;
           font-size: 14px;
-          color: white;
+          color: #1E1B4B;
           outline: none;
           transition: all .2s;
           font-family: system-ui, sans-serif;
         }
-        .fi::placeholder { color: rgba(255,255,255,.25); }
-        .fi:focus { border-color: rgba(124,58,237,.6); background: rgba(124,58,237,.06); box-shadow: 0 0 0 4px rgba(124,58,237,.1); }
+        .fi::placeholder { color: #9CA3AF; }
+        .fi:focus { border-color: rgba(124,58,237,.55); background: #FFFFFF; box-shadow: 0 0 0 4px rgba(124,58,237,.1); }
         .lb {
           width: 100%;
           background: linear-gradient(135deg,#7C3AED,#6D28D9);
@@ -89,23 +85,23 @@ export default function LoginPage() {
         }
         .lb:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 8px 32px rgba(124,58,237,.5); }
         .lb:disabled { opacity: .5; cursor: not-allowed; }
-        .div { height:1px; background:linear-gradient(90deg,transparent,rgba(124,58,237,.2),transparent); margin:24px 0; }
+        .div { height:1px; background:linear-gradient(90deg,transparent,rgba(109,40,217,.16),transparent); margin:24px 0; }
         .btn-padres {
           display: flex;
           align-items: center;
           justify-content: center;
           gap: 8px;
-          background: rgba(44,62,107,.3);
-          border: 1px solid rgba(91,141,184,.2);
+          background: #F8FAFC;
+          border: 1px solid rgba(37,99,235,.12);
           border-radius: 12px;
           padding: 13px;
           text-decoration: none;
           transition: all .2s;
-          color: #93B4D4;
+          color: #2563EB;
           font-size: 13px;
           font-weight: 600;
         }
-        .btn-padres:hover { background: rgba(44,62,107,.5); border-color: rgba(91,141,184,.4); color: #BAD4EC; }
+        .btn-padres:hover { background: #EFF6FF; border-color: rgba(37,99,235,.24); color: #1D4ED8; }
       `}</style>
 
       <div className="lr">
@@ -114,23 +110,23 @@ export default function LoginPage() {
             <img src="/buho.png" alt="Owlaris" style={{width:'44px',height:'44px',objectFit:'contain'}}/>
           </div>
 
-          <h1 style={{fontFamily:'system-ui',fontSize:'28px',fontWeight:800,color:'white',letterSpacing:'-0.5px',textAlign:'center',marginBottom:'6px'}}>
+          <h1 style={{fontFamily:'system-ui',fontSize:'28px',fontWeight:800,color:'#1E1B4B',letterSpacing:'-0.5px',textAlign:'center',marginBottom:'6px'}}>
             Owlaris
           </h1>
-          <p style={{fontSize:'13px',color:'rgba(255,255,255,.4)',textAlign:'center',marginBottom:'32px',fontWeight:400}}>
+          <p style={{fontSize:'13px',color:'#6B658C',textAlign:'center',marginBottom:'32px',fontWeight:400}}>
             Tu tutor académico inteligente
           </p>
 
           <form onSubmit={handleLogin} style={{display:'flex',flexDirection:'column',gap:'14px'}}>
             <div>
-              <label style={{display:'block',fontSize:'11px',fontWeight:600,color:'rgba(255,255,255,.4)',letterSpacing:'.8px',textTransform:'uppercase',marginBottom:'8px'}}>
+              <label style={{display:'block',fontSize:'11px',fontWeight:600,color:'#6B658C',letterSpacing:'.8px',textTransform:'uppercase',marginBottom:'8px'}}>
                 Correo electrónico
               </label>
               <input type="email" value={email} onChange={e=>setEmail(e.target.value)}
                 placeholder="tu@colegio.edu.gt" required className="fi"/>
             </div>
             <div>
-              <label style={{display:'block',fontSize:'11px',fontWeight:600,color:'rgba(255,255,255,.4)',letterSpacing:'.8px',textTransform:'uppercase',marginBottom:'8px'}}>
+              <label style={{display:'block',fontSize:'11px',fontWeight:600,color:'#6B658C',letterSpacing:'.8px',textTransform:'uppercase',marginBottom:'8px'}}>
                 Contraseña
               </label>
               <input type="password" value={password} onChange={e=>setPassword(e.target.value)}
@@ -155,14 +151,14 @@ export default function LoginPage() {
               Portal para padres de familia →
             </a>
             <div style={{textAlign:'center'}}>
-              <p style={{fontSize:'12px',color:'rgba(255,255,255,.2)',marginBottom:'6px'}}>¿No tienes cuenta?</p>
-              <Link href="/signup" style={{fontSize:'13px',color:'#A78BFA',fontWeight:600,textDecoration:'none'}}>
+              <p style={{fontSize:'12px',color:'#9490B8',marginBottom:'6px'}}>¿No tienes cuenta?</p>
+              <Link href="/signup" style={{fontSize:'13px',color:'#6D28D9',fontWeight:600,textDecoration:'none'}}>
                 Regístrate aquí →
               </Link>
             </div>
           </div>
 
-          <p style={{textAlign:'center',fontSize:'11px',color:'rgba(255,255,255,.1)',marginTop:'28px'}}>
+          <p style={{textAlign:'center',fontSize:'11px',color:'#B6B1D6',marginTop:'28px'}}>
             © 2026 Owlaris · Todos los derechos reservados
           </p>
         </div>

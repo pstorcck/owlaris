@@ -623,7 +623,10 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
   }
 
   async function generarReporte() {
-    if (mensajes.length < 3) return
+    if (mensajes.length < 3) {
+      setError('Todavía no hay suficiente actividad para generar el reporte de hoy.')
+      return
+    }
     setGenerandoPDF(true)
     try {
       const adaptacionesParaReporte = adaptacionesDificultad.slice(-8)
@@ -704,7 +707,11 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
       }
       const alumnoNombre = nombreAlumno || usuario.nombre_completo
       const estudianteMsgs = mensajes.filter(m => m.rol === 'usuario').length
-      const documentos = Array.from(new Set(mensajes.map(m => m.documento_fuente).filter(Boolean))) as string[]
+      const metricasHoy = data.analisis.metricas_hoy || {}
+      const documentos = Array.from(new Set([
+        ...mensajes.map(m => m.documento_fuente).filter(Boolean),
+        ...(Array.isArray(metricasHoy.fuentes) ? metricasHoy.fuentes : []),
+      ])) as string[]
       const temas = Array.isArray(data.analisis.temas) ? data.analisis.temas : []
       const logros = Array.isArray(data.analisis.logros) ? data.analisis.logros : []
       const mejoras = Array.isArray(data.analisis.areas_mejora) ? data.analisis.areas_mejora : []
@@ -720,7 +727,7 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
       doc.setFillColor(20, 28, 45); doc.roundedRect(10, 10, W - 20, 45, 5, 5, 'F')
       doc.setFillColor(14, 116, 144); doc.roundedRect(10, 50, W - 20, 5, 2, 2, 'F')
       text('Owlaris', margin, 28, 23, true, [255, 255, 255])
-      text('Informe Pedagógico Familiar', margin, 39, 12, false, [226, 232, 240])
+      text('Reporte de hoy para familia', margin, 39, 12, false, [226, 232, 240])
       doc.setFontSize(9); doc.setFont('helvetica', 'normal'); doc.setTextColor(226, 232, 240)
       doc.text(usuario.colegio?.nombre || 'Centro educativo', W - margin, 29, { align: 'right' })
       doc.text(new Date().toLocaleString('es-GT', { day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' }), W - margin, 39, { align: 'right' })
@@ -732,13 +739,13 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
       text(alumnoNombre, margin + 6, y + 19, 14, true, palette.ink)
       text(`Grado: ${gradoAlumno || 'No asignado'}  |  Materia: ${materiaAlumno || 'No seleccionada'}`, margin + 6, y + 28, 8.5, false, palette.muted)
       text(`Nivel adaptativo final: ${nivelDificultad}`, W - margin - 6, y + 14, 9, true, palette.violet)
-      text(`Duración: ${durStr || 'sesión corta'}`, W - margin - 6, y + 24, 8.5, false, palette.muted)
+      text(`Duración: ${metricasHoy.duracion_minutos ? `${metricasHoy.duracion_minutos} minutos` : durStr || 'sesión corta'}`, W - margin - 6, y + 24, 8.5, false, palette.muted)
       y += 46
 
       const cardW = (maxW - 9) / 4
-      metricCard(margin, y, cardW, 'Interacciones', String(mensajes.length), palette.blue)
-      metricCard(margin + cardW + 3, y, cardW, 'Participación', String(estudianteMsgs), palette.teal)
-      metricCard(margin + (cardW + 3) * 2, y, cardW, 'Fuentes', String(documentos.length), palette.green)
+      metricCard(margin, y, cardW, 'Interacciones', String(metricasHoy.interacciones || mensajes.length), palette.blue)
+      metricCard(margin + cardW + 3, y, cardW, 'Ejercicios', String(metricasHoy.ejercicios || estudianteMsgs), palette.teal)
+      metricCard(margin + (cardW + 3) * 2, y, cardW, 'Precisión', metricasHoy.precision !== null && metricasHoy.precision !== undefined ? `${metricasHoy.precision}%` : 'En curso', palette.green)
       metricCard(margin + (cardW + 3) * 3, y, cardW, 'Dificultad', `Nivel ${nivelDificultad}`, palette.violet)
       y += 35
 
@@ -766,7 +773,8 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
 
       section('Qué estudió', palette.blue)
       bulletList((data.analisis.materias_estudiadas || [materiaAlumno].filter(Boolean)).slice(0, 4), palette.teal)
-      if (temas.length > 0) bulletList(temas.slice(0, 5), palette.violet)
+      const temasHoy = Array.isArray(metricasHoy.temas) && metricasHoy.temas.length ? metricasHoy.temas : temas
+      if (temasHoy.length > 0) bulletList(temasHoy.slice(0, 5), palette.violet)
 
       section('Logros y próximos pasos', palette.green)
       const colW = (maxW - 6) / 2
@@ -1354,7 +1362,7 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
                 <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
               </svg>
             )}
-            <span style={{fontSize:'13px',fontWeight:600,color:'white',letterSpacing:'.2px'}}>{generandoPDF?'Generando...':'Reporte Académico'}</span>
+            <span style={{fontSize:'13px',fontWeight:600,color:'white',letterSpacing:'.2px'}}>{generandoPDF?'Generando...':'Reporte de hoy'}</span>
           </button>
         )}
       </div>
