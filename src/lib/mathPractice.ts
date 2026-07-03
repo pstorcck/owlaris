@@ -9,6 +9,8 @@ export type MathPracticeExercise = {
   op: string
 }
 
+export type MathPracticeFocus = 'general' | 'equation' | 'decimal'
+
 export type DifficultyAdaptationType = 'sube' | 'baja' | 'refuerza' | 'mantiene'
 
 export type DifficultyAdaptation = {
@@ -57,7 +59,7 @@ function hashText(value: string) {
   return Math.abs(hash)
 }
 
-function exercisePoolForLevel(level: number) {
+function exercisePoolForLevel(level: number, focus: MathPracticeFocus = 'general') {
   const safeLevel = Math.min(8, Math.max(1, Number.isFinite(level) ? Math.round(level) : 1))
   const pools = [
     ['7+5', '48-19', '72/8', '8*6', '63-27', '9*7'],
@@ -69,16 +71,29 @@ function exercisePoolForLevel(level: number) {
     ['5*x+3=2*x+15', '4*x-1=x+11', '6*x+2=3*x+20', '7*x-5=2*x+25'],
     ['4*(x-2)+3=2*(x+1)+9', '3*(x+4)-5=x+17', '2*(x-6)+8=4*x-10'],
   ]
+
+  if (focus === 'equation') {
+    const equationMaxLevel = Math.min(8, Math.max(4, safeLevel + 3))
+    return pools.slice(3, equationMaxLevel).flat()
+  }
+
+  if (focus === 'decimal') return pools[2]
+
   return pools.slice(0, safeLevel).flat()
 }
 
-function fallbackExercise(recentOps: string[], level: number) {
+function fallbackExercise(recentOps: string[], level: number, focus: MathPracticeFocus = 'general') {
   const seed = recentOps.length + Math.max(1, level) * 11
-  if (level >= 4) {
+  if (focus === 'equation' || level >= 4) {
     const x = (seed % 9) + 2
     const a = (seed % 5) + 2
     const b = (seed % 7) + 1
     return `${a}*x+${b}=${a * x + b}`
+  }
+  if (focus === 'decimal') {
+    const hundredths = [10, 15, 20, 25, 50, 75][seed % 6]
+    const quantity = ((seed % 9) + 2) * 10
+    return `${hundredths / 100}*${quantity}`
   }
   const a = (seed % 40) + 12
   const b = (seed % 9) + 2
@@ -174,14 +189,15 @@ export function calculateAdaptiveDifficulty(input: {
 export function buildNextMathExercise(
   recentOps: Array<string | null | undefined>,
   level = 1,
-  idiomaIngles = false
+  idiomaIngles = false,
+  focus: MathPracticeFocus = 'general'
 ): MathPracticeExercise {
   const recentClean = recentOps
     .map((op) => normalizePracticeOperation(op))
     .filter(Boolean)
   const recentSet = new Set(recentClean)
-  const pool = exercisePoolForLevel(level)
-  const start = hashText(`${recentClean.join('|')}|${level}`) % pool.length
+  const pool = exercisePoolForLevel(level, focus)
+  const start = hashText(`${recentClean.join('|')}|${level}|${focus}`) % pool.length
 
   for (let i = 0; i < pool.length; i += 1) {
     const op = pool[(start + i) % pool.length]
@@ -191,11 +207,34 @@ export function buildNextMathExercise(
     }
   }
 
-  let op = fallbackExercise(recentClean, level)
+  let op = fallbackExercise(recentClean, level, focus)
   while (recentSet.has(normalizePracticeOperation(op))) {
-    op = fallbackExercise([...recentClean, op], level)
+    op = fallbackExercise([...recentClean, op], level, focus)
   }
   return { op, text: exerciseText(op, idiomaIngles) }
+}
+
+export function inferMathPracticeFocus(texts: Array<string | null | undefined>): MathPracticeFocus {
+  const normalized = texts
+    .filter(Boolean)
+    .join('\n')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+
+  if (
+    /\b(ecuacion|ecuaciones|equation|equations|algebra|despej|variable|variables)\b/.test(normalized) ||
+    /[0-9)]\s*\*?\s*x\s*[+\-*/=]/i.test(normalized) ||
+    /x\s*[+\-*/=]/i.test(normalized)
+  ) {
+    return 'equation'
+  }
+
+  if (/\b(decimal|decimales|porcentaje|porcentajes|percent|fraction|fraccion|fracciones)\b/.test(normalized)) {
+    return 'decimal'
+  }
+
+  return 'general'
 }
 
 export function isWorkedExampleRequest(text: string) {
