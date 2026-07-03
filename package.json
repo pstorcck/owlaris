@@ -11,7 +11,9 @@
     "test:humanistic": "tsx scripts/humanistic-safety-smoke.ts",
     "test:pedagogy": "tsx scripts/pedagogical-guard-smoke.ts",
     "test:stress": "tsx scripts/difficult-conversations-stress.ts",
-    "test:escholaris-math": "tsx scripts/escholaris-math-stress.ts"
+    "test:escholaris-math": "tsx scripts/escholaris-math-stress.ts",
+    "test:practice": "tsx scripts/math-practice-stress.ts",
+    "test:safety-sensitive": "tsx scripts/sensitive-safety-stress.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.5.1",

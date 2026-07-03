@@ -44,7 +44,13 @@ const SELF_HARM = [
   'quitarme la vida', 'me voy a matar', 'suicidar', 'suicidio',
   'no quiero vivir', 'prefiero estar muerto', 'mejor muerto',
   'hacerme daño', 'hacerme dano', 'cortarme', 'autolesion', 'autolesionarme',
+  'me quiero suicidar', 'quisiera morirme', 'no quiero seguir vivo',
+  'no quiero seguir viva', 'me quiero cortar', 'pienso en suicidarme',
+  'i want to kill myself', 'i want to die', 'i want to end my life',
+  'i am going to kill myself', 'i do not want to live', "i don't want to live",
+  'i want to hurt myself', 'i want to cut myself', 'suicide',
   /(?:ya no|no)\s+aguanto\s+(?:vivir|mas)/,
+  /(?:quiero|quisiera|pienso en)\s+(?:mi\s+)?muerte/,
 ]
 
 const ABUSE = [
@@ -52,12 +58,22 @@ const ABUSE = [
   'me tocaron', 'me toca inapropiadamente', 'me tocaron mis partes',
   'me hicieron daño', 'me hicieron dano', 'acoso sexual', 'me acosan',
   'un adulto me toca', 'me obligan a tocar',
+  'violacion', 'sufri una violacion', 'fui violada', 'fui violado',
+  'me estan violando', 'me intentaron violar', 'me tocaron sin permiso',
+  'un familiar me toca', 'mi padrastro me toca', 'mi madrastra me toca',
+  'me obligaron a tener sexo', 'me forzaron',
+  'sexual abuse', 'i was abused', 'i was raped', 'someone raped me',
+  'an adult touched me', 'someone touched my private parts',
+  'they touched me without permission', 'i was forced to have sex',
 ]
 
 const VIOLENCE = [
   'me pegan', 'me golpean', 'me maltratan', 'me pega', 'me golpea',
   'violencia domestica', 'violencia en casa', 'me amenaza', 'me amenazan',
   'tengo miedo en casa', 'mis papas pelean fuerte', 'mis padres pelean fuerte',
+  'me estan golpeando', 'me estan maltratando', 'me hacen daño en casa',
+  'me hacen dano en casa', 'i am being hit', 'they hit me at home',
+  'domestic violence', 'violence at home', 'i am afraid at home',
 ]
 
 const HARM_OTHERS = [

@@ -30,6 +30,11 @@ import {
   solveOperation,
   type MathEvaluation,
 } from '@/lib/mathSafety'
+import {
+  buildNextMathExercise,
+  collectRecentMathOperations,
+  isRepeatedMathOperation,
+} from '@/lib/mathPractice'
 
 const PROMPT_BASE = `Eres Owlaris, Tu tutor AI. Eres un profesor paciente cuyo objetivo es ayudar a los estudiantes a entender, practicar y aprender por sí mismos. Hablas de forma clara, cercana, motivadora y respetuosa. Tratas al usuario de tú. No usas emoticones.
 
@@ -1178,6 +1183,7 @@ export async function POST(req: NextRequest) {
 
     // Si el protocolo evaluó y tiene resultado definitivo, responder directo
     if (evaluacionProtocolo && evaluacionProtocolo.estado !== 'no_evaluable') {
+      const esRespuestaCorrecta = evaluacionProtocolo.estado === 'correcto' || evaluacionProtocolo.estado === 'equivalente'
       const aciertosConsecutivos = evaluacionProtocolo.estado === 'correcto' || evaluacionProtocolo.estado === 'equivalente'
         ? rachaAprendizaje.correctas + 1
         : 0
@@ -1189,16 +1195,30 @@ export async function POST(req: NextRequest) {
         : aciertosConsecutivos > 3
           ? Math.min(8, nivelDificultadActual + 1)
           : nivelDificultadActual
-      const respuesta = reforzarDiagnosticoPorFallos(evaluacionProtocolo.feedback, idiomaIngles, fallosConsecutivos)
+      const operacionesRecientes = collectRecentMathOperations([
+        ...(Array.isArray(historial) ? historial.map((msg: { contenido?: string }) => msg.contenido || '') : []),
+        evaluacionProtocolo.op || '',
+      ])
+      const siguienteEjercicio = esRespuestaCorrecta
+        ? buildNextMathExercise(operacionesRecientes, nivelSiguiente, idiomaIngles)
+        : null
+      const respuestaCorrectaConSiguiente = siguienteEjercicio
+        ? idiomaIngles
+          ? `Correct. Your answer is right. Let's try a different exercise now.\n\n${siguienteEjercicio.text}`
+          : `¡Correcto! Tu respuesta está bien. Vamos con un ejercicio distinto.\n\n${siguienteEjercicio.text}`
+        : evaluacionProtocolo.feedback
+      const respuesta = esRespuestaCorrecta
+        ? respuestaCorrectaConSiguiente
+        : reforzarDiagnosticoPorFallos(evaluacionProtocolo.feedback, idiomaIngles, fallosConsecutivos)
       const { data: evaluacionInsertada } = await supabase.from('interacciones').insert({
         usuario_id: user.id, colegio_id: perfil.colegio_id, materia_id: materia_uuid,
         grado: gradoEfectivo, tema_detectado: pregunta.substring(0, 100),
         pregunta, respuesta, tokens_usados: 0, costo_usd: 0,
         modelo_usado: 'calculadora', documento_fuente: null, sospecha_copia: false,
-        operacion_canonica: evaluacionProtocolo?.op || null,
-        op_estado: evaluacionProtocolo?.estado === 'incorrecto' ? 'pendiente' : 'evaluada',
-        op_evaluada_en: evaluacionProtocolo?.estado === 'incorrecto' ? null : new Date().toISOString(),
-        op_respuesta_alumno: pregunta,
+        operacion_canonica: siguienteEjercicio?.op || evaluacionProtocolo?.op || null,
+        op_estado: siguienteEjercicio ? 'pendiente' : evaluacionProtocolo?.estado === 'incorrecto' ? 'pendiente' : 'evaluada',
+        op_evaluada_en: siguienteEjercicio || evaluacionProtocolo?.estado === 'incorrecto' ? null : new Date().toISOString(),
+        op_respuesta_alumno: siguienteEjercicio ? null : pregunta,
         estado_evaluacion: evaluacionProtocolo?.estado || null,
         guard_activado: evaluacionProtocolo?.guardActivado || false,
       }).select('id').single()
@@ -1207,8 +1227,10 @@ export async function POST(req: NextRequest) {
       // Verificar alertas pedagógicas
       await verificarAlertasBajaComprension(supabase, user.id, perfil, gradoEfectivo, materia, respuesta, null, evaluacionProtocolo?.estado || null)
       
-      // Si incorrecto conservar pendingMathId para reintento; si correcto ya fue marcado evaluada
-      const returnPendingId = (evaluacionProtocolo?.estado === 'incorrecto') ? (pendingMathId || evaluacionInsertada?.id || null) : null
+      // Si incorrecto conservar pendingMathId para reintento; si correcto, la nueva pregunta queda pendiente.
+      const returnPendingId = siguienteEjercicio
+        ? (evaluacionInsertada?.id || null)
+        : (evaluacionProtocolo?.estado === 'incorrecto') ? (pendingMathId || evaluacionInsertada?.id || null) : null
       return NextResponse.json({
         respuesta,
         tokens: 0,
@@ -1386,22 +1408,13 @@ ${contextoContenido}`
     const opInferida = !_opExtraida && looksLikeMathPracticePrompt(respuesta)
       ? inferCanonicalOperationFromText(respuesta)
       : null
-    const opFinalRespuesta = _opExtraida || opInferida
+    let opFinalRespuesta = _opExtraida || opInferida
     let opValidaEnRespuesta = isSafeCanonicalOperation(opFinalRespuesta) ? opFinalRespuesta : null
-
-    // ANTI-REPETICIÓN: nunca repetir un ejercicio que el alumno YA respondió correctamente
     if (opValidaEnRespuesta) {
+      const operacionesRecientes = collectRecentMathOperations(
+        Array.isArray(historial) ? historial.map((msg: { contenido?: string }) => msg.contenido || '') : []
+      )
       try {
-        const opNormalizada = opValidaEnRespuesta.replace(/\s+/g, '')
-        const { data: yaRespondida } = await supabase
-          .from('interacciones')
-          .select('id')
-          .eq('usuario_id', user.id)
-          .eq('op_estado', 'evaluada')
-          .not('operacion_canonica', 'is', null)
-          .limit(500)
-        const opsEvaluadas = new Set((yaRespondida || []).map((r: {id: string}) => r.id))
-        // Verificar contra las operaciones ya evaluadas (comparación normalizada)
         const { data: opsPrevias } = await supabase
           .from('interacciones')
           .select('operacion_canonica')
@@ -1409,23 +1422,24 @@ ${contextoContenido}`
           .eq('op_estado', 'evaluada')
           .not('operacion_canonica', 'is', null)
           .limit(500)
-        const setPrevias = new Set((opsPrevias || []).map((r: {operacion_canonica: string}) => (r.operacion_canonica || '').replace(/\s+/g, '')))
-        if (setPrevias.has(opNormalizada)) {
-          // Ejercicio repetido — mutar la operación ligeramente para variar
-          const mutada = opNormalizada.replace(/\d+/, (n) => String(Number(n) + 1 + Math.floor(Math.random() * 3)))
-          const solNueva = solveOperation(mutada)
-          if (solNueva !== null && !setPrevias.has(mutada)) {
-            // Reemplazar los números en el texto visible también
-            const numViejo = opNormalizada.match(/\d+/)?.[0]
-            const numNuevo = mutada.match(/\d+/)?.[0]
-            if (numViejo && numNuevo && numViejo !== numNuevo) {
-              respuesta = respuesta.replace(new RegExp('\\b' + numViejo + '\\b'), numNuevo)
-              opValidaEnRespuesta = mutada
-            }
-          }
-          console.log('ANTI-REPETICION: ejercicio ya respondido, variado a', opValidaEnRespuesta)
+        const operacionesEvaluadas = (opsPrevias || [])
+          .map((r: { operacion_canonica: string | null }) => r.operacion_canonica || '')
+          .filter(Boolean)
+        const operacionesBloqueadas = collectRecentMathOperations([
+          ...operacionesRecientes,
+          ...operacionesEvaluadas,
+        ])
+        if (isRepeatedMathOperation(opValidaEnRespuesta, operacionesBloqueadas)) {
+          const ejercicioFresco = buildNextMathExercise([...operacionesBloqueadas, opValidaEnRespuesta], nivelDificultadActual, idiomaIngles)
+          respuesta = idiomaIngles
+            ? `Let's use a different exercise so we do not repeat the same one.\n\n${ejercicioFresco.text}`
+            : `Usemos un ejercicio distinto para no repetir el mismo.\n\n${ejercicioFresco.text}`
+          opFinalRespuesta = ejercicioFresco.op
+          opValidaEnRespuesta = ejercicioFresco.op
         }
-      } catch (e) { console.error('Error anti-repetición:', e) }
+      } catch (error) {
+        console.error('Error anti-repetición:', error)
+      }
     }
     const guardiaHumanistica = guardHumanisticResponse(respuesta, {
       materia: materia?.nombre || materia_id,
