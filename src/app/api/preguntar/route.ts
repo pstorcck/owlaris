@@ -977,7 +977,7 @@ export async function POST(req: NextRequest) {
         })
       }
       return NextResponse.json({
-        respuesta: idiomaIngles ? 'Ok, let me help you with that topic.' : 'Ok, vamos con ese tema.',
+        respuesta: idiomaIngles ? 'Great, let\'s study that subject! What topic would you like to work on, or do you have a specific question?' : '¡Perfecto, vamos con esa materia! ¿Qué tema te gustaría trabajar, o tienes alguna duda específica?',
         nuevo_estado: 'activo',
         nombre_alumno: nombreAlumno,
         grado_detectado: gradoAlumno,
