@@ -649,7 +649,11 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
       return new Date(m.timestamp).getTime() >= sessionStartedAtMs - 1000
     })
 
-    if (mensajesDeReporte.length < 3) {
+    // El reporte de hoy consolida TODA la actividad del día en el backend
+    // (no solo la materia/sesión activa), así que este mínimo se valida
+    // contra toda la conversación acumulada, no solo la ventana reiniciada
+    // por el último cambio de materia.
+    if (mensajes.length < 3) {
       setError(idiomaIngles ? 'There is not enough activity yet to generate today\'s report.' : 'Todavía no hay suficiente actividad para generar el reporte de hoy.')
       return
     }
@@ -684,8 +688,9 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
         gradeSubject: (g: string, m: string) => `Grade: ${g}  |  Subject: ${m}`,
         duration: (d: string) => `Duration: ${d}`,
         interactions: 'Interactions',
-        exercises: 'Exercises',
+        exercises: 'Graded exercises',
         accuracy: 'Accuracy',
+        accuracyInsufficient: 'Not enough to evaluate',
         difficulty: 'Difficulty',
         inProgress: 'In progress',
         level: (n: number) => `Level ${n}`,
@@ -696,7 +701,8 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
         wentUp: (a: number, b: number) => `Went up from level ${a} to ${b}`,
         wentDown: (a: number, b: number) => `Went down from level ${a} to ${b}`,
         reinforced: (n: number) => `Reinforced basics at level ${n}`,
-        whatTheyStudied: 'What they studied',
+        whatTheyStudied: 'What they studied today (all subjects)',
+        evidenceStatus: 'Evidence status',
         achievementsNextSteps: 'Achievements and next steps',
         achievementsObserved: 'Achievements observed',
         defaultAchievement: 'Participated in practice and progressed with guidance.',
@@ -706,14 +712,17 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
         defaultHomeSupport: 'Ask them to explain an exercise in their own words and close with a short practice.',
         nextSessionPlan: 'Suggested plan for the next session',
         defaultPlan: 'Practice one idea at a time and explain the process before moving on.',
-        materialConsulted: 'Material consulted',
+        materialConsulted: 'Classes worked on today',
         annexTitle: 'ANNEX: ACTIVITY EVIDENCE',
-        noEvidence: 'There are not yet enough evaluated exercises to show detailed evidence. The executive report summarizes the available activity for the day.',
+        noEvidence: 'There is not yet any recorded activity today to show as evidence.',
         recorded: 'Recorded',
+        subject: (t: string) => `Subject: ${t}`,
         topic: (t: string) => `Topic: ${t}`,
-        exercise: (t: string) => `Exercise: ${t}`,
-        studentAnswer: (t: string) => `Student answer: ${t}`,
+        exercise: (t: string) => `Activity: ${t}`,
+        studentAnswer: (t: string) => `Student wrote: ${t}`,
         source: (t: string) => `Source: ${t}`,
+        gradedTag: 'Graded',
+        notGradedTag: 'Not graded',
         footer: 'Owlaris - Family pedagogical report - owlaris.app',
         page: (i: number, total: number) => `Page ${i} of ${total}`,
         sessionShort: (m: number) => (m <= 1 ? '1 min' : m + ' minutes'),
@@ -725,8 +734,9 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
         gradeSubject: (g: string, m: string) => `Grado: ${g}  |  Materia: ${m}`,
         duration: (d: string) => `Duración: ${d}`,
         interactions: 'Interacciones',
-        exercises: 'Ejercicios',
+        exercises: 'Ejercicios calificables',
         accuracy: 'Precisión',
+        accuracyInsufficient: 'Insuficiente para evaluar',
         difficulty: 'Dificultad',
         inProgress: 'En curso',
         level: (n: number) => `Nivel ${n}`,
@@ -737,7 +747,8 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
         wentUp: (a: number, b: number) => `Subió de nivel ${a} a ${b}`,
         wentDown: (a: number, b: number) => `Bajó de nivel ${a} a ${b}`,
         reinforced: (n: number) => `Reforzó bases en nivel ${n}`,
-        whatTheyStudied: 'Qué estudió',
+        whatTheyStudied: 'Qué estudió hoy (todas las materias)',
+        evidenceStatus: 'Estado de la evidencia',
         achievementsNextSteps: 'Logros y próximos pasos',
         achievementsObserved: 'Logros observados',
         defaultAchievement: 'Participó en la práctica y avanzó con guía.',
@@ -747,14 +758,17 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
         defaultHomeSupport: 'Pedirle que explique un ejercicio con sus propias palabras y cerrar con una práctica corta.',
         nextSessionPlan: 'Plan sugerido para la próxima sesión',
         defaultPlan: 'Practicar una idea a la vez y explicar el proceso antes de avanzar.',
-        materialConsulted: 'Material consultado',
+        materialConsulted: 'Clases trabajadas hoy',
         annexTitle: 'ANEXO: EVIDENCIA DE ACTIVIDAD',
-        noEvidence: 'Todavía no hay ejercicios evaluados suficientes para mostrar evidencia detallada. El reporte ejecutivo resume la actividad disponible del día.',
+        noEvidence: 'Todavía no hay actividad registrada hoy para mostrar como evidencia.',
         recorded: 'Registrada',
+        subject: (t: string) => `Materia: ${t}`,
         topic: (t: string) => `Tema: ${t}`,
-        exercise: (t: string) => `Ejercicio: ${t}`,
-        studentAnswer: (t: string) => `Respuesta del estudiante: ${t}`,
+        exercise: (t: string) => `Actividad: ${t}`,
+        studentAnswer: (t: string) => `El estudiante escribió: ${t}`,
         source: (t: string) => `Fuente: ${t}`,
+        gradedTag: 'Calificable',
+        notGradedTag: 'No calificable',
         footer: 'Owlaris - Informe pedagogico familiar - owlaris.app',
         page: (i: number, total: number) => `Página ${i} de ${total}`,
         sessionShort: (m: number) => (m <= 1 ? '1 min' : m + ' minutos'),
@@ -824,10 +838,12 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
       const estudianteMsgs = mensajesDeReporte.filter(m => m.rol === 'usuario').length
       const metricasHoy = data.analisis.metricas_hoy || {}
       const evidenciaHoy = Array.isArray(data.analisis.evidencia_hoy) ? data.analisis.evidencia_hoy : []
-      const documentos = Array.from(new Set([
-        ...mensajesDeReporte.map(m => m.documento_fuente).filter(Boolean),
-        ...(Array.isArray(metricasHoy.fuentes) ? metricasHoy.fuentes : []),
-      ])) as string[]
+      // Clases trabajadas hoy: nombres de materia legibles (ej. "Biology"),
+      // nunca el nombre técnico del archivo fuente (ej. "Owlaris - Biology.md").
+      const clasesTrabajadas = Array.isArray(metricasHoy.materias) && metricasHoy.materias.length
+        ? metricasHoy.materias
+        : [materiaAlumno].filter(Boolean)
+      const temasPorMateria = Array.isArray(data.analisis.temas_por_materia) ? data.analisis.temas_por_materia : []
       const temas = Array.isArray(data.analisis.temas) ? data.analisis.temas : []
       const logros = Array.isArray(data.analisis.logros) ? data.analisis.logros : []
       const mejoras = Array.isArray(data.analisis.areas_mejora) ? data.analisis.areas_mejora : []
@@ -859,9 +875,9 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
       y += 53
 
       const cardW = (maxW - 9) / 4
-      metricCard(margin, y, cardW, L.interactions, String(metricasHoy.interacciones || mensajesDeReporte.length), palette.blue)
-      metricCard(margin + cardW + 3, y, cardW, L.exercises, String(metricasHoy.ejercicios || estudianteMsgs), palette.teal)
-      metricCard(margin + (cardW + 3) * 2, y, cardW, L.accuracy, metricasHoy.precision !== null && metricasHoy.precision !== undefined ? `${metricasHoy.precision}%` : L.inProgress, palette.green)
+      metricCard(margin, y, cardW, L.interactions, String(metricasHoy.interacciones ?? mensajesDeReporte.length), palette.blue)
+      metricCard(margin + cardW + 3, y, cardW, L.exercises, String(metricasHoy.ejercicios ?? estudianteMsgs), palette.teal)
+      metricCard(margin + (cardW + 3) * 2, y, cardW, L.accuracy, metricasHoy.precision !== null && metricasHoy.precision !== undefined ? `${metricasHoy.precision}%` : L.accuracyInsufficient, palette.green)
       metricCard(margin + (cardW + 3) * 3, y, cardW, L.difficulty, L.level(nivelDificultad), palette.violet)
       y += 35
 
@@ -902,9 +918,27 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
       y += 10
 
       section(L.whatTheyStudied, palette.blue)
-      bulletList((data.analisis.materias_estudiadas || [materiaAlumno].filter(Boolean)).slice(0, 4), palette.teal)
-      const temasHoy = Array.isArray(metricasHoy.temas) && metricasHoy.temas.length ? metricasHoy.temas : temas
-      if (temasHoy.length > 0) bulletList(temasHoy.slice(0, 5), palette.violet)
+      if (temasPorMateria.length > 0) {
+        // Punto 9: un bloque por materia (ej. "Biology: Genética, Ecosistemas"),
+        // para que el resumen no se limite a la materia activa al descargar.
+        bulletList(
+          temasPorMateria.slice(0, 6).map((tm: { materia?: string; temas?: string[] }) =>
+            `${tm.materia || ''}: ${(tm.temas || []).slice(0, 4).join(', ') || '—'}`
+          ),
+          palette.teal
+        )
+      } else {
+        bulletList((data.analisis.materias_estudiadas || [materiaAlumno].filter(Boolean)).slice(0, 4), palette.teal)
+        const temasHoy = Array.isArray(metricasHoy.temas) && metricasHoy.temas.length ? metricasHoy.temas : temas
+        if (temasHoy.length > 0) bulletList(temasHoy.slice(0, 5), palette.violet)
+      }
+
+      if (metricasHoy.estado_evidencia && data.analisis.frase_evidencia) {
+        section(L.evidenceStatus, palette.amber)
+        doc.setFillColor(255, 251, 235); doc.roundedRect(margin, y - 3, maxW, 20, 4, 4, 'F')
+        wrapped(data.analisis.frase_evidencia, margin + 6, y + 5, maxW - 12, 8.8, [146, 64, 14])
+        y += 28
+      }
 
       section(L.achievementsNextSteps, palette.green)
       const colW = (maxW - 6) / 2
@@ -931,9 +965,9 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
       addPage()
       section(L.nextSessionPlan, palette.violet)
       bulletList(alumnoRecs.length ? alumnoRecs : [L.defaultPlan], palette.blue)
-      if (documentos.length > 0) {
+      if (clasesTrabajadas.length > 0) {
         section(L.materialConsulted, palette.teal)
-        bulletList(documentos.slice(0, 5), palette.teal)
+        bulletList(clasesTrabajadas.slice(0, 6), palette.teal)
       }
 
       addPage()
@@ -945,8 +979,10 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
         y += 12
       }
       for (const item of evidenciaHoy) {
-        const header = `#${item.secuencia || ''} ${item.hora ? '· ' + item.hora : ''} · ${item.resultado || L.recorded}`
+        const etiquetaCalificable = item.calificable ? L.gradedTag : L.notGradedTag
+        const header = `#${item.secuencia || ''} ${item.hora ? '· ' + item.hora : ''} · ${item.resultado || L.recorded} · ${etiquetaCalificable}`
         const detail = [
+          item.materia ? L.subject(item.materia) : null,
           item.tema ? L.topic(item.tema) : null,
           item.ejercicio ? L.exercise(item.ejercicio) : null,
           item.respuesta_estudiante ? L.studentAnswer(item.respuesta_estudiante) : null,
