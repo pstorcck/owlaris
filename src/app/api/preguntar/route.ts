@@ -1162,7 +1162,7 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    if (estado === 'activo') {
+    if (estado === 'activo' && cfg.grado_edicion_libre !== 'false') {
       const cambioGradoRegex = /ahora (estoy en|curso|voy a|soy de)\s+(.+)|cambi[eé] (a|de) grado[:\s]*(.+)|estoy en\s+(.+(?:grado|b[aá]sico|primaria|bachillerato))/i
       const cambioGradoMatch = cambioGradoRegex.exec(pregunta)
       if (cambioGradoMatch) {

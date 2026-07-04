@@ -9,6 +9,7 @@ export default function ConfiguracionPage() {
   const [prompt, setPrompt]               = useState('')
   const [limite, setLimite]               = useState('999')
   const [mantenimiento, setMantenimiento] = useState(false)
+  const [gradoLibre, setGradoLibre]       = useState(true)
   const [cargando, setCargando]           = useState(true)
   const [guardando, setGuardando]         = useState(false)
   const [sincronizando, setSincronizando] = useState(false)
@@ -33,6 +34,7 @@ export default function ConfiguracionPage() {
       setPrompt(cfg.prompt_personalizado || '')
       setLimite(cfg.limite_preguntas_diarias || '999')
       setMantenimiento(cfg.modo_mantenimiento === 'true')
+      setGradoLibre(cfg.grado_edicion_libre !== 'false')
       setCargando(false)
     }
     cargar()
@@ -103,6 +105,33 @@ export default function ConfiguracionPage() {
           {mantenimiento && (
             <div className="mt-3 bg-red-500/10 border border-red-500/20 rounded-lg px-4 py-2">
               <p className="text-red-300 text-sm">⚠️ El chat está desactivado para todos los alumnos ahora mismo.</p>
+            </div>
+          )}
+        </div>
+
+        {/* Cambio de grado libre */}
+        <div className="bg-white/5 rounded-2xl p-6 border border-white/10">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="font-semibold mb-1">🎓 Cambio de grado libre</h2>
+              <p className="text-sm text-gray-400">Cuando está activo, el alumno puede cambiar su propio grado en cualquier momento escribiéndolo en el chat.</p>
+              <p className="text-xs text-gray-500 mt-1">Al desactivarlo, el grado queda fijo y solo un administrador puede cambiarlo.</p>
+            </div>
+            <button
+              onClick={() => {
+                const nuevo = !gradoLibre
+                setGradoLibre(nuevo)
+                guardar('grado_edicion_libre', nuevo.toString())
+              }}
+              className={`relative w-14 h-7 rounded-full transition-colors duration-200 flex-shrink-0
+                ${gradoLibre ? 'bg-green-500' : 'bg-gray-600'}`}>
+              <span className={`absolute top-1 w-5 h-5 bg-white rounded-full shadow transition-transform duration-200
+                ${gradoLibre ? 'translate-x-8' : 'translate-x-1'}`}/>
+            </button>
+          </div>
+          {!gradoLibre && (
+            <div className="mt-3 bg-amber-500/10 border border-amber-500/20 rounded-lg px-4 py-2">
+              <p className="text-amber-300 text-sm">🔒 El grado de los alumnos está fijo ahora mismo. No pueden cambiarlo desde el chat.</p>
             </div>
           )}
         </div>

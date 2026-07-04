@@ -4,27 +4,26 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
-
-const GRADOS = [
-  '4to Primaria', '5to Primaria', '6to Primaria',
-  '1ero Básico', '2do Básico', '3ero Básico',
-  '4to Bachillerato', '5to Bachillerato',
-]
+import { GRADOS_MONTANO_ESCOLARIS, GRADOS_ESCHOLARIS } from '@/lib/sharepointFolders'
 
 export default function SignupPage() {
   const [nombre, setNombre]     = useState('')
   const [email, setEmail]       = useState('')
   const [colegioId, setColegioId] = useState('')
+  const [grado, setGrado]       = useState('')
   const [loading, setLoading]   = useState(false)
   const [error, setError]       = useState('')
   const [exito, setExito]       = useState('')
   const router = useRouter()
 
   const COLEGIOS = [
-    { id: '9fe47d21-5ee3-4aa1-a347-a08f95869a96', nombre: 'Colegio Montano Portal Los Álamos' },
-    { id: '4cd950b5-3385-4aa9-84a7-201eb87406f4', nombre: 'Colegio Montano Cortijo' },
-    { id: 'be33fb6b-6ba5-449f-876f-0c6ec60a8f58', nombre: 'Colegio Escolaris' },
+    { id: '9fe47d21-5ee3-4aa1-a347-a08f95869a96', nombre: 'Colegio Montano Portal Los Álamos', esEscholaris: false },
+    { id: '4cd950b5-3385-4aa9-84a7-201eb87406f4', nombre: 'Colegio Montano Cortijo', esEscholaris: false },
+    { id: 'be33fb6b-6ba5-449f-876f-0c6ec60a8f58', nombre: 'Colegio Escolaris', esEscholaris: true },
   ]
+
+  const colegioSeleccionado = COLEGIOS.find(c => c.id === colegioId)
+  const GRADOS = colegioSeleccionado?.esEscholaris ? GRADOS_ESCHOLARIS : GRADOS_MONTANO_ESCOLARIS
 
   async function handleSignup(e: React.FormEvent) {
     e.preventDefault()
@@ -35,7 +34,7 @@ export default function SignupPage() {
       const res = await fetch('/api/signup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ nombre_completo: nombre, email, rol: 'alumno', colegio_id: colegioId }),
+        body: JSON.stringify({ nombre_completo: nombre, email, grado, rol: 'alumno', colegio_id: colegioId }),
       })
       const data = await res.json()
       setLoading(false)
@@ -82,11 +81,21 @@ export default function SignupPage() {
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Colegio / Sede</label>
-                <select value={colegioId} onChange={e => setColegioId(e.target.value)} required
+                <select value={colegioId} onChange={e => { setColegioId(e.target.value); setGrado('') }} required
                   className="input-base">
                   <option value="">Selecciona tu colegio...</option>
                   {COLEGIOS.map(col => (
                     <option key={col.id} value={col.id}>{col.nombre}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Grado</label>
+                <select value={grado} onChange={e => setGrado(e.target.value)} required
+                  disabled={!colegioId} className="input-base">
+                  <option value="">{colegioId ? 'Selecciona tu grado...' : 'Primero selecciona tu colegio'}</option>
+                  {GRADOS.map(g => (
+                    <option key={g} value={g}>{g}</option>
                   ))}
                 </select>
               </div>
