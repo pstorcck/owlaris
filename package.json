@@ -24,7 +24,8 @@
     "test:materia-detection": "tsx scripts/materia-detection-smoke.ts",
     "test:mistake-review": "tsx scripts/mistake-review-smoke.ts",
     "test:reporte-actividad": "tsx scripts/reporte-actividad-smoke.ts",
-    "test": "npm run test:math && npm run test:humanistic && npm run test:pedagogy && npm run test:stress && npm run test:escholaris-math && npm run test:practice && npm run test:safety-sensitive && npm run test:exercise-repetition && npm run test:sensitive-topics && npm run test:openai-reliability && npm run test:reporte-seguridad && npm run test:all-classes && npm run test:chat-formatting && npm run test:topic-selection && npm run test:materia-detection && npm run test:mistake-review && npm run test:reporte-actividad"
+    "test:tema-general": "tsx scripts/tema-general-smoke.ts",
+    "test": "npm run test:math && npm run test:humanistic && npm run test:pedagogy && npm run test:stress && npm run test:escholaris-math && npm run test:practice && npm run test:safety-sensitive && npm run test:exercise-repetition && npm run test:sensitive-topics && npm run test:openai-reliability && npm run test:reporte-seguridad && npm run test:all-classes && npm run test:chat-formatting && npm run test:topic-selection && npm run test:materia-detection && npm run test:mistake-review && npm run test:reporte-actividad && npm run test:tema-general"
   },
   "dependencies": {
     "@supabase/ssr": "^0.5.1",

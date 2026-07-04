@@ -815,7 +815,17 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
         doc.setFillColor(255, 255, 255); doc.roundedRect(x, yy, w, 23, 3, 3, 'F')
         doc.setDrawColor(palette.line[0], palette.line[1], palette.line[2]); doc.roundedRect(x, yy, w, 23, 3, 3, 'S')
         text(title, x + 5, yy + 7, 7.5, true, palette.muted)
-        text(value, x + 5, yy + 16, 12, true, color)
+        // Encoge el tamaño del valor si no cabe en la tarjeta (ej. "Insuficiente
+        // para evaluar" es mucho más largo que "85%" o "Nivel 1") en vez de
+        // dejar que el texto se salga de la caja hacia la siguiente tarjeta.
+        const maxValueWidth = w - 10
+        let valueSize = 12
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(valueSize)
+        while (valueSize > 7 && doc.getTextWidth(String(value || '')) > maxValueWidth) {
+          valueSize -= 0.5
+          doc.setFontSize(valueSize)
+        }
+        text(value, x + 5, yy + 16, valueSize, true, color)
       }
       const bulletList = (items: string[], color: number[], width = maxW - 8) => {
         for (const item of items.filter(Boolean).slice(0, 5)) {

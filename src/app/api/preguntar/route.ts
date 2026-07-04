@@ -6,6 +6,7 @@ import { guardNoFinalAnswer } from '@/lib/pedagogicalGuard'
 import { sanitizeChatFormatting } from '@/lib/chatFormatting'
 import { detectarMateriaDesdeTexto, materiaActualEnSistemaCNB, normalizarMateria } from '@/lib/materiaDetection'
 import { isReviewMistakesRequest, primeraOperacionValida, temaMasFrecuente } from '@/lib/mistakeReview'
+import { limpiarTemaGeneral } from '@/lib/temaGeneral'
 import {
   buildCourseTopicListResponse,
   extractCourseTopicIndex,
@@ -1749,7 +1750,7 @@ export async function POST(req: NextRequest) {
         colegio_id: perfil.colegio_id,
         materia_id: materia_uuid,
         grado: gradoEfectivo,
-        tema_detectado: pregunta.substring(0, 100),
+        tema_detectado: limpiarTemaGeneral(pregunta, idiomaIngles),
         pregunta,
         respuesta,
         tokens_usados: 0,
@@ -1953,7 +1954,7 @@ ${contextoContenido}`
 
     const { data: insertedRow, error: insertErr } = await supabase.from('interacciones').insert({
       usuario_id: user.id, colegio_id: perfil.colegio_id, materia_id: materia_uuid,
-      grado: gradoEfectivo, tema_detectado: pregunta.substring(0, 100),
+      grado: gradoEfectivo, tema_detectado: limpiarTemaGeneral(pregunta, idiomaIngles),
       pregunta, respuesta, tokens_usados: tokensUsados, costo_usd: costoUSD,
       modelo_usado: 'gpt-4o-mini', documento_fuente: documentoFuente,
       sospecha_copia: detectarCopia(pregunta),
