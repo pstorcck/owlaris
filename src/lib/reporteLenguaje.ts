@@ -10,11 +10,18 @@ const FRASES_EMOCIONALES_NO_OBSERVABLES = [
   /particip[oó]\s+con\s+(?:mucho\s+)?entusiasmo/gi,
   /con\s+(?:mucho\s+)?entusiasmo/gi,
   /demostr[oó]\s+(?:gran\s+)?inter[eé]s/gi,
+  // "Mostró iniciativa"/"de manera proactiva" son juicios de actitud, no
+  // hechos observables — encontrado en un reporte real de producción.
+  /(?:mostr[oó]|demostr[oó]|tuvo)\s+(?:mucha\s+|gran\s+)?iniciativa/gi,
+  /de\s+(?:manera|forma)\s+proactiv[ao]/gi,
+  /actu[oó]\s+de\s+(?:manera|forma)\s+proactiv[ao]/gi,
   /showed\s+(?:great\s+|a\s+lot\s+of\s+)?interest(?:\s+and\s+receptiveness)?/gi,
   /was\s+(?:very\s+)?motivated/gi,
   /participated\s+with\s+enthusiasm/gi,
   /showed\s+commitment/gi,
   /seemed\s+(?:very\s+)?engaged/gi,
+  /showed\s+(?:great\s+)?initiative/gi,
+  /(?:acted|worked)\s+proactively/gi,
 ]
 
 export function stripUngroundedEmotionalClaims(text: string, idiomaIngles = false): { text: string; guardActivado: boolean } {

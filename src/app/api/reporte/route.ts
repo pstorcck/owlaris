@@ -135,7 +135,11 @@ function extraerNombreMateria(row: FilaInteraccionCruda): string | null {
 }
 
 function calcularMetricasHoy(filas: FilaInteraccion[], materiaFallback: string) {
-  const resumenMaterias = agruparPorMateria(filas, materiaFallback)
+  // Las alertas de seguridad se cuentan aparte (ver resumenSeguridadIntegridad)
+  // pero NUNCA deben aparecer como "tema" trabajado — ni en el resumen por
+  // materia de la portada ni en la lista plana de temas.
+  const filasAcademicas = filas.filter(i => !esDeSeguridad(i))
+  const resumenMaterias = agruparPorMateria(filasAcademicas, materiaFallback)
   const correctas = resumenMaterias.reduce((acc, m) => acc + m.correctas, 0)
   const incorrectas = resumenMaterias.reduce((acc, m) => acc + m.incorrectas, 0)
   const pasosCorrectos = filas.filter(i => i.estado_evaluacion === 'paso_correcto').length
@@ -145,7 +149,7 @@ function calcularMetricasHoy(filas: FilaInteraccion[], materiaFallback: string) 
   const evaluadas = correctas + incorrectas
   const precision = evaluadas > 0 ? Math.round((correctas / evaluadas) * 100) : null
   const materias = resumenMaterias.map(m => m.materia)
-  const temas = Array.from(new Set(filas.map(i => (i.tema_detectado || '').trim()).filter(Boolean))).slice(0, 12)
+  const temas = Array.from(new Set(filasAcademicas.map(i => (i.tema_detectado || '').trim()).filter(Boolean))).slice(0, 12)
   const inicio = filas[0]?.creado_en || null
   const fin = filas[filas.length - 1]?.creado_en || null
   const duracionMinutos = inicio && fin

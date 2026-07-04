@@ -721,8 +721,6 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
         exercise: (t: string) => `Activity: ${t}`,
         studentAnswer: (t: string) => `Student wrote: ${t}`,
         source: (t: string) => `Source: ${t}`,
-        gradedTag: 'Graded',
-        notGradedTag: 'Not graded',
         footer: 'Owlaris - Family pedagogical report - owlaris.app',
         page: (i: number, total: number) => `Page ${i} of ${total}`,
         sessionShort: (m: number) => (m <= 1 ? '1 min' : m + ' minutes'),
@@ -767,8 +765,6 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
         exercise: (t: string) => `Actividad: ${t}`,
         studentAnswer: (t: string) => `El estudiante escribió: ${t}`,
         source: (t: string) => `Fuente: ${t}`,
-        gradedTag: 'Calificable',
-        notGradedTag: 'No calificable',
         footer: 'Owlaris - Informe pedagogico familiar - owlaris.app',
         page: (i: number, total: number) => `Página ${i} de ${total}`,
         sessionShort: (m: number) => (m <= 1 ? '1 min' : m + ' minutos'),
@@ -989,8 +985,11 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
         y += 12
       }
       for (const item of evidenciaHoy) {
-        const etiquetaCalificable = item.calificable ? L.gradedTag : L.notGradedTag
-        const header = `#${item.secuencia || ''} ${item.hora ? '· ' + item.hora : ''} · ${item.resultado || L.recorded} · ${etiquetaCalificable}`
+        // item.resultado ya distingue calificable de no calificable (una
+        // nota concreta, o literalmente "No calificable") — agregar una
+        // segunda etiqueta aparte producía un duplicado visible como
+        // "No calificable · No calificable" en filas no calificables.
+        const header = `#${item.secuencia || ''} ${item.hora ? '· ' + item.hora : ''} · ${item.resultado || L.recorded}`
         const detail = [
           item.materia ? L.subject(item.materia) : null,
           item.tema ? L.topic(item.tema) : null,
