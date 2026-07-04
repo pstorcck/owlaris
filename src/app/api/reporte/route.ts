@@ -72,6 +72,26 @@ type InteraccionReporte = {
   op_respuesta_alumno?: string | null
   op_estado?: string | null
   creado_en?: string | null
+  sospecha_copia?: boolean | null
+}
+
+// Alertas que un padre necesita ver aunque el hijo estudie solo y el padre
+// solo reciba el reporte: temas sensibles tocados durante la sesión, e
+// intentos de copiar/pedir la respuesta directa en vez de razonarla. Es
+// determinístico (no depende del LLM) para que nunca se omita por error.
+function resumenSeguridadIntegridad(alertasSensibles: number, sospechasCopia: number, idiomaIngles = false): string[] {
+  const partes: string[] = []
+  if (alertasSensibles > 0) {
+    partes.push(idiomaIngles
+      ? `Today's session touched a sensitive topic ${alertasSensibles} time${alertasSensibles === 1 ? '' : 's'}. We recommend talking with your child about it.`
+      : `Hoy la sesión tocó un tema sensible ${alertasSensibles} vez${alertasSensibles === 1 ? '' : 'es'}. Te sugerimos hablar con tu hijo o hija sobre esto.`)
+  }
+  if (sospechasCopia > 0) {
+    partes.push(idiomaIngles
+      ? `We detected ${sospechasCopia} possible attempt${sospechasCopia === 1 ? '' : 's'} to copy or ask for the direct answer instead of working through it. We recommend talking about this with your child.`
+      : `Se detectaron ${sospechasCopia} posible${sospechasCopia === 1 ? '' : 's'} intento${sospechasCopia === 1 ? '' : 's'} de copiar o pedir la respuesta directa en vez de razonarla. Te sugerimos conversarlo con tu hijo o hija.`)
+  }
+  return partes
 }
 
 function resumenDificultad(
@@ -140,6 +160,8 @@ function calcularMetricasHoy(interacciones: InteraccionReporte[]) {
   const duracionMinutos = inicio && fin
     ? Math.max(1, Math.round((new Date(fin).getTime() - new Date(inicio).getTime()) / 60000))
     : null
+  const alertasSensibles = interacciones.filter(i => i.estado_evaluacion === 'alerta_seguridad' || i.estado_evaluacion === 'crisis_emocional').length
+  const sospechasCopia = interacciones.filter(i => !!i.sospecha_copia).length
 
   return {
     interacciones: interacciones.length,
@@ -153,6 +175,8 @@ function calcularMetricasHoy(interacciones: InteraccionReporte[]) {
     inicio,
     fin,
     duracion_minutos: duracionMinutos,
+    alertas_sensibles: alertasSensibles,
+    sospechas_copia: sospechasCopia,
   }
 }
 
@@ -160,12 +184,17 @@ function etiquetaResultado(estado?: string | null, opEstado?: string | null, idi
   if (estado === 'correcto' || estado === 'equivalente') return idiomaIngles ? 'Correct' : 'Correcta'
   if (estado === 'incorrecto') return idiomaIngles ? 'To reinforce' : 'Por reforzar'
   if (estado === 'paso_correcto') return idiomaIngles ? 'Correct step' : 'Paso correcto'
+  if (estado === 'alerta_seguridad' || estado === 'crisis_emocional') return idiomaIngles ? 'Attention' : 'Atención'
   if (opEstado === 'pendiente') return idiomaIngles ? 'Pending' : 'Pendiente'
   return idiomaIngles ? 'Recorded' : 'Registrada'
 }
 
 function construirEvidenciaHoy(interacciones: InteraccionReporte[], idiomaIngles = false) {
   return interacciones
+    // Las alertas sensibles se cuentan y se señalan aparte (ver
+    // resumenSeguridadIntegridad), pero el texto crudo del alumno no se
+    // reproduce en el anexo de evidencia de un reporte familiar.
+    .filter(i => i.estado_evaluacion !== 'alerta_seguridad' && i.estado_evaluacion !== 'crisis_emocional')
     .filter(i => i.operacion_canonica || i.estado_evaluacion)
     .map((i, idx) => ({
       secuencia: idx + 1,
@@ -217,7 +246,7 @@ export async function POST(req: NextRequest) {
     const finSesion = new Date()
     const { data: interaccionesHoy } = await supabase
       .from('interacciones')
-      .select('pregunta,respuesta,tema_detectado,estado_evaluacion,documento_fuente,operacion_canonica,op_respuesta_alumno,op_estado,creado_en')
+      .select('pregunta,respuesta,tema_detectado,estado_evaluacion,documento_fuente,operacion_canonica,op_respuesta_alumno,op_estado,creado_en,sospecha_copia')
       .eq('usuario_id', user.id)
       .gte('creado_en', inicioSesion.toISOString())
       .lte('creado_en', finSesion.toISOString())
@@ -335,6 +364,7 @@ REGLAS ESTRICTAS:
     analisis.nivel_dificultad_final = nivelFinal
     analisis.metricas_hoy = metricasHoy
     analisis.evidencia_hoy = evidenciaHoy
+    analisis.seguridad_integridad = resumenSeguridadIntegridad(metricasHoy.alertas_sensibles, metricasHoy.sospechas_copia, idiomaIngles)
     analisis.frase_motivacional = fraseMotivacionalSesion(seed, idiomaIngles)
     analisis.fecha_generacion = new Date().toISOString()
     analisis.grado = grado

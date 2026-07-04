@@ -983,6 +983,28 @@ export async function POST(req: NextRequest) {
         materia_id,
         grado_override || perfil.grado || ''
       )
+      // El reporte para padres cuenta estos eventos a partir de interacciones,
+      // asi que se registra uno aqui tambien (antes solo quedaba en "alertas",
+      // invisible para /api/reporte). El tema_detectado es generico a proposito:
+      // no se expone el texto sensible tal cual en un reporte familiar.
+      await supabase.from('interacciones').insert({
+        usuario_id: user.id,
+        colegio_id: perfil.colegio_id,
+        materia_id: null,
+        grado: grado_override || perfil.grado || '',
+        tema_detectado: idiomaIngles ? 'Safety alert' : 'Alerta de seguridad',
+        pregunta,
+        respuesta: safety.respuesta,
+        tokens_usados: 0,
+        costo_usd: 0,
+        modelo_usado: 'content_safety',
+        documento_fuente: null,
+        sospecha_copia: false,
+        operacion_canonica: null,
+        op_estado: null,
+        estado_evaluacion: 'alerta_seguridad',
+        guard_activado: true,
+      })
       return NextResponse.json({
         respuesta: safety.respuesta,
         source: 'content_safety',
@@ -1836,7 +1858,10 @@ ${contextoContenido}`
       sospecha_copia: detectarCopia(pregunta),
       operacion_canonica: opValidaEnRespuesta || null,
       op_estado: opValidaEnRespuesta ? 'pendiente' : null,
-      estado_evaluacion: evaluacionProtocolo?.estado || estadoEvaluacionHumanistico,
+      // "crisis" es una clasificacion mas suave que el bloqueo de content safety
+      // (no bloquea la respuesta, pero SI es un tema sensible que el reporte
+      // para padres debe poder contar y senalar).
+      estado_evaluacion: tipoPregunta === 'crisis' ? 'crisis_emocional' : (evaluacionProtocolo?.estado || estadoEvaluacionHumanistico),
       guard_activado: evaluacionProtocolo?.guardActivado || pedagogicalGuard.guardActivado || guardiaHumanistica.guardActivado || externalResourceGuard.guardActivado || externalResourceGuardFinal.guardActivado || false,
     }).select('id').single()
     const insertedId = insertedRow?.id || null

@@ -692,6 +692,7 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
         level: (n: number) => `Level ${n}`,
         pedagogicalInsight: 'Pedagogical insight',
         defaultSummary: 'Session recorded with academic support.',
+        safetyIntegrity: 'Safety and academic integrity',
         difficultyPath: 'Adaptive difficulty path',
         wentUp: (a: number, b: number) => `Went up from level ${a} to ${b}`,
         wentDown: (a: number, b: number) => `Went down from level ${a} to ${b}`,
@@ -732,6 +733,7 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
         level: (n: number) => `Nivel ${n}`,
         pedagogicalInsight: 'Lectura pedagógica',
         defaultSummary: 'Sesión registrada con acompañamiento académico.',
+        safetyIntegrity: 'Seguridad y honestidad académica',
         difficultyPath: 'Ruta de dificultad adaptativa',
         wentUp: (a: number, b: number) => `Subió de nivel ${a} a ${b}`,
         wentDown: (a: number, b: number) => `Bajó de nivel ${a} a ${b}`,
@@ -869,6 +871,20 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
       doc.setDrawColor(palette.line[0], palette.line[1], palette.line[2]); doc.roundedRect(margin, y - 3, maxW, 30, 4, 4, 'S')
       wrapped(data.analisis.resumen || L.defaultSummary, margin + 6, y + 6, maxW - 12, 9.5, palette.ink)
       y += 40
+
+      const seguridadIntegridad: string[] = Array.isArray(data.analisis.seguridad_integridad) ? data.analisis.seguridad_integridad : []
+      if (seguridadIntegridad.length > 0) {
+        section(L.safetyIntegrity, [185, 28, 28])
+        const boxH = seguridadIntegridad.reduce((acc, item) => acc + (doc.splitTextToSize(item, maxW - 12).length * (8.8 * 0.38 + 1.6)), 8)
+        checkY(boxH + 6)
+        doc.setFillColor(254, 242, 242); doc.roundedRect(margin, y - 3, maxW, boxH + 6, 4, 4, 'F')
+        doc.setDrawColor(220, 38, 38); doc.roundedRect(margin, y - 3, maxW, boxH + 6, 4, 4, 'S')
+        let yAlerta = y + 5
+        for (const item of seguridadIntegridad) {
+          yAlerta += wrapped(item, margin + 6, yAlerta, maxW - 12, 8.8, [127, 29, 29])
+        }
+        y = yAlerta + 10
+      }
 
       section(L.difficultyPath, palette.teal)
       const rutaH = adaptacionesParaReporte.length ? 44 : 26
