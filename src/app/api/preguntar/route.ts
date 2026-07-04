@@ -1241,12 +1241,6 @@ export async function POST(req: NextRequest) {
     let pendingMathOperation: string | null = null
     let pendingMathDocumentoFuente: string | null = null
     let pendingMathPrompt: string | null = null
-    // Se activa si dos peticiones casi simultaneas (doble clic, reintento de red)
-    // intentan resolver el mismo ejercicio pendiente: solo una debe generar el
-    // siguiente ejercicio, la otra no debe duplicarlo.
-    let respuestaDuplicadaPorConcurrencia = false
-
-    console.log('DIAG pendingMathId inicial:', pendingMathId, '| materia_uuid:', materia_uuid, '| grado:', gradoEfectivo, '| pregunta:', pregunta)
 
     if (!pendingMathId && (isLikelyMathAnswerText(pregunta) || isPendingContextQuestion(pregunta) || isWorkedExampleRequest(pregunta))) {
       try {
@@ -1263,7 +1257,6 @@ export async function POST(req: NextRequest) {
         if (gradoEfectivo) pendingQuery = pendingQuery.eq('grado', gradoEfectivo)
         const { data: latestPendingMath } = await pendingQuery.maybeSingle()
         if (latestPendingMath?.id) pendingMathId = latestPendingMath.id
-        console.log('DIAG recovery pendingMathId:', pendingMathId)
       } catch (error) {
         console.error('No se pudo recuperar OP pendiente reciente:', error)
       }
@@ -1337,20 +1330,17 @@ export async function POST(req: NextRequest) {
 
           const textoConOP = preguntaPendiente.respuesta + '\n[OP: ' + preguntaPendiente.operacion_canonica + ']'
           evaluacionProtocolo = await handleMathEvaluation(textoConOP, pregunta, idiomaIngles, process.env.WOLFRAM_APP_ID)
-          // Si acertó el valor final: marcar como evaluada. Un paso intermedio válido conserva la OP pendiente.
+          // Si acertó el valor final: marcar como evaluada (best-effort, sin
+          // condicionar la respuesta al resultado de este update). Un intento
+          // previo de hacerlo compare-and-swap contra .eq('op_estado','pendiente')
+          // devolvía 0 filas incluso en peticiones solitarias sin ninguna
+          // concurrencia real, lo que bloqueaba el avance de la práctica para
+          // todos los alumnos — un daño mucho mayor que el caso raro de doble
+          // clic que ese guard intentaba prevenir.
           if (evaluacionProtocolo && !evaluacionProtocolo.pasoIntermedio && (evaluacionProtocolo.estado === 'correcto' || evaluacionProtocolo.estado === 'equivalente')) {
-            // Update condicionado a que SIGA pendiente (compare-and-swap): si dos
-            // peticiones llegan casi al mismo tiempo, solo la primera consigue
-            // filasActualizadas.length > 0 y solo esa debe generar el siguiente
-            // ejercicio. La segunda detecta que perdio la carrera.
-            const { data: filasActualizadas, error: errorCas } = await supabase.from('interacciones')
+            await supabase.from('interacciones')
               .update({ op_estado: 'evaluada', op_evaluada_en: new Date().toISOString(), op_respuesta_alumno: pregunta })
-              .eq('id', pendingMathId).eq('usuario_id', user.id).eq('op_estado', 'pendiente')
-              .select('id')
-            if (!filasActualizadas || filasActualizadas.length === 0) {
-              respuestaDuplicadaPorConcurrencia = true
-            }
-            console.log('DIAG CAS update:', JSON.stringify({ pendingMathId, filas: filasActualizadas?.length ?? 0, error: errorCas?.message ?? null, respuestaDuplicadaPorConcurrencia }))
+              .eq('id', pendingMathId).eq('usuario_id', user.id)
           }
           // Si incorrecto: mantener pendiente — no actualizar, el frontend conserva el mismo ID
         } else {
@@ -1437,7 +1427,6 @@ export async function POST(req: NextRequest) {
     if (!evaluacionProtocolo && normalizeStudentAnswer(pregunta) !== null) {
       const ultimaPregunta = ultimoMensajeAsistente(historial)
       const opInferida = inferCanonicalOperationFromText(ultimaPregunta)
-      console.log('DIAG fallback-B ultimaPregunta:', JSON.stringify(ultimaPregunta), '| opInferida:', opInferida)
       if (opInferida && isSafeCanonicalOperation(opInferida) && solveOperation(opInferida) !== null) {
         evaluacionProtocolo = await handleMathEvaluation(
           ultimaPregunta + '\n[OP: ' + opInferida + ']',
@@ -1448,54 +1437,7 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    console.log('DIAG evaluacionProtocolo final:', JSON.stringify({ estado: evaluacionProtocolo?.estado, op: evaluacionProtocolo?.op, pendingMathId, historialLen: Array.isArray(historial) ? historial.length : -1 }))
-
     // Si el protocolo evaluó y tiene resultado definitivo, responder directo
-    if (respuestaDuplicadaPorConcurrencia) {
-      // Otra peticion casi simultanea ya proceso este mismo ejercicio pendiente
-      // y ya genero el siguiente ejercicio. No insertamos una fila duplicada ni
-      // sumamos dos veces a la racha, pero el tutor debe seguir avanzando: se
-      // busca el ejercicio que la peticion ganadora acaba de dejar pendiente y
-      // se entrega ese, para que la practica continue sin cortarse en un
-      // mensaje de "ya quedó registrado" sin salida.
-      let siguienteDeGanadora: { id: string; respuesta: string; documento_fuente: string | null } | null = null
-      try {
-        let ganadoraQuery = supabase
-          .from('interacciones')
-          .select('id, respuesta, documento_fuente')
-          .eq('usuario_id', user.id)
-          .eq('op_estado', 'pendiente')
-          .is('op_evaluada_en', null)
-          .not('operacion_canonica', 'is', null)
-          .order('creado_en', { ascending: false })
-          .limit(1)
-        if (materia_uuid) ganadoraQuery = ganadoraQuery.eq('materia_id', materia_uuid)
-        const { data: filaGanadora } = await ganadoraQuery.maybeSingle()
-        if (filaGanadora?.id) siguienteDeGanadora = filaGanadora
-      } catch (error) {
-        console.error('No se pudo recuperar el ejercicio de la petición ganadora:', error)
-      }
-
-      return NextResponse.json({
-        respuesta: siguienteDeGanadora?.respuesta || (idiomaIngles
-          ? "Got it, your answer was already recorded. Let's continue."
-          : 'Listo, tu respuesta ya quedó registrada. Sigamos.'),
-        tokens: 0,
-        documento_fuente: siguienteDeGanadora?.documento_fuente ?? pendingMathDocumentoFuente,
-        pending_math_interaction_id: siguienteDeGanadora?.id || null,
-        nivel_dificultad: nivelDificultadActual,
-        aciertos_consecutivos: rachaAprendizaje.correctas,
-        fallos_consecutivos: rachaAprendizaje.incorrectas,
-        practica_enfoque: practicaEnfoqueEstable,
-        adaptacion_dificultad: calculateAdaptiveDifficulty({
-          currentLevel: nivelDificultadActual,
-          correctStreak: rachaAprendizaje.correctas,
-          wrongStreak: rachaAprendizaje.incorrectas,
-          idiomaIngles,
-        }),
-      })
-    }
-
     if (evaluacionProtocolo && evaluacionProtocolo.estado !== 'no_evaluable') {
       const esRespuestaCorrecta = evaluacionProtocolo.estado === 'correcto' || evaluacionProtocolo.estado === 'equivalente'
       const esPasoIntermedio = evaluacionProtocolo.estado === 'paso_correcto' || evaluacionProtocolo.pasoIntermedio
