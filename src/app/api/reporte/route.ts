@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient, createClient } from '@/lib/supabase/server'
 import { withOpenAIRetry } from '@/lib/openaiRetry'
 import { registrarAlertaTecnica } from '@/lib/technicalAlerts'
+import { contarAlertasSensibles, contarSospechasCopia, resumenSeguridadIntegridad } from '@/lib/reporteSeguridad'
 
 function hashString(value: string) {
   let hash = 0
@@ -75,25 +76,6 @@ type InteraccionReporte = {
   sospecha_copia?: boolean | null
 }
 
-// Alertas que un padre necesita ver aunque el hijo estudie solo y el padre
-// solo reciba el reporte: temas sensibles tocados durante la sesión, e
-// intentos de copiar/pedir la respuesta directa en vez de razonarla. Es
-// determinístico (no depende del LLM) para que nunca se omita por error.
-function resumenSeguridadIntegridad(alertasSensibles: number, sospechasCopia: number, idiomaIngles = false): string[] {
-  const partes: string[] = []
-  if (alertasSensibles > 0) {
-    partes.push(idiomaIngles
-      ? `Today's session touched a sensitive topic ${alertasSensibles} time${alertasSensibles === 1 ? '' : 's'}. We recommend talking with your child about it.`
-      : `Hoy la sesión tocó un tema sensible ${alertasSensibles} vez${alertasSensibles === 1 ? '' : 'es'}. Te sugerimos hablar con tu hijo o hija sobre esto.`)
-  }
-  if (sospechasCopia > 0) {
-    partes.push(idiomaIngles
-      ? `We detected ${sospechasCopia} possible attempt${sospechasCopia === 1 ? '' : 's'} to copy or ask for the direct answer instead of working through it. We recommend talking about this with your child.`
-      : `Se detectaron ${sospechasCopia} posible${sospechasCopia === 1 ? '' : 's'} intento${sospechasCopia === 1 ? '' : 's'} de copiar o pedir la respuesta directa en vez de razonarla. Te sugerimos conversarlo con tu hijo o hija.`)
-  }
-  return partes
-}
-
 function resumenDificultad(
   adaptaciones: AdaptacionDificultadReporte[],
   nivelFinal: number | null,
@@ -160,8 +142,8 @@ function calcularMetricasHoy(interacciones: InteraccionReporte[]) {
   const duracionMinutos = inicio && fin
     ? Math.max(1, Math.round((new Date(fin).getTime() - new Date(inicio).getTime()) / 60000))
     : null
-  const alertasSensibles = interacciones.filter(i => i.estado_evaluacion === 'alerta_seguridad' || i.estado_evaluacion === 'crisis_emocional').length
-  const sospechasCopia = interacciones.filter(i => !!i.sospecha_copia).length
+  const alertasSensibles = contarAlertasSensibles(interacciones)
+  const sospechasCopia = contarSospechasCopia(interacciones)
 
   return {
     interacciones: interacciones.length,
