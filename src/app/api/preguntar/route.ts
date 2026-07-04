@@ -1350,8 +1350,28 @@ export async function POST(req: NextRequest) {
           }
           // Si incorrecto: mantener pendiente — no actualizar, el frontend conserva el mismo ID
         } else {
-          // ID inválido o OP no segura — no evaluar
-          evaluacionProtocolo = { estado: 'no_evaluable', feedback: idiomaIngles ? 'I cannot verify that safely. Let me explain step by step.' : 'No puedo verificarlo con seguridad. Revisemos el procedimiento paso a paso.', correctAnswer: null, op: null, guardActivado: false }
+          // El pending_math_interaction_id no encontró una fila válida (cambio de
+          // materia, condición de carrera, ID desincronizado). Antes de rendirnos,
+          // intentamos inferir la operación desde el último mensaje del asistente
+          // en el historial visible — igual que el respaldo de más abajo. Sin este
+          // intento, un ID desincronizado dejaba al alumno atascado para siempre
+          // pidiéndole "escribe la operación" en vez de evaluar su respuesta.
+          evaluacionProtocolo = null
+          if (normalizeStudentAnswer(pregunta) !== null) {
+            const ultimaPreguntaHistorial = ultimoMensajeAsistente(historial)
+            const opInferidaHistorial = inferCanonicalOperationFromText(ultimaPreguntaHistorial)
+            if (opInferidaHistorial && isSafeCanonicalOperation(opInferidaHistorial) && solveOperation(opInferidaHistorial) !== null) {
+              evaluacionProtocolo = await handleMathEvaluation(
+                ultimaPreguntaHistorial + '\n[OP: ' + opInferidaHistorial + ']',
+                pregunta,
+                idiomaIngles,
+                process.env.WOLFRAM_APP_ID
+              )
+            }
+          }
+          if (!evaluacionProtocolo) {
+            evaluacionProtocolo = { estado: 'no_evaluable', feedback: idiomaIngles ? 'I cannot verify that safely. Let me explain step by step.' : 'No puedo verificarlo con seguridad. Revisemos el procedimiento paso a paso.', correctAnswer: null, op: null, guardActivado: false }
+          }
         }
       } catch (e) { console.error('Error recuperando OP pendiente:', e) }
     }
