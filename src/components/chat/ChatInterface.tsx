@@ -651,7 +651,7 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
     })
 
     if (mensajesDeReporte.length < 3) {
-      setError('Todavía no hay suficiente actividad para generar el reporte de hoy.')
+      setError(idiomaIngles ? 'There is not enough activity yet to generate today\'s report.' : 'Todavía no hay suficiente actividad para generar el reporte de hoy.')
       return
     }
     setGenerandoPDF(true)
@@ -672,10 +672,93 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
           adaptaciones_dificultad: adaptacionesParaReporte,
           nivel_dificultad_final: nivelDificultad,
           aciertos_consecutivos: aciertosConsec,
+          idioma_ingles: idiomaIngles,
         })
       })
       const data = await res.json()
       if (!data.analisis) return
+
+      const L = idiomaIngles ? {
+        reportSubtitle: 'Today\'s report for family',
+        defaultSchool: 'School',
+        student: 'Student',
+        gradeSubject: (g: string, m: string) => `Grade: ${g}  |  Subject: ${m}`,
+        duration: (d: string) => `Duration: ${d}`,
+        interactions: 'Interactions',
+        exercises: 'Exercises',
+        accuracy: 'Accuracy',
+        difficulty: 'Difficulty',
+        inProgress: 'In progress',
+        level: (n: number) => `Level ${n}`,
+        pedagogicalInsight: 'Pedagogical insight',
+        defaultSummary: 'Session recorded with academic support.',
+        difficultyPath: 'Adaptive difficulty path',
+        wentUp: (a: number, b: number) => `Went up from level ${a} to ${b}`,
+        wentDown: (a: number, b: number) => `Went down from level ${a} to ${b}`,
+        reinforced: (n: number) => `Reinforced basics at level ${n}`,
+        whatTheyStudied: 'What they studied',
+        achievementsNextSteps: 'Achievements and next steps',
+        achievementsObserved: 'Achievements observed',
+        defaultAchievement: 'Participated in practice and progressed with guidance.',
+        areasToReinforce: 'Areas to reinforce',
+        defaultArea: 'Practice the step-by-step procedure and explain how they reached each answer.',
+        homeSupport: 'Support at home',
+        defaultHomeSupport: 'Ask them to explain an exercise in their own words and close with a short practice.',
+        nextSessionPlan: 'Suggested plan for the next session',
+        defaultPlan: 'Practice one idea at a time and explain the process before moving on.',
+        materialConsulted: 'Material consulted',
+        annexTitle: 'ANNEX: ACTIVITY EVIDENCE',
+        noEvidence: 'There are not yet enough evaluated exercises to show detailed evidence. The executive report summarizes the available activity for the day.',
+        recorded: 'Recorded',
+        topic: (t: string) => `Topic: ${t}`,
+        exercise: (t: string) => `Exercise: ${t}`,
+        studentAnswer: (t: string) => `Student answer: ${t}`,
+        source: (t: string) => `Source: ${t}`,
+        footer: 'Owlaris - Family pedagogical report - owlaris.app',
+        page: (i: number, total: number) => `Page ${i} of ${total}`,
+        sessionShort: (m: number) => (m <= 1 ? '1 min' : m + ' minutes'),
+        shortSession: 'short session',
+      } : {
+        reportSubtitle: 'Reporte de hoy para familia',
+        defaultSchool: 'Centro educativo',
+        student: 'Alumno',
+        gradeSubject: (g: string, m: string) => `Grado: ${g}  |  Materia: ${m}`,
+        duration: (d: string) => `Duración: ${d}`,
+        interactions: 'Interacciones',
+        exercises: 'Ejercicios',
+        accuracy: 'Precisión',
+        difficulty: 'Dificultad',
+        inProgress: 'En curso',
+        level: (n: number) => `Nivel ${n}`,
+        pedagogicalInsight: 'Lectura pedagógica',
+        defaultSummary: 'Sesión registrada con acompañamiento académico.',
+        difficultyPath: 'Ruta de dificultad adaptativa',
+        wentUp: (a: number, b: number) => `Subió de nivel ${a} a ${b}`,
+        wentDown: (a: number, b: number) => `Bajó de nivel ${a} a ${b}`,
+        reinforced: (n: number) => `Reforzó bases en nivel ${n}`,
+        whatTheyStudied: 'Qué estudió',
+        achievementsNextSteps: 'Logros y próximos pasos',
+        achievementsObserved: 'Logros observados',
+        defaultAchievement: 'Participó en la práctica y avanzó con guía.',
+        areasToReinforce: 'Áreas para reforzar',
+        defaultArea: 'Practicar el procedimiento paso a paso y explicar cómo llegó a cada respuesta.',
+        homeSupport: 'Acompañamiento en casa',
+        defaultHomeSupport: 'Pedirle que explique un ejercicio con sus propias palabras y cerrar con una práctica corta.',
+        nextSessionPlan: 'Plan sugerido para la próxima sesión',
+        defaultPlan: 'Practicar una idea a la vez y explicar el proceso antes de avanzar.',
+        materialConsulted: 'Material consultado',
+        annexTitle: 'ANEXO: EVIDENCIA DE ACTIVIDAD',
+        noEvidence: 'Todavía no hay ejercicios evaluados suficientes para mostrar evidencia detallada. El reporte ejecutivo resume la actividad disponible del día.',
+        recorded: 'Registrada',
+        topic: (t: string) => `Tema: ${t}`,
+        exercise: (t: string) => `Ejercicio: ${t}`,
+        studentAnswer: (t: string) => `Respuesta del estudiante: ${t}`,
+        source: (t: string) => `Fuente: ${t}`,
+        footer: 'Owlaris - Informe pedagogico familiar - owlaris.app',
+        page: (i: number, total: number) => `Página ${i} de ${total}`,
+        sessionShort: (m: number) => (m <= 1 ? '1 min' : m + ' minutos'),
+        shortSession: 'sesión corta',
+      }
 
       const { jsPDF } = await import('jspdf')
       const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
@@ -734,7 +817,7 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
         const ini = new Date(msgsConFecha[0].timestamp).getTime()
         const fin = new Date(msgsConFecha[msgsConFecha.length - 1].timestamp).getTime()
         const mins = Math.round((fin - ini) / 60000)
-        durStr = mins <= 1 ? '1 min' : mins + ' minutos'
+        durStr = L.sessionShort(mins)
       }
       const alumnoNombre = nombreAlumno || usuario.nombre_completo
       const estudianteMsgs = mensajesDeReporte.filter(m => m.rol === 'usuario').length
@@ -749,78 +832,78 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
       const mejoras = Array.isArray(data.analisis.areas_mejora) ? data.analisis.areas_mejora : []
       const familia = Array.isArray(data.analisis.recomendaciones_familia) ? data.analisis.recomendaciones_familia : []
       const alumnoRecs = Array.isArray(data.analisis.recomendaciones_alumno) ? data.analisis.recomendaciones_alumno : []
-      const duracionSesion = metricasHoy.duracion_minutos ? `${metricasHoy.duracion_minutos} minutos` : durStr || 'sesión corta'
+      const duracionSesion = metricasHoy.duracion_minutos ? L.sessionShort(metricasHoy.duracion_minutos) : durStr || L.shortSession
       const resumenDificultad = data.analisis.resumen_dificultad || (
         adaptacionesParaReporte.length
           ? adaptacionesParaReporte.map(a => a.motivo).join(' ')
-          : `La sesión se mantuvo en nivel ${nivelDificultad}.`
+          : `${L.level(nivelDificultad)}.`
       )
 
       doc.setFillColor(247, 250, 252); doc.rect(0, 0, W, H, 'F')
       doc.setFillColor(20, 28, 45); doc.roundedRect(10, 10, W - 20, 45, 5, 5, 'F')
       doc.setFillColor(14, 116, 144); doc.roundedRect(10, 50, W - 20, 5, 2, 2, 'F')
       text('Owlaris', margin, 28, 23, true, [255, 255, 255])
-      text('Reporte de hoy para familia', margin, 39, 12, false, [226, 232, 240])
+      text(L.reportSubtitle, margin, 39, 12, false, [226, 232, 240])
       doc.setFontSize(9); doc.setFont('helvetica', 'normal'); doc.setTextColor(226, 232, 240)
-      doc.text(usuario.colegio?.nombre || 'Centro educativo', W - margin, 29, { align: 'right' })
-      doc.text(new Date().toLocaleString('es-GT', { day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' }), W - margin, 39, { align: 'right' })
+      doc.text(usuario.colegio?.nombre || L.defaultSchool, W - margin, 29, { align: 'right' })
+      doc.text(new Date().toLocaleString(idiomaIngles ? 'en-US' : 'es-GT', { day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' }), W - margin, 39, { align: 'right' })
 
       y = 68
       doc.setFillColor(255, 255, 255); doc.roundedRect(margin, y, maxW, 42, 4, 4, 'F')
       doc.setDrawColor(palette.line[0], palette.line[1], palette.line[2]); doc.roundedRect(margin, y, maxW, 42, 4, 4, 'S')
-      text('Alumno', margin + 6, y + 9, 8, true, palette.muted)
+      text(L.student, margin + 6, y + 9, 8, true, palette.muted)
       text(alumnoNombre, margin + 6, y + 19, 14, true, palette.ink)
-      text(`Grado: ${gradoAlumno || 'No asignado'}  |  Materia: ${materiaAlumno || 'No seleccionada'}`, margin + 6, y + 28, 8.5, false, palette.muted)
-      text(`Duración: ${duracionSesion}`, margin + 6, y + 36, 8.3, false, palette.muted)
+      text(L.gradeSubject(gradoAlumno || (idiomaIngles ? 'Not assigned' : 'No asignado'), materiaAlumno || (idiomaIngles ? 'Not selected' : 'No seleccionada')), margin + 6, y + 28, 8.5, false, palette.muted)
+      text(L.duration(duracionSesion), margin + 6, y + 36, 8.3, false, palette.muted)
       y += 53
 
       const cardW = (maxW - 9) / 4
-      metricCard(margin, y, cardW, 'Interacciones', String(metricasHoy.interacciones || mensajesDeReporte.length), palette.blue)
-      metricCard(margin + cardW + 3, y, cardW, 'Ejercicios', String(metricasHoy.ejercicios || estudianteMsgs), palette.teal)
-      metricCard(margin + (cardW + 3) * 2, y, cardW, 'Precisión', metricasHoy.precision !== null && metricasHoy.precision !== undefined ? `${metricasHoy.precision}%` : 'En curso', palette.green)
-      metricCard(margin + (cardW + 3) * 3, y, cardW, 'Dificultad', `Nivel ${nivelDificultad}`, palette.violet)
+      metricCard(margin, y, cardW, L.interactions, String(metricasHoy.interacciones || mensajesDeReporte.length), palette.blue)
+      metricCard(margin + cardW + 3, y, cardW, L.exercises, String(metricasHoy.ejercicios || estudianteMsgs), palette.teal)
+      metricCard(margin + (cardW + 3) * 2, y, cardW, L.accuracy, metricasHoy.precision !== null && metricasHoy.precision !== undefined ? `${metricasHoy.precision}%` : L.inProgress, palette.green)
+      metricCard(margin + (cardW + 3) * 3, y, cardW, L.difficulty, L.level(nivelDificultad), palette.violet)
       y += 35
 
-      section('Lectura pedagógica', palette.violet)
+      section(L.pedagogicalInsight, palette.violet)
       doc.setFillColor(255, 255, 255); doc.roundedRect(margin, y - 3, maxW, 30, 4, 4, 'F')
       doc.setDrawColor(palette.line[0], palette.line[1], palette.line[2]); doc.roundedRect(margin, y - 3, maxW, 30, 4, 4, 'S')
-      wrapped(data.analisis.resumen || 'Sesión registrada con acompañamiento académico.', margin + 6, y + 6, maxW - 12, 9.5, palette.ink)
+      wrapped(data.analisis.resumen || L.defaultSummary, margin + 6, y + 6, maxW - 12, 9.5, palette.ink)
       y += 40
 
-      section('Ruta de dificultad adaptativa', palette.teal)
+      section(L.difficultyPath, palette.teal)
       const rutaH = adaptacionesParaReporte.length ? 44 : 26
       doc.setFillColor(236, 253, 245); doc.roundedRect(margin, y - 3, maxW, rutaH, 4, 4, 'F')
       wrapped(resumenDificultad, margin + 6, y + 5, maxW - 12, 8.8, [22, 101, 52])
       y += 22
       for (const a of adaptacionesParaReporte.slice(-3)) {
         const label = a.tipo === 'sube'
-          ? `Subió de nivel ${a.nivel_anterior} a ${a.nivel_nuevo}`
+          ? L.wentUp(a.nivel_anterior, a.nivel_nuevo)
           : a.tipo === 'baja'
-            ? `Bajó de nivel ${a.nivel_anterior} a ${a.nivel_nuevo}`
-            : `Reforzó bases en nivel ${a.nivel_nuevo}`
+            ? L.wentDown(a.nivel_anterior, a.nivel_nuevo)
+            : L.reinforced(a.nivel_nuevo)
         text(label, margin + 8, y, 8.3, true, a.tipo === 'sube' ? palette.green : palette.amber)
         y += 5
       }
       y += 10
 
-      section('Qué estudió', palette.blue)
+      section(L.whatTheyStudied, palette.blue)
       bulletList((data.analisis.materias_estudiadas || [materiaAlumno].filter(Boolean)).slice(0, 4), palette.teal)
       const temasHoy = Array.isArray(metricasHoy.temas) && metricasHoy.temas.length ? metricasHoy.temas : temas
       if (temasHoy.length > 0) bulletList(temasHoy.slice(0, 5), palette.violet)
 
-      section('Logros y próximos pasos', palette.green)
+      section(L.achievementsNextSteps, palette.green)
       const colW = (maxW - 6) / 2
       const colY = y
       doc.setFillColor(240, 253, 244); doc.roundedRect(margin, colY, colW, 50, 4, 4, 'F')
       doc.setFillColor(255, 251, 235); doc.roundedRect(margin + colW + 6, colY, colW, 50, 4, 4, 'F')
-      text('Logros observados', margin + 5, colY + 8, 8.5, true, palette.green)
-      wrapped((logros[0] || data.analisis.avances || 'Participó en la práctica y avanzó con guía.').toString(), margin + 5, colY + 16, colW - 10, 8.4, palette.ink)
-      text('Áreas para reforzar', margin + colW + 11, colY + 8, 8.5, true, palette.amber)
-      wrapped((mejoras[0] || 'Practicar el procedimiento paso a paso y explicar cómo llegó a cada respuesta.').toString(), margin + colW + 11, colY + 16, colW - 10, 8.4, palette.ink)
+      text(L.achievementsObserved, margin + 5, colY + 8, 8.5, true, palette.green)
+      wrapped((logros[0] || data.analisis.avances || L.defaultAchievement).toString(), margin + 5, colY + 16, colW - 10, 8.4, palette.ink)
+      text(L.areasToReinforce, margin + colW + 11, colY + 8, 8.5, true, palette.amber)
+      wrapped((mejoras[0] || L.defaultArea).toString(), margin + colW + 11, colY + 16, colW - 10, 8.4, palette.ink)
       y = colY + 62
 
-      section('Acompañamiento en casa', palette.amber)
-      bulletList(familia.length ? familia : ['Pedirle que explique un ejercicio con sus propias palabras y cerrar con una práctica corta.'], palette.amber)
+      section(L.homeSupport, palette.amber)
+      bulletList(familia.length ? familia : [L.defaultHomeSupport], palette.amber)
 
       if (data.analisis.frase_motivacional) {
         checkY(24)
@@ -831,28 +914,28 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
       }
 
       addPage()
-      section('Plan sugerido para la próxima sesión', palette.violet)
-      bulletList(alumnoRecs.length ? alumnoRecs : ['Practicar una idea a la vez y explicar el proceso antes de avanzar.'], palette.blue)
+      section(L.nextSessionPlan, palette.violet)
+      bulletList(alumnoRecs.length ? alumnoRecs : [L.defaultPlan], palette.blue)
       if (documentos.length > 0) {
-        section('Material consultado', palette.teal)
+        section(L.materialConsulted, palette.teal)
         bulletList(documentos.slice(0, 5), palette.teal)
       }
 
       addPage()
       doc.setFillColor(20,28,45); doc.rect(0, 0, W, 16, 'F')
       doc.setFontSize(11); doc.setFont('helvetica','bold'); doc.setTextColor(255,255,255)
-      doc.text('ANEXO: EVIDENCIA DE ACTIVIDAD', margin, 11); y = 26
+      doc.text(L.annexTitle, margin, 11); y = 26
       if (evidenciaHoy.length === 0) {
-        wrapped('Todavía no hay ejercicios evaluados suficientes para mostrar evidencia detallada. El reporte ejecutivo resume la actividad disponible del día.', margin, y, maxW, 9.2, palette.muted)
+        wrapped(L.noEvidence, margin, y, maxW, 9.2, palette.muted)
         y += 12
       }
       for (const item of evidenciaHoy) {
-        const header = `#${item.secuencia || ''} ${item.hora ? '· ' + item.hora : ''} · ${item.resultado || 'Registrada'}`
+        const header = `#${item.secuencia || ''} ${item.hora ? '· ' + item.hora : ''} · ${item.resultado || L.recorded}`
         const detail = [
-          item.tema ? `Tema: ${item.tema}` : null,
-          item.ejercicio ? `Ejercicio: ${item.ejercicio}` : null,
-          item.respuesta_estudiante ? `Respuesta del estudiante: ${item.respuesta_estudiante}` : null,
-          item.fuente ? `Fuente: ${item.fuente}` : null,
+          item.tema ? L.topic(item.tema) : null,
+          item.ejercicio ? L.exercise(item.ejercicio) : null,
+          item.respuesta_estudiante ? L.studentAnswer(item.respuesta_estudiante) : null,
+          item.fuente ? L.source(item.fuente) : null,
         ].filter(Boolean).join('\n')
         const detailLines = doc.splitTextToSize(detail, maxW - 16)
         const boxH = detailLines.length * 4.4 + 14
@@ -870,8 +953,8 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
       for (let i = 1; i <= totalPages; i++) {
         doc.setPage(i); doc.setFillColor(248,250,252); doc.rect(0, 285, W, 12, 'F')
         doc.setFontSize(7); doc.setFont('helvetica','normal'); doc.setTextColor(100,116,139)
-        doc.text('Owlaris - Informe pedagogico familiar - owlaris.app', margin, 291)
-        doc.text(`Página ${i} de ${totalPages}`, W - margin, 291, { align:'right' })
+        doc.text(L.footer, margin, 291)
+        doc.text(L.page(i, totalPages), W - margin, 291, { align:'right' })
       }
       const fecha = new Date().toISOString().split('T')[0]
       doc.save(`Owlaris-Reporte-${(nombreAlumno || usuario.nombre_completo).replace(/ /g,'-')}-${fecha}.pdf`)

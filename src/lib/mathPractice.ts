@@ -9,7 +9,7 @@ export type MathPracticeExercise = {
   op: string
 }
 
-export type MathPracticeFocus = 'general' | 'equation' | 'decimal' | 'suma_resta' | 'multiplicacion_division'
+export type MathPracticeFocus = 'general' | 'equation' | 'decimal' | 'suma_resta' | 'multiplicacion_division' | 'suma' | 'resta'
 
 export type DifficultyAdaptationType = 'sube' | 'baja' | 'refuerza' | 'mantiene'
 
@@ -162,6 +162,20 @@ function generateSumaResta(level: number): string {
   return `${a}-${b}`
 }
 
+// Cuando el alumno pide solo "sumas" (o solo "restas"), debe practicar
+// exclusivamente esa operación — no una mezcla, aunque sea de la misma familia.
+function generateSuma(level: number): string {
+  const span = 30 + level * 25
+  return `${randInt(4, span)}+${randInt(3, span)}`
+}
+
+function generateResta(level: number): string {
+  const span = 30 + level * 25
+  const a = randInt(20, span * 2)
+  const b = randInt(3, Math.max(4, a - 2))
+  return `${a}-${b}`
+}
+
 function generateMultDiv(level: number): string {
   const maxFactor = Math.min(50, 12 + level * 6)
   if (randInt(0, 1) === 0) return `${randInt(2, maxFactor)}*${randInt(2, maxFactor)}`
@@ -177,6 +191,8 @@ function exerciseGeneratorFor(level: number, focus: MathPracticeFocus): () => st
   const safeLevel = Math.min(8, Math.max(1, Number.isFinite(level) ? Math.round(level) : 1))
 
   if (focus === 'suma_resta') return () => generateSumaResta(safeLevel)
+  if (focus === 'suma') return () => generateSuma(safeLevel)
+  if (focus === 'resta') return () => generateResta(safeLevel)
   if (focus === 'multiplicacion_division') return () => generateMultDiv(safeLevel)
   if (focus === 'decimal') return generateDecimal
 
@@ -326,16 +342,21 @@ export function inferMathPracticeFocus(texts: Array<string | null | undefined>):
     return 'decimal'
   }
 
-  const pideSumaResta = /\b(suma|sumas|sumar|adicion|resta|restas|restar|sustraccion|addition|subtraction|add|subtract)\b/.test(normalized)
+  // Se distingue "solo sumas" de "solo restas" de "sumas y restas": pedir
+  // únicamente una de las dos no debe mezclarse con la otra en los ejercicios.
+  const pideSuma = /\b(suma|sumas|sumar|adicion|addition|add)\b/.test(normalized)
+  const pideResta = /\b(resta|restas|restar|sustraccion|subtraction|subtract)\b/.test(normalized)
   const pideMultDiv = /\b(multiplicaci[oa]n|multiplicar|division|dividir|producto|cociente|multiplication|divide|divid[ei]ng)\b/.test(normalized)
 
-  if (pideSumaResta && !pideMultDiv) return 'suma_resta'
-  if (pideMultDiv && !pideSumaResta) return 'multiplicacion_division'
+  if (pideSuma && pideResta) return 'suma_resta'
+  if (pideSuma && !pideMultDiv) return 'suma'
+  if (pideResta && !pideMultDiv) return 'resta'
+  if (pideMultDiv && !pideSuma && !pideResta) return 'multiplicacion_division'
 
   return 'general'
 }
 
-const ENFOQUES_PRACTICA_VALIDOS: MathPracticeFocus[] = ['equation', 'decimal', 'suma_resta', 'multiplicacion_division']
+const ENFOQUES_PRACTICA_VALIDOS: MathPracticeFocus[] = ['equation', 'decimal', 'suma_resta', 'multiplicacion_division', 'suma', 'resta']
 
 // El historial que llega al backend es una ventana corta (ultimos 6 mensajes),
 // asi que a partir del 3er-4to ejercicio la frase original ("sumas y restas")

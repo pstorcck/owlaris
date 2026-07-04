@@ -183,13 +183,39 @@ async function main() {
   }
 
   // ── Enfoque suma/resta y multiplicacion/division ────────────────
-  const sumaRestaPhrases = [
-    'quiero practicar sumas y restas', 'vamos con suma y resta', 'suma y resta por favor',
-    'practiquemos restas', 'quiero sumar y restar', 'addition and subtraction please',
+  // Bug reportado en produccion: pedir solo "sumas" mezclaba restas en los
+  // ejercicios (y viceversa), porque ambas palabras caian en el mismo
+  // enfoque combinado 'suma_resta'. Ahora se distinguen tres casos: solo
+  // suma, solo resta, y ambas juntas.
+  const sumaSoloPhrases = [
+    'quiero practicar sumas', 'vamos con suma', 'sumas por favor',
+    'quiero sumar', 'practica de adicion', 'addition please',
   ]
-  for (let i = 0; i < 30; i += 1) {
-    test(`focus-detects-suma-resta-${i}`, () => {
-      const focus = inferMathPracticeFocus([sumaRestaPhrases[i % sumaRestaPhrases.length]])
+  for (let i = 0; i < 20; i += 1) {
+    test(`focus-detects-suma-solo-${i}`, () => {
+      const focus = inferMathPracticeFocus([sumaSoloPhrases[i % sumaSoloPhrases.length]])
+      assert.equal(focus, 'suma')
+    })
+  }
+
+  const restaSoloPhrases = [
+    'quiero practicar restas', 'vamos con resta', 'restas por favor',
+    'quiero restar', 'practica de sustraccion', 'subtraction please',
+  ]
+  for (let i = 0; i < 20; i += 1) {
+    test(`focus-detects-resta-solo-${i}`, () => {
+      const focus = inferMathPracticeFocus([restaSoloPhrases[i % restaSoloPhrases.length]])
+      assert.equal(focus, 'resta')
+    })
+  }
+
+  const sumaYRestaPhrases = [
+    'quiero practicar sumas y restas', 'vamos con suma y resta', 'suma y resta por favor',
+    'quiero sumar y restar', 'practica de suma y resta', 'addition and subtraction please',
+  ]
+  for (let i = 0; i < 20; i += 1) {
+    test(`focus-detects-suma-y-resta-${i}`, () => {
+      const focus = inferMathPracticeFocus([sumaYRestaPhrases[i % sumaYRestaPhrases.length]])
       assert.equal(focus, 'suma_resta')
     })
   }
@@ -210,6 +236,22 @@ async function main() {
     test(`suma-resta-pool-is-pure-${i}`, () => {
       const next = buildNextMathExercise([], level, false, 'suma_resta')
       assert.doesNotMatch(next.op, /[*/]/, `not pure addition/subtraction: ${next.op}`)
+    })
+  }
+
+  for (let i = 0; i < 30; i += 1) {
+    const level = (i % 8) + 1
+    test(`suma-pool-is-pure-${i}`, () => {
+      const next = buildNextMathExercise([], level, false, 'suma')
+      assert.doesNotMatch(next.op, /[*/-]/, `not pure addition: ${next.op}`)
+    })
+  }
+
+  for (let i = 0; i < 30; i += 1) {
+    const level = (i % 8) + 1
+    test(`resta-pool-is-pure-${i}`, () => {
+      const next = buildNextMathExercise([], level, false, 'resta')
+      assert.doesNotMatch(next.op, /[*/+]/, `not pure subtraction: ${next.op}`)
     })
   }
 
@@ -238,6 +280,21 @@ async function main() {
     sumaRestaSessionOps.push(next.op)
   }
 
+  // ── Bug reportado en produccion: el alumno pide SOLO "sumas" (no "sumas y
+  // restas"), pero los ejercicios se mezclaban con restas de todos modos
+  // porque ambas palabras caian en el mismo enfoque combinado. ──
+  const sumaSoloSessionOps: string[] = []
+  let enfoqueSumaSolo = resolveMathPracticeFocus(['sumas'], null)
+  for (let i = 0; i < 20; i += 1) {
+    enfoqueSumaSolo = resolveMathPracticeFocus([String(i), 'Matematica'], enfoqueSumaSolo)
+    const next = buildNextMathExercise(sumaSoloSessionOps, 1, false, enfoqueSumaSolo)
+    test(`suma-solo-no-se-mezcla-con-resta-${i}`, () => {
+      assert.equal(enfoqueSumaSolo, 'suma', `enfoque se perdio en el turno ${i}`)
+      assert.doesNotMatch(next.op, /[*/-]/, `se coló una resta u otra operacion en el turno ${i}: ${next.op}`)
+    })
+    sumaSoloSessionOps.push(next.op)
+  }
+
   // Sin la funcion de persistencia, el mismo escenario SI pierde el enfoque
   // (confirma que el hallazgo era real y que resolveMathPracticeFocus lo cierra).
   test('without-persistence-focus-is-lost', () => {
@@ -245,7 +302,7 @@ async function main() {
     assert.equal(focusSinPersistencia, 'general')
   })
 
-  assert.equal(total, 1000 + 30 + 30 + 60 + 60 + 25 + 1)
+  assert.equal(total, 1000 + 20 + 20 + 20 + 30 + 60 + 30 + 30 + 60 + 25 + 20 + 1)
 
   if (failures.length > 0) {
     console.error(`math practice stress failed: ${failures.length}/${total}`)
