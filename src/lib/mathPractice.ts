@@ -64,6 +64,28 @@ export function describeMathTopic(op: string | null | undefined, idiomaIngles = 
   return idiomaIngles ? 'Math practice' : 'Práctica de matemática'
 }
 
+// Deriva un enfoque puro (para buildNextMathExercise) a partir de una
+// operación canónica ya evaluada — usado para proponer práctica enfocada en
+// "Revisemos mis errores" a partir del error real más reciente, no de una
+// palabra clave que el alumno tenga que volver a escribir.
+export function inferMathPracticeFocusFromOperation(op: string | null | undefined): MathPracticeFocus {
+  const clean = String(op || '')
+  if (/x/i.test(clean) && clean.includes('=')) return 'equation'
+  if (/\d+\.\d+|%/.test(clean)) return 'decimal'
+  const tieneSuma = clean.includes('+')
+  const tieneResta = /-/.test(clean)
+  const tieneMult = clean.includes('*')
+  const tieneDiv = clean.includes('/')
+  if ((tieneSuma || tieneResta) && (tieneMult || tieneDiv)) return 'general'
+  if (tieneSuma && tieneResta) return 'suma_resta'
+  if (tieneSuma) return 'suma'
+  if (tieneResta) return 'resta'
+  if (tieneMult && tieneDiv) return 'multiplicacion_division'
+  if (tieneMult) return 'multiplicacion'
+  if (tieneDiv) return 'division'
+  return 'general'
+}
+
 function randInt(min: number, max: number) {
   return min + Math.floor(Math.random() * (max - min + 1))
 }

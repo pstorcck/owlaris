@@ -4,6 +4,8 @@ import { checkContentSafety, type ContentSafetyResult } from '@/lib/contentSafet
 import { guardHumanisticResponse } from '@/lib/humanisticSafety'
 import { guardNoFinalAnswer } from '@/lib/pedagogicalGuard'
 import { sanitizeChatFormatting } from '@/lib/chatFormatting'
+import { detectarMateriaDesdeTexto, materiaActualEnSistemaCNB, normalizarMateria } from '@/lib/materiaDetection'
+import { isReviewMistakesRequest, primeraOperacionValida, temaMasFrecuente } from '@/lib/mistakeReview'
 import {
   buildCourseTopicListResponse,
   extractCourseTopicIndex,
@@ -27,6 +29,7 @@ import {
   type ColegioSharePointInput,
 } from '@/lib/sharepointFolders'
 import {
+  buildGuidedMathHint,
   extractAndCleanOperation,
   handleMathEvaluation,
   inferCanonicalOperationFromText,
@@ -43,6 +46,7 @@ import {
   calculateAdaptiveDifficulty,
   collectRecentMathOperations,
   describeMathTopic,
+  inferMathPracticeFocusFromOperation,
   isRepeatedMathOperation,
   isWorkedExampleRequest,
   resolveMathPracticeFocus,
@@ -224,36 +228,6 @@ function normalizarGradoPorColegio(texto: string, colegio?: ColegioSharePointInp
   return normalizarGrado(texto)
 }
 
-function normalizarMateria(texto: string, esOlimpiadas = false): string {
-  const t = texto.toLowerCase()
-    .replace(/á/g,'a').replace(/é/g,'e').replace(/í/g,'i').replace(/ó/g,'o').replace(/ú/g,'u')
-  if (/olimp.*mat/i.test(t)) return 'Olimpiadas - Matemática'
-  if (/olimp.*biol/i.test(t)) return 'Olimpiadas - Biología'
-  if (/olimp.*fis/i.test(t)) return 'Olimpiadas - Física'
-  if (/olimp.*quim/i.test(t)) return 'Olimpiadas - Química'
-  if (/olimp.*cien/i.test(t)) return 'Olimpiadas - Ciencias Naturales'
-  if (/olimp/i.test(t)) return '__OLIMPIADAS__'
-  if (esOlimpiadas) {
-    if (/matem/i.test(t)) return 'Olimpiadas - Matemática'
-    if (/biol/i.test(t)) return 'Olimpiadas - Biología'
-    if (/fis/i.test(t)) return 'Olimpiadas - Física'
-    if (/quim/i.test(t)) return 'Olimpiadas - Química'
-    if (/cien/i.test(t)) return 'Olimpiadas - Ciencias Naturales'
-  }
-  if (/mineduc.*leng|leng.*mineduc/i.test(t)) return 'Mineduc - Lenguaje'
-  if (/mineduc.*mat|mat.*mineduc/i.test(t)) return 'Mineduc - Matemática'
-  if (/mineduc/i.test(t)) return 'Mineduc - Lenguaje'
-  if (/matem|math/i.test(t)) return 'Matemática'
-  if (/leng|espan|español|castell|spanish/i.test(t)) return 'Español'
-  if (/ingles|english|inglés/i.test(t)) return 'Inglés'
-  if (/biol|biology/i.test(t)) return 'Biología'
-  if (/fis|fisica|physics/i.test(t)) return 'Física'
-  if (/quim|chemistry/i.test(t)) return 'Química'
-  if (/hist|history/i.test(t)) return 'Historia'
-  if (/cien.*nat|natural science|natural/i.test(t)) return 'Ciencias Naturales'
-  return texto.trim()
-}
-
 function esMateriaNumerica(materia: string): boolean {
   return isLikelyNumericSubject(materia)
 }
@@ -262,28 +236,6 @@ const GRADOS_OLIMPIADAS: Record<string, string> = {
   '1ero Básico': 'Primero Basico', '2do Básico': 'Segundo Basico', '3ero Básico': 'Tercero Basico',
   '4to Bachillerato': 'Diversificado', '5to Bachillerato': 'Diversificado',
   '4to Primaria': 'Primaria', '5to Primaria': 'Primaria', '6to Primaria': 'Primaria',
-}
-
-const TEMAS_POR_MATERIA: Record<string, string[]> = {
-  'Matemática': ['aritmética','aritmetica','algebra','álgebra','geometría','geometria','fracciones','ecuaciones','trigonometría','trigonometria','estadística','estadistica','probabilidad','porcentajes','decimales','números','numeros','matrices','funciones','polinomios','logaritmos'],
-  'Física': ['cinemática','cinematica','dinámica','dinamica','fuerza','movimiento','velocidad','aceleración','aceleracion','energía','energia','trabajo','calor','temperatura','ondas','luz','electricidad','magnetismo','gravedad','óptica','optica'],
-  'Química': ['átomo','atomo','molécula','molecula','enlace','reacción','reaccion','tabla periódica','tabla periodica','ácido','acido','base','solución','solucion','oxidación','oxidacion','elemento','compuesto','estequiometría'],
-  'Biología': ['célula','celula','fotosíntesis','fotosintesis','adn','genética','genetica','evolución','evolucion','ecosistema','organismo','proteína','proteina','mitosis','meiosis','respiración celular'],
-  'Historia': ['guerra','revolución','revolucion','independencia','civilización','civilizacion','colonia','conquista','maya','azteca','inca','república','republica','democracia','feudalismo'],
-  'Español': ['gramática','gramatica','sintaxis','ortografía','ortografia','redacción','redaccion','literatura','poesía','poesia','narración','narracion','verbo','sustantivo','adjetivo','párrafo','parrafo'],
-  'Inglés': ['vocabulary','grammar','verb','tense','sentence','reading','writing','speaking','listening','english'],
-  'Ciencias Naturales': ['planta','animal','ecosistema','medio ambiente','naturaleza','suelo','agua','aire','clima','biodiversidad','nutrición','nutricion'],
-}
-
-function detectarMateriaDesdeTexto(texto: string): string | null {
-  const t = texto.toLowerCase().replace(/á/g,'a').replace(/é/g,'e').replace(/í/g,'i').replace(/ó/g,'o').replace(/ú/g,'u')
-  for (const [materia, temas] of Object.entries(TEMAS_POR_MATERIA)) {
-    for (const tema of temas) {
-      const temaNorm = tema.replace(/á/g,'a').replace(/é/g,'e').replace(/í/g,'i').replace(/ó/g,'o').replace(/ú/g,'u')
-      if (t.includes(temaNorm)) return materia
-    }
-  }
-  return null
 }
 
 const MATERIAS_OLIMPIADAS: Record<string, string> = {
@@ -1136,9 +1088,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ respuesta: idiomaIngles ? 'Ok, ' + materiaDetectada + '. Do you have a specific question or would you like me to suggest a topic?' : 'Ok, ' + materiaDetectada + '. ¿Tienes una duda específica o quieres que te proponga un tema?', nuevo_estado: 'activo', nombre_alumno: nombreAlumno, grado_detectado: gradoAlumno, materia_detectada: materiaDetectada, tokens: 0, pending_math_interaction_id: null, nivel_dificultad: 1, aciertos_consecutivos: 0, fallos_consecutivos: 0, practica_enfoque: 'general' })
     }
 
-    if (estado === 'activo' && materia_id) {
+    if (estado === 'activo' && materia_id && materiaActualEnSistemaCNB(materia_id)) {
       const materiaDetectada = detectarMateriaDesdeTexto(pregunta)
-      if (materiaDetectada && materiaDetectada !== materia_id) return NextResponse.json({ respuesta: '"' + pregunta.trim() + '" es un tema de ' + materiaDetectada + '. ¿Quieres que cambiemos a ' + materiaDetectada + '?', nuevo_estado: 'esperando_confirmacion_cambio_materia', materia_sugerida: materiaDetectada, tokens: 0 })
+      if (materiaDetectada && materiaDetectada !== normalizarMateria(materia_id)) return NextResponse.json({ respuesta: 'Estamos en ' + materia_id + '. "' + pregunta.trim() + '" parece un tema de ' + materiaDetectada + '. ¿Quieres seguir con ' + materia_id + ' o cambiar a ' + materiaDetectada + '?', nuevo_estado: 'esperando_confirmacion_cambio_materia', materia_sugerida: materiaDetectada, tokens: 0 })
     }
 
     if (estado === 'esperando_confirmacion_cambio_materia') {
@@ -1159,7 +1111,11 @@ export async function POST(req: NextRequest) {
       const mencionaMateria = MATERIAS_KEYWORDS.some(m => preguntaLow.includes(m))
       if (cambioExplicito && mencionaMateria) {
         const nuevaMateria = normalizarMateria(cambioExplicito[1].trim())
-        if (nuevaMateria && nuevaMateria !== materia_id && !nuevaMateria.startsWith('__')) {
+        // Comparar contra la materia actual ya normalizada, no el string crudo:
+        // un alumno de eScholaris en "Biology" que dice "quiero estudiar
+        // biología" no está cambiando de materia, solo la nombra en otro
+        // idioma — normalizarMateria("Biology") también da "Biología".
+        if (nuevaMateria && nuevaMateria !== normalizarMateria(materia_id) && !nuevaMateria.startsWith('__')) {
           Array.from(cacheContenido.keys()).forEach(key => { if (key.includes(materia_id)) cacheContenido.delete(key) })
           Array.from(indiceDocumentos.keys()).forEach(key => { if (key.includes(materia_id)) indiceDocumentos.delete(key) })
           return NextResponse.json({ respuesta: 'Claro, cambiamos a ' + nuevaMateria + '. ¿Tienes una duda específica o quieres que te proponga un tema?', nuevo_estado: 'activo', materia_detectada: nuevaMateria, tokens: 0, pending_math_interaction_id: null, nivel_dificultad: 1, aciertos_consecutivos: 0, fallos_consecutivos: 0, practica_enfoque: 'general' })
@@ -1275,6 +1231,100 @@ export async function POST(req: NextRequest) {
           practica_enfoque: practicaEnfoqueEstable,
         })
       }
+    }
+
+    // "Revisemos mis errores" (reemplaza el quick-action "Propón otro tema",
+    // que empujaba a cambiar de tema en vez de dominar el actual). Busca los
+    // errores recientes del alumno en la materia activa, identifica el
+    // patrón (tema que más se repite) y propone práctica corta enfocada en
+    // corregirlo — sin salirse del tema ni dar la respuesta final.
+    if (isReviewMistakesRequest(pregunta)) {
+      let queryErrores = supabase
+        .from('interacciones')
+        .select('tema_detectado, operacion_canonica, creado_en')
+        .eq('usuario_id', user.id)
+        .eq('estado_evaluacion', 'incorrecto')
+        .order('creado_en', { ascending: false })
+        .limit(15)
+      if (materia_uuid) queryErrores = queryErrores.eq('materia_id', materia_uuid)
+      const { data: erroresRecientes } = await queryErrores
+      const errores = erroresRecientes || []
+
+      let respuesta: string
+      let ejercicioEnfocadoOp: string | null = null
+      let fuentePracticaErrores: string | null = null
+      let enfoqueDetectado: MathPracticeFocus = practicaEnfoqueEstable
+
+      if (errores.length === 0) {
+        respuesta = idiomaIngles
+          ? "I don't see enough recent mistakes in this session yet to find a clear pattern. Let's keep practicing and I will point them out as they come up."
+          : 'Todavía no veo suficientes errores recientes en esta sesión para encontrar un patrón claro. Sigamos practicando y te los señalaré en cuanto aparezcan.'
+      } else {
+        const patron = temaMasFrecuente(errores)
+        const opMasReciente = primeraOperacionValida(errores)
+        const patronLine = patron
+          ? (idiomaIngles ? `I noticed a pattern: most of your recent mistakes were around ${patron}.` : `Noté un patrón: la mayoría de tus errores recientes fueron en ${patron}.`)
+          : (idiomaIngles ? `You've had ${errores.length} recent mistakes.` : `Has tenido ${errores.length} errores recientes.`)
+
+        if (materiaNumerica && opMasReciente && isSafeCanonicalOperation(opMasReciente)) {
+          const hint = buildGuidedMathHint(opMasReciente, idiomaIngles)
+          enfoqueDetectado = inferMathPracticeFocusFromOperation(opMasReciente)
+          const operacionesHistorial = collectRecentMathOperations(
+            Array.isArray(historial) ? historial.map((msg: { contenido?: string }) => msg.contenido || '') : []
+          )
+          const operacionesEvaluadas = await cargarOperacionesEvaluadas(supabase, user.id, materia_uuid)
+          const operacionesBloqueadas = combinarOperacionesBloqueadas(operacionesHistorial, operacionesEvaluadas)
+          const ejercicioEnfocado = buildNextMathExercise(operacionesBloqueadas, nivelDificultadActual, idiomaIngles, enfoqueDetectado)
+          const fuentePractica = await obtenerFuenteCurricularParaPractica({
+            colegio: colegioSharePoint,
+            grado: gradoEfectivo,
+            materiaConsulta: materiaConsultaSharePoint,
+            pregunta: `${ejercicioEnfocado.text}`,
+            fallbackArchivo: null,
+          })
+          ejercicioEnfocadoOp = ejercicioEnfocado.op
+          fuentePracticaErrores = fuentePractica.archivo
+          respuesta = idiomaIngles
+            ? `${patronLine} ${hint}\n\nLet's practice that specifically:\n\n${ejercicioEnfocado.text}`
+            : `${patronLine} ${hint}\n\nPractiquemos eso específicamente:\n\n${ejercicioEnfocado.text}`
+        } else {
+          respuesta = idiomaIngles
+            ? `${patronLine} Let's go back to that idea: can you explain it in your own words? I will help you refine it from there.`
+            : `${patronLine} Volvamos a esa idea: ¿puedes explicarla con tus propias palabras? Te ayudo a afinarla desde ahí.`
+        }
+      }
+
+      const { data: insertedRow } = await supabase.from('interacciones').insert({
+        usuario_id: user.id,
+        colegio_id: perfil.colegio_id,
+        materia_id: materia_uuid,
+        grado: gradoEfectivo,
+        tema_detectado: ejercicioEnfocadoOp ? describeMathTopic(ejercicioEnfocadoOp, idiomaIngles) : 'Revisión de errores',
+        pregunta,
+        respuesta,
+        tokens_usados: 0,
+        costo_usd: 0,
+        modelo_usado: 'mistake_review_guard',
+        documento_fuente: fuentePracticaErrores,
+        sospecha_copia: false,
+        operacion_canonica: ejercicioEnfocadoOp,
+        op_estado: ejercicioEnfocadoOp ? 'pendiente' : null,
+        estado_evaluacion: 'no_calificable',
+        guard_activado: false,
+      }).select('id').single()
+      supabase.from('usuarios').update({ ultimo_acceso: new Date().toISOString() }).eq('id', user.id).then(() => {})
+      return NextResponse.json({
+        respuesta,
+        source: 'mistake_review_guard',
+        tokens: 0,
+        documento_fuente: fuentePracticaErrores,
+        interaction_id: insertedRow?.id || null,
+        pending_math_interaction_id: ejercicioEnfocadoOp ? (insertedRow?.id || null) : null,
+        nivel_dificultad: nivelDificultadActual,
+        aciertos_consecutivos: rachaAprendizaje.correctas,
+        fallos_consecutivos: rachaAprendizaje.incorrectas,
+        practica_enfoque: enfoqueDetectado,
+      })
     }
 
     if (tipoPregunta === 'academica' && pideLeccionSinTema(pregunta)) {

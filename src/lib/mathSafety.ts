@@ -276,7 +276,7 @@ function generatePedagogicalFeedback(
   }
 }
 
-function buildGuidedMathHint(op: string | null | undefined, idiomaIngles: boolean): string {
+export function buildGuidedMathHint(op: string | null | undefined, idiomaIngles: boolean): string {
   const clean = normalizeOperation(op || '')
   if (clean.includes('=') && /x/i.test(clean)) {
     return idiomaIngles

@@ -474,17 +474,16 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
 
       // Sugerencias solo cuando está activo
       if (data.nuevo_estado === 'activo' || estadoChat === 'activo') {
-        const mat = data.materia_detectada || materiaAlumno
         setSugerencias(idiomaActivo ? [
           { icon: '✦', text: 'Explain with an example' },
           { icon: '◈', text: 'I want to practice' },
           { icon: '◇', text: 'Summarize the topic' },
-          { icon: '↺', text: 'Suggest another topic in ' + (mat || 'the subject') },
+          { icon: '↺', text: "Let's review my mistakes" },
         ] : [
           { icon: '✦', text: 'Explícame con un ejemplo' },
           { icon: '◈', text: 'Quiero practicar' },
           { icon: '◇', text: 'Resume el tema' },
-          { icon: '↺', text: 'Propón otro tema de ' + (mat || 'la materia') },
+          { icon: '↺', text: 'Revisemos mis errores' },
         ])
       }
     } catch { setError('Hubo un problema. Intenta de nuevo.') }
