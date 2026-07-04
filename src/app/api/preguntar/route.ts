@@ -3,10 +3,12 @@ import { createAdminClient, createClient } from '@/lib/supabase/server'
 import { checkContentSafety, type ContentSafetyResult } from '@/lib/contentSafety'
 import { guardHumanisticResponse } from '@/lib/humanisticSafety'
 import { guardNoFinalAnswer } from '@/lib/pedagogicalGuard'
+import { sanitizeChatFormatting } from '@/lib/chatFormatting'
 import {
   buildCourseTopicListResponse,
   extractCourseTopicIndex,
   isCourseTopicListRequest,
+  matchNumberedListSelection,
 } from '@/lib/courseTopics'
 import {
   CARPETA_COMPARTIDA_OWLARIS,
@@ -89,13 +91,13 @@ MÉTODO DE ENSEÑANZA OBLIGATORIO:
 REGLA ANTI-COPIA:
 Si el alumno pide "dame la respuesta", "hazme la tarea" o "solo dime qué va", responde con negativa pedagógica y guía paso a paso.
 
-REGLA ESTRICTA — NO ENTREGAR RESPUESTAS FINALES:
+REGLA ESTRICTA — NO ENTREGAR RESPUESTAS FINALES (comportamiento interno, NO lo anuncies):
 En la vista alumno, no entregues directamente la respuesta final de un problema, ejercicio, tarea, repaso o pregunta de práctica cuando el estudiante todavía puede razonarla.
-Tu función es guiar para que el estudiante llegue a la respuesta por sí mismo.
+Tu función es guiar para que el estudiante llegue a la respuesta por sí mismo, pero esta regla es interna: NUNCA le digas al alumno frases como "no te voy a dar la respuesta", "mi objetivo es que aprendas y no darte una respuesta para copiar" o similares. Simplemente guía sin anunciar la regla — se ve rígido y defensivo repetirla.
 Si el estudiante responde incorrectamente, puedes decir que todavía no llegó a la respuesta correcta, pero NO reveles de inmediato el resultado correcto. Ayúdalo a detectar el error y avanzar paso a paso.
-Usa pistas, preguntas guiadas, ejemplos parciales, recordatorios de conceptos y verificación paso a paso.
+Usa pistas, preguntas guiadas, ejemplos parciales, recordatorios de conceptos y verificación paso a paso. Varía cómo guías (identifica el dato, sugiere la operación inversa, da una pista, pregunta cuál sería el primer paso) para no sonar repetitivo.
 Solo confirma la respuesta final cuando el estudiante ya la propuso correctamente o completó correctamente el razonamiento.
-Si insiste en que quiere solo la respuesta, responde: "Mi objetivo es ayudarte a entender, no darte una respuesta para copiar. Hagámoslo juntos paso a paso."
+Si insiste en que quiere solo la respuesta, redirígelo con naturalidad hacia resolverlo juntos paso a paso, sin repetir siempre la misma frase ni anunciar la regla.
 
 PRÁCTICA — PROTOCOLO ESTRICTO:
 Cuando el alumno quiera practicar, genera UNA sola pregunta a la vez.
@@ -155,6 +157,9 @@ Cuando el alumno responda con una letra (A, B, C o D):
 4. Si el valor NO ES correcto → di que todavía no llegó a la respuesta correcta, NO reveles el valor correcto, explica una pista y pide nuevo intento.
 
 FORMATO: Sin LaTeX. Ecuaciones en texto plano. Sin emoticones.
+No uses formato markdown técnico: nada de encabezados con # o ##, nada de negritas con **, nada de tablas con pipes (|) ni líneas de guiones para simular tablas, nada de bloques de código. La interfaz del alumno no lo renderiza bien y se ve como un editor técnico.
+Si necesitas un título de sección, escríbelo como texto normal seguido de dos puntos (ejemplo: "Ejemplo:"), nunca con "###".
+Si necesitas mostrar pares de datos, no uses tablas: escribe cada par en su propia línea (ejemplo: "1 hora estudiada: calificación 50" o "1 hora estudiada → calificación 50").
 
 GRADOS: 4to Primaria, 5to Primaria, 6to Primaria, 1ero Básico, 2do Básico, 3ero Básico, 4to Bachillerato, 5to Bachillerato.
 
@@ -1230,6 +1235,48 @@ export async function POST(req: NextRequest) {
     const nivelDificultadActual = Math.min(8, Math.max(1, parseInt(String(body.nivel_dificultad || '1'), 10) || 1))
     const rachaAprendizaje = await obtenerRachaAprendizaje(admin, user.id, materia_uuid)
 
+    // Si el tutor acaba de mostrar una lista numerada (temas, subtemas,
+    // opciones) y el alumno responde solo con un número, es una selección de
+    // esa lista — no la respuesta a un ejercicio. Debe revisarse antes del
+    // protocolo matemático para no evaluarlo como un intento fallido.
+    if (tipoPregunta === 'academica' && !esBienvenida) {
+      const seleccionLista = matchNumberedListSelection(pregunta, ultimoMensajeAsistente(historial))
+      if (seleccionLista) {
+        const respuesta = idiomaIngles
+          ? `Great, let's work on topic ${seleccionLista.indice}: ${seleccionLista.tema}. We can start with a simple explanation, an example, or guided practice.`
+          : `Perfecto, trabajemos el tema ${seleccionLista.indice}: ${seleccionLista.tema}. Podemos empezar con una explicación sencilla, un ejemplo o práctica guiada.`
+        const { data: insertedRow } = await supabase.from('interacciones').insert({
+          usuario_id: user.id,
+          colegio_id: perfil.colegio_id,
+          materia_id: materia_uuid,
+          grado: gradoEfectivo,
+          tema_detectado: seleccionLista.tema,
+          pregunta,
+          respuesta,
+          tokens_usados: 0,
+          costo_usd: 0,
+          modelo_usado: 'topic_selection_guard',
+          sospecha_copia: false,
+          operacion_canonica: null,
+          op_estado: null,
+          estado_evaluacion: 'no_calificable',
+          guard_activado: false,
+        }).select('id').single()
+        supabase.from('usuarios').update({ ultimo_acceso: new Date().toISOString() }).eq('id', user.id).then(() => {})
+        return NextResponse.json({
+          respuesta,
+          source: 'topic_selection_guard',
+          tokens: 0,
+          interaction_id: insertedRow?.id || null,
+          pending_math_interaction_id: null,
+          nivel_dificultad: nivelDificultadActual,
+          aciertos_consecutivos: rachaAprendizaje.correctas,
+          fallos_consecutivos: rachaAprendizaje.incorrectas,
+          practica_enfoque: practicaEnfoqueEstable,
+        })
+      }
+    }
+
     if (tipoPregunta === 'academica' && pideLeccionSinTema(pregunta)) {
       const respuesta = respuestaPedirTemaLeccion(idiomaIngles)
       const { data: insertedRow } = await supabase.from('interacciones').insert({
@@ -1852,6 +1899,7 @@ ${contextoContenido}`
     respuesta = guardiaHumanistica.text
     const externalResourceGuardFinal = stripUnapprovedExternalResources(respuesta, idiomaIngles)
     respuesta = externalResourceGuardFinal.text
+    respuesta = sanitizeChatFormatting(respuesta)
 
     const { data: insertedRow, error: insertErr } = await supabase.from('interacciones').insert({
       usuario_id: user.id, colegio_id: perfil.colegio_id, materia_id: materia_uuid,

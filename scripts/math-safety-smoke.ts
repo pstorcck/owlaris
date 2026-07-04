@@ -4,6 +4,7 @@ import {
   inferCanonicalOperationFromText,
   isLikelyNumericSubject,
   looksLikeMathPracticePrompt,
+  normalizeStudentAnswer,
   solveOperation,
 } from '../src/lib/mathSafety'
 import {
@@ -26,7 +27,7 @@ async function main() {
   const wrong = await handleMathEvaluation(tutorPrompt, '17', false)
   assert.equal(wrong?.estado, 'incorrecto')
   assert.equal(wrong?.correctAnswer, 16)
-  assert.match(wrong?.feedback || '', /Todavía no llegamos|No te voy/i)
+  assert.match(wrong?.feedback || '', /Todavía no/i)
   assert.doesNotMatch(wrong?.feedback || '', /16/)
 
   const explicit = await handleMathEvaluation('¿Cuánto es 25 - 9? [OP: 25-9]', '16', false)
@@ -166,6 +167,24 @@ D) 10
   })
   assert.match(calculatorResponse, /comprobar al final/i)
   assert.match(calculatorResponse, /48 - 19/i)
+
+  // Equivalencias en lenguaje natural: el alumno no siempre escribe "x = 6".
+  // Todas estas variantes deben normalizar al mismo número.
+  const equivalentes = [
+    '6', 'x = 6', 'x=6', 'x es 6', 'x vale 6', 'la x es 6', 'el valor de x es 6',
+    'creo que x vale 6', 'x es igual a 6',
+    'el problema era 2x+5=17 y x vale 6',
+    'la ecuacion 2x+5=17 entonces x es igual a 6',
+  ]
+  for (const respuestaAlumno of equivalentes) {
+    assert.equal(normalizeStudentAnswer(respuestaAlumno), 6, `"${respuestaAlumno}" debería normalizar a 6`)
+  }
+
+  const equationPromptEquivalencias = 'Resuelve: 2x + 5 = 17 [OP: 2*x+5=17]'
+  for (const respuestaAlumno of ['x = 6', 'x es 6', 'x vale 6', 'creo que x vale 6', 'el valor de x es 6']) {
+    const evaluado = await handleMathEvaluation(equationPromptEquivalencias, respuestaAlumno, false)
+    assert.equal(evaluado?.estado, 'correcto', `"${respuestaAlumno}" debería marcarse correcto`)
+  }
 
   console.log('math-safety smoke passed')
 }

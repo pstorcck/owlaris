@@ -62,6 +62,32 @@ export function shouldGuideWithoutFinalAnswer(options: GuardOptions): boolean {
     CONTEXTO_PRACTICA.some((pattern) => pattern.test(pregunta))
 }
 
+// La regla de no dar la respuesta final es interna: el alumno no debe leer un
+// anuncio de la regla en cada turno (se sentía rígido y defensivo). Estas frases
+// guían sin anunciarla, y se elige una de forma estable según el texto original
+// para que el comportamiento sea determinístico y comprobable en pruebas.
+const GUIA_SIN_ANUNCIO_ES = [
+  'Empecemos por identificar qué nos pide el problema.',
+  'Vamos paso a paso.',
+  'Estás cerca. Revisemos qué operación ayuda a avanzar.',
+  'Probemos con una pista para seguir avanzando.',
+  'Pensemos juntos cuál sería el siguiente paso.',
+]
+const GUIA_SIN_ANUNCIO_EN = [
+  "Let's start by identifying what the problem is asking.",
+  "Let's go step by step.",
+  "You're close. Let's check which operation helps you move forward.",
+  "Let's try a hint to keep going.",
+  "Let's think together about the next step.",
+]
+
+function elegirGuiaEstable(seed: string, idiomaIngles: boolean): string {
+  const lista = idiomaIngles ? GUIA_SIN_ANUNCIO_EN : GUIA_SIN_ANUNCIO_ES
+  let hash = 0
+  for (let i = 0; i < seed.length; i += 1) hash = (hash * 31 + seed.charCodeAt(i)) >>> 0
+  return lista[hash % lista.length]
+}
+
 export function guardNoFinalAnswer(text: string, options: GuardOptions): { text: string; guardActivado: boolean } {
   if (!text || !shouldGuideWithoutFinalAnswer(options)) {
     return { text, guardActivado: false }
@@ -79,12 +105,13 @@ export function guardNoFinalAnswer(text: string, options: GuardOptions): { text:
 
   if (cleaned === text.trim()) return { text, guardActivado: false }
 
-  const prefix = options.idiomaIngles
-    ? 'I will not give you the final answer directly, but I will guide you so you can find it.'
-    : 'No te voy a dar la respuesta final directamente, pero sí te voy a guiar para que puedas encontrarla.'
+  const prefix = elegirGuiaEstable(text, !!options.idiomaIngles)
+  const preguntaSiguientePaso = options.idiomaIngles
+    ? 'What would be the first step you would try?'
+    : '¿Cuál sería el primer paso que intentarías?'
 
   return {
-    text: `${prefix}\n\n${cleaned || (options.idiomaIngles ? 'Let us go step by step. What is the first step you would try?' : 'Vamos paso a paso. ¿Cuál sería el primer paso que intentarías?')}`,
+    text: cleaned ? `${prefix}\n\n${cleaned}` : `${prefix} ${preguntaSiguientePaso}`,
     guardActivado: true,
   }
 }

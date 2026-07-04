@@ -126,6 +126,29 @@ export function extractCourseTopicIndex(content: string): CourseTopicIndex {
   }
 }
 
+const BARE_NUMBER_SELECTION = /^\s*(?:opci[oó]n\s+|n[uú]mero\s+|el\s+|la\s+)?(\d{1,3})\s*[.)]?\s*$/i
+
+// Cuando el tutor acaba de mostrar una lista numerada (temas, subtemas,
+// opciones) y el alumno responde solo con un número, ese número selecciona un
+// elemento de la lista — no es la respuesta a un ejercicio matemático. Se basa
+// en extractCourseTopicIndex, que ya sabe reconocer listas numeradas o con
+// viñetas en texto libre (no solo en el índice oficial del curso).
+export function matchNumberedListSelection(
+  pregunta: string,
+  ultimoMensajeAsistente: string
+): { indice: number; tema: string } | null {
+  const match = BARE_NUMBER_SELECTION.exec((pregunta || '').trim())
+  if (!match) return null
+  const n = parseInt(match[1], 10)
+  if (!n || n < 1) return null
+
+  const { topics } = extractCourseTopicIndex(ultimoMensajeAsistente || '')
+  if (topics.length < 2) return null
+  if (n > topics.length) return null
+
+  return { indice: n, tema: topics[n - 1] }
+}
+
 export function buildCourseTopicListResponse(input: {
   index: CourseTopicIndex
   subject: string

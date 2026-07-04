@@ -70,7 +70,10 @@ export function normalizeStudentAnswer(respuesta: string): number | null {
     .replace(/[¿?¡!]+$/g, '')
     .trim()
 
-  const variableAssignments = Array.from(s.matchAll(/(?:^|[^\d])x\s*=\s*(-?\d+(?:[.,]\d+)?(?:\s*\/\s*-?\d+(?:[.,]\d+)?)?)/gi))
+  // Cubre "x = 6", "x=6", "x es 6", "x vale 6", "x es igual a 6" — el alumno
+  // no siempre escribe el signo "=", así que no basta con depender del caso
+  // de respaldo (un único número suelto en todo el mensaje).
+  const variableAssignments = Array.from(s.matchAll(/(?:^|[^\d])x\s*(?:=|es(?:\s+igual\s+a)?|vale)\s*(-?\d+(?:[.,]\d+)?(?:\s*\/\s*-?\d+(?:[.,]\d+)?)?)/gi))
   if (variableAssignments.length > 0) return parseNumericAnswerToken(variableAssignments[variableAssignments.length - 1][1])
 
   const direct = s.match(/^(?:x\s*=\s*)?(-?\d+(?:[.,]\d+)?(?:\s*\/\s*-?\d+(?:[.,]\d+)?)?)[\s.]*$/i)
@@ -260,8 +263,8 @@ function generatePedagogicalFeedback(
         : `¡Correcto! ${studentAnswer} es la respuesta correcta. ¿Puedes explicarme cómo llegaste a ese resultado?`
     case 'incorrecto':
       return idiomaIngles
-        ? `Not yet. I will not give you the final answer directly, but I will guide you. ${hint} Try again with that step.`
-        : `Todavía no llegamos a la respuesta correcta. No te voy a dar la respuesta directamente, pero sí te voy a guiar. ${hint} Intenta de nuevo con ese paso.`
+        ? `Not yet. ${hint} Try again with that step.`
+        : `Todavía no. ${hint} Intenta de nuevo con ese paso.`
     case 'no_evaluable':
       return idiomaIngles
         ? "To check properly, first write the operation. What operation represents the problem?"

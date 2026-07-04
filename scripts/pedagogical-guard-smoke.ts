@@ -29,7 +29,10 @@ function main() {
   )
   assert.equal(guardedMath.guardActivado, true)
   assert.doesNotMatch(guardedMath.text, /resultado correcto|13/i)
-  assert.match(guardedMath.text, /No te voy a dar la respuesta final/i)
+  // La regla de no dar la respuesta final debe funcionar como comportamiento
+  // interno: el texto visible no debe anunciarla ("no te voy a dar...").
+  assert.doesNotMatch(guardedMath.text, /no te voy a dar/i)
+  assert.match(guardedMath.text, /paso a paso|primer paso|identificar qu[eé] nos pide|pista|pensemos juntos/i)
 
   const directRequest = guardNoFinalAnswer(
     'La respuesta correcta es fotosíntesis. Copia eso.',
