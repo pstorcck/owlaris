@@ -1426,15 +1426,36 @@ export async function POST(req: NextRequest) {
     // Si el protocolo evaluó y tiene resultado definitivo, responder directo
     if (respuestaDuplicadaPorConcurrencia) {
       // Otra peticion casi simultanea ya proceso este mismo ejercicio pendiente
-      // y ya genero el siguiente. No insertamos una fila duplicada ni sumamos
-      // dos veces a la racha de aciertos.
+      // y ya genero el siguiente ejercicio. No insertamos una fila duplicada ni
+      // sumamos dos veces a la racha, pero el tutor debe seguir avanzando: se
+      // busca el ejercicio que la peticion ganadora acaba de dejar pendiente y
+      // se entrega ese, para que la practica continue sin cortarse en un
+      // mensaje de "ya quedó registrado" sin salida.
+      let siguienteDeGanadora: { id: string; respuesta: string; documento_fuente: string | null } | null = null
+      try {
+        let ganadoraQuery = supabase
+          .from('interacciones')
+          .select('id, respuesta, documento_fuente')
+          .eq('usuario_id', user.id)
+          .eq('op_estado', 'pendiente')
+          .is('op_evaluada_en', null)
+          .not('operacion_canonica', 'is', null)
+          .order('creado_en', { ascending: false })
+          .limit(1)
+        if (materia_uuid) ganadoraQuery = ganadoraQuery.eq('materia_id', materia_uuid)
+        const { data: filaGanadora } = await ganadoraQuery.maybeSingle()
+        if (filaGanadora?.id) siguienteDeGanadora = filaGanadora
+      } catch (error) {
+        console.error('No se pudo recuperar el ejercicio de la petición ganadora:', error)
+      }
+
       return NextResponse.json({
-        respuesta: idiomaIngles
-          ? 'Got it, your answer was already recorded.'
-          : 'Listo, tu respuesta ya quedó registrada.',
+        respuesta: siguienteDeGanadora?.respuesta || (idiomaIngles
+          ? "Got it, your answer was already recorded. Let's continue."
+          : 'Listo, tu respuesta ya quedó registrada. Sigamos.'),
         tokens: 0,
-        documento_fuente: pendingMathDocumentoFuente,
-        pending_math_interaction_id: null,
+        documento_fuente: siguienteDeGanadora?.documento_fuente ?? pendingMathDocumentoFuente,
+        pending_math_interaction_id: siguienteDeGanadora?.id || null,
         nivel_dificultad: nivelDificultadActual,
         aciertos_consecutivos: rachaAprendizaje.correctas,
         fallos_consecutivos: rachaAprendizaje.incorrectas,
