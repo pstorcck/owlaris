@@ -34,12 +34,10 @@ export function isNoAnswerComplaint(value: string) {
 export function isPendingContextQuestion(value: string) {
   const text = normalizeText(value)
   if (!text) return false
+  if (/puedo usar\s+(?:una\s+|la\s+)?calculadora/.test(text) || /usar\s+(?:una\s+|la\s+)?calculadora para/.test(text)) return true
   return isNoAnswerComplaint(value) || [
     'sin calculadora',
     'sin usar calculadora',
-    'puedo usar calculadora',
-    'puedo usar la calculadora',
-    'usar calculadora para',
     'puedo lograr',
     'puedo hacerlo',
     'puedo resolverlo',
@@ -99,8 +97,8 @@ export function buildPendingContextResponse(input: PendingContextResponseInput) 
   const operation = formatOperation(input.activeOperation)
   const asksCalculator = question.includes('calculadora') || question.includes('calculator') || question.includes('puedo lograr') || question.includes('puedo hacerlo')
   const asksToUseCalculator = (
-    /puedo usar(?: la)? calculadora/.test(question) ||
-    /usar(?: la)? calculadora para/.test(question) ||
+    /puedo usar(?: la| una)? calculadora/.test(question) ||
+    /usar(?: la| una)? calculadora para/.test(question) ||
     /can i use (?:a )?calculator/.test(question)
   ) && !question.includes('sin usar calculadora') && !question.includes('without')
 
