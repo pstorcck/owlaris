@@ -387,12 +387,26 @@ const ENFOQUES_PRACTICA_VALIDOS: MathPracticeFocus[] = ['equation', 'decimal', '
 // asi que a partir del 3er-4to ejercicio la frase original ("sumas y restas")
 // ya no esta en esa ventana. Si el turno actual no trae una senal clara, se
 // conserva el enfoque que el alumno ya habia pedido antes en la sesion.
+//
+// El primer elemento del arreglo se trata como la peticion ACTUAL del alumno
+// y tiene prioridad exclusiva sobre el resto (operacion pendiente, nombre de
+// la materia, mensaje anterior del tutor): si por si sola revela un enfoque,
+// ese gana. Sin esto, una materia llamada "Algebra I" secuestraba el enfoque
+// a 'equation' para siempre (incluso pidiendo "sumas"), y lo mismo pasaba
+// cuando el ejercicio pendiente era una ecuacion como "x+5=12" — el texto
+// literal de esa operacion tambien activaba la deteccion de 'equation',
+// sin importar lo que el alumno acabara de pedir en este turno.
 export function resolveMathPracticeFocus(
   textosActuales: Array<string | null | undefined>,
   enfoquePersistido: unknown
 ): MathPracticeFocus {
-  const inferido = inferMathPracticeFocus(textosActuales)
-  if (inferido !== 'general') return inferido
+  const [actual, ...contexto] = textosActuales
+  const inferidoActual = inferMathPracticeFocus([actual])
+  if (inferidoActual !== 'general') return inferidoActual
+
+  const inferidoContexto = inferMathPracticeFocus(contexto)
+  if (inferidoContexto !== 'general') return inferidoContexto
+
   if (ENFOQUES_PRACTICA_VALIDOS.includes(enfoquePersistido as MathPracticeFocus)) {
     return enfoquePersistido as MathPracticeFocus
   }

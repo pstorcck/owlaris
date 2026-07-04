@@ -161,6 +161,10 @@ function normalizeSubjectForMathProtocol(subject: string): string {
 
 export function isLikelyNumericSubject(subject: string): boolean {
   const s = normalizeSubjectForMathProtocol(subject)
+  // "Educacion Fisica" / "Physical Education" (deportes) contiene "fisica"/
+  // "physical" pero NO es una materia numerica — el protocolo matematico
+  // determinístico no debe activarse ahi. Se excluye antes de la deteccion.
+  if (/educacion fisica|physical education/.test(s)) return false
   return /\b(mathematics?|math|algebra|geometry|geometria|aritmetica|estadistica|statistics|physics?|fisica|chemistry|quimica|biology|biologia|natural sciences?|ciencias naturales|olimpiadas?)\b/.test(s) ||
     s.includes('matematica') ||
     s.includes('mineduc - matematica')

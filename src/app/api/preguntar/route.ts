@@ -1486,10 +1486,13 @@ export async function POST(req: NextRequest) {
         operacionesEvaluadas,
         [evaluacionProtocolo.op || '']
       )
+      // El nombre de la materia (ej. "Algebra I") NO debe entrar aqui: si la
+      // clase se llama asi, "algebra" secuestraba el enfoque a "equation"
+      // para siempre, incluso cuando el alumno pedia explicitamente "sumas".
+      // El nombre de la materia es una etiqueta fija, no una señal de que
+      // operacion quiere practicar el alumno en este turno.
       const enfoquePractica = resolveMathPracticeFocus([
         pregunta,
-        materia_id,
-        materia?.nombre,
         pendingMathOperation,
         pendingMathPrompt,
         ultimoMensajeAsistente(historial),
@@ -1819,11 +1822,11 @@ ${contextoContenido}`
         const operacionesEvaluadas = await cargarOperacionesEvaluadas(supabase, user.id, materia_uuid)
         const operacionesBloqueadas = combinarOperacionesBloqueadas(operacionesHistorial, operacionesEvaluadas)
         if (isRepeatedMathOperation(opValidaEnRespuesta, operacionesBloqueadas)) {
+          // Ver nota arriba: el nombre de la materia no debe influir en el
+          // enfoque de práctica detectado en este turno.
           const enfoquePractica = resolveMathPracticeFocus([
             pregunta,
             respuesta,
-            materia_id,
-            materia?.nombre,
             ultimoMensajeAsistente(historial),
             opValidaEnRespuesta,
           ], practicaEnfoquePersistido)
