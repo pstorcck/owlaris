@@ -1246,6 +1246,8 @@ export async function POST(req: NextRequest) {
     // siguiente ejercicio, la otra no debe duplicarlo.
     let respuestaDuplicadaPorConcurrencia = false
 
+    console.log('DIAG pendingMathId inicial:', pendingMathId, '| materia_uuid:', materia_uuid, '| grado:', gradoEfectivo, '| pregunta:', pregunta)
+
     if (!pendingMathId && (isLikelyMathAnswerText(pregunta) || isPendingContextQuestion(pregunta) || isWorkedExampleRequest(pregunta))) {
       try {
         let pendingQuery = supabase
@@ -1261,6 +1263,7 @@ export async function POST(req: NextRequest) {
         if (gradoEfectivo) pendingQuery = pendingQuery.eq('grado', gradoEfectivo)
         const { data: latestPendingMath } = await pendingQuery.maybeSingle()
         if (latestPendingMath?.id) pendingMathId = latestPendingMath.id
+        console.log('DIAG recovery pendingMathId:', pendingMathId)
       } catch (error) {
         console.error('No se pudo recuperar OP pendiente reciente:', error)
       }
@@ -1433,6 +1436,7 @@ export async function POST(req: NextRequest) {
     if (!evaluacionProtocolo && normalizeStudentAnswer(pregunta) !== null) {
       const ultimaPregunta = ultimoMensajeAsistente(historial)
       const opInferida = inferCanonicalOperationFromText(ultimaPregunta)
+      console.log('DIAG fallback-B ultimaPregunta:', JSON.stringify(ultimaPregunta), '| opInferida:', opInferida)
       if (opInferida && isSafeCanonicalOperation(opInferida) && solveOperation(opInferida) !== null) {
         evaluacionProtocolo = await handleMathEvaluation(
           ultimaPregunta + '\n[OP: ' + opInferida + ']',
@@ -1442,6 +1446,8 @@ export async function POST(req: NextRequest) {
         )
       }
     }
+
+    console.log('DIAG evaluacionProtocolo final:', JSON.stringify({ estado: evaluacionProtocolo?.estado, op: evaluacionProtocolo?.op, pendingMathId, historialLen: Array.isArray(historial) ? historial.length : -1 }))
 
     // Si el protocolo evaluó y tiene resultado definitivo, responder directo
     if (respuestaDuplicadaPorConcurrencia) {
