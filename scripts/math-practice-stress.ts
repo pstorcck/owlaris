@@ -220,13 +220,38 @@ async function main() {
     })
   }
 
-  const multDivPhrases = [
-    'quiero practicar multiplicacion y division', 'vamos con multiplicacion', 'practiquemos division',
-    'quiero multiplicar y dividir', 'el producto de dos numeros', 'multiplication and division please',
+  // Igual que suma/resta: pedir solo "multiplicaciones" (o solo "divisiones")
+  // no debe mezclarse con la otra operación de la misma familia. También se
+  // cubren las formas en plural, que antes caían silenciosamente en 'general'.
+  const multSoloPhrases = [
+    'quiero practicar multiplicaciones', 'vamos con multiplicacion', 'multiplicaciones por favor',
+    'quiero multiplicar', 'el producto de dos numeros', 'multiplication please',
   ]
-  for (let i = 0; i < 30; i += 1) {
-    test(`focus-detects-mult-div-${i}`, () => {
-      const focus = inferMathPracticeFocus([multDivPhrases[i % multDivPhrases.length]])
+  for (let i = 0; i < 20; i += 1) {
+    test(`focus-detects-mult-solo-${i}`, () => {
+      const focus = inferMathPracticeFocus([multSoloPhrases[i % multSoloPhrases.length]])
+      assert.equal(focus, 'multiplicacion')
+    })
+  }
+
+  const divSoloPhrases = [
+    'quiero practicar divisiones', 'vamos con division', 'divisiones por favor',
+    'quiero dividir', 'el cociente de dos numeros', 'division please',
+  ]
+  for (let i = 0; i < 20; i += 1) {
+    test(`focus-detects-div-solo-${i}`, () => {
+      const focus = inferMathPracticeFocus([divSoloPhrases[i % divSoloPhrases.length]])
+      assert.equal(focus, 'division')
+    })
+  }
+
+  const multYDivPhrases = [
+    'quiero practicar multiplicacion y division', 'vamos con multiplicacion y division', 'multiplicacion y division por favor',
+    'quiero multiplicar y dividir', 'practica de multiplicacion y division', 'multiplication and division please',
+  ]
+  for (let i = 0; i < 20; i += 1) {
+    test(`focus-detects-mult-y-div-${i}`, () => {
+      const focus = inferMathPracticeFocus([multYDivPhrases[i % multYDivPhrases.length]])
       assert.equal(focus, 'multiplicacion_division')
     })
   }
@@ -263,6 +288,22 @@ async function main() {
     })
   }
 
+  for (let i = 0; i < 30; i += 1) {
+    const level = (i % 8) + 1
+    test(`mult-pool-is-pure-${i}`, () => {
+      const next = buildNextMathExercise([], level, false, 'multiplicacion')
+      assert.doesNotMatch(next.op, /[+\-/]/, `not pure multiplication: ${next.op}`)
+    })
+  }
+
+  for (let i = 0; i < 30; i += 1) {
+    const level = (i % 8) + 1
+    test(`div-pool-is-pure-${i}`, () => {
+      const next = buildNextMathExercise([], level, false, 'division')
+      assert.doesNotMatch(next.op, /[+\-*]/, `not pure division: ${next.op}`)
+    })
+  }
+
   // ── Bug reportado en produccion: el alumno pide "sumas y restas" una vez,
   // y varios ejercicios despues el sistema le da division/multiplicacion
   // porque la ventana de historial (6 mensajes) ya no incluye esa frase. ──
@@ -295,6 +336,21 @@ async function main() {
     sumaSoloSessionOps.push(next.op)
   }
 
+  // Mismo hallazgo, pero para "multiplicaciones" (plural) — antes esta forma
+  // ni siquiera se reconocia (caia en 'general'), y aunque se reconociera,
+  // se mezclaba con divisiones por el mismo bug de enfoque combinado.
+  const multSoloSessionOps: string[] = []
+  let enfoqueMultSolo = resolveMathPracticeFocus(['multiplicaciones'], null)
+  for (let i = 0; i < 20; i += 1) {
+    enfoqueMultSolo = resolveMathPracticeFocus([String(i), 'Matematica'], enfoqueMultSolo)
+    const next = buildNextMathExercise(multSoloSessionOps, 1, false, enfoqueMultSolo)
+    test(`mult-solo-no-se-mezcla-con-division-${i}`, () => {
+      assert.equal(enfoqueMultSolo, 'multiplicacion', `enfoque se perdio en el turno ${i}`)
+      assert.doesNotMatch(next.op, /[+\-/]/, `se coló una division u otra operacion en el turno ${i}: ${next.op}`)
+    })
+    multSoloSessionOps.push(next.op)
+  }
+
   // Sin la funcion de persistencia, el mismo escenario SI pierde el enfoque
   // (confirma que el hallazgo era real y que resolveMathPracticeFocus lo cierra).
   test('without-persistence-focus-is-lost', () => {
@@ -302,7 +358,7 @@ async function main() {
     assert.equal(focusSinPersistencia, 'general')
   })
 
-  assert.equal(total, 1000 + 20 + 20 + 20 + 30 + 60 + 30 + 30 + 60 + 25 + 20 + 1)
+  assert.equal(total, 1000 + 20 + 20 + 20 + 20 + 20 + 20 + 60 + 30 + 30 + 60 + 30 + 30 + 25 + 20 + 20 + 1)
 
   if (failures.length > 0) {
     console.error(`math practice stress failed: ${failures.length}/${total}`)

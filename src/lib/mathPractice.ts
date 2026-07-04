@@ -9,7 +9,7 @@ export type MathPracticeExercise = {
   op: string
 }
 
-export type MathPracticeFocus = 'general' | 'equation' | 'decimal' | 'suma_resta' | 'multiplicacion_division' | 'suma' | 'resta'
+export type MathPracticeFocus = 'general' | 'equation' | 'decimal' | 'suma_resta' | 'multiplicacion_division' | 'suma' | 'resta' | 'multiplicacion' | 'division'
 
 export type DifficultyAdaptationType = 'sube' | 'baja' | 'refuerza' | 'mantiene'
 
@@ -183,6 +183,19 @@ function generateMultDiv(level: number): string {
   return `${b * k}/${b}`
 }
 
+// Igual que suma/resta: pedir solo "multiplicaciones" (o solo "divisiones")
+// no debe mezclarse con la otra operación de la misma familia.
+function generateMultiplicacion(level: number): string {
+  const maxFactor = Math.min(50, 12 + level * 6)
+  return `${randInt(2, maxFactor)}*${randInt(2, maxFactor)}`
+}
+
+function generateDivision(level: number): string {
+  const maxFactor = Math.min(50, 12 + level * 6)
+  const b = randInt(2, maxFactor); const k = randInt(2, maxFactor)
+  return `${b * k}/${b}`
+}
+
 function generateDecimal(): string {
   return LEVEL_GENERATORS[2]()
 }
@@ -194,6 +207,8 @@ function exerciseGeneratorFor(level: number, focus: MathPracticeFocus): () => st
   if (focus === 'suma') return () => generateSuma(safeLevel)
   if (focus === 'resta') return () => generateResta(safeLevel)
   if (focus === 'multiplicacion_division') return () => generateMultDiv(safeLevel)
+  if (focus === 'multiplicacion') return () => generateMultiplicacion(safeLevel)
+  if (focus === 'division') return () => generateDivision(safeLevel)
   if (focus === 'decimal') return generateDecimal
 
   if (focus === 'equation') {
@@ -342,21 +357,28 @@ export function inferMathPracticeFocus(texts: Array<string | null | undefined>):
     return 'decimal'
   }
 
-  // Se distingue "solo sumas" de "solo restas" de "sumas y restas": pedir
-  // únicamente una de las dos no debe mezclarse con la otra en los ejercicios.
+  // Se distingue "solo sumas" de "solo restas" de "sumas y restas" (y lo
+  // mismo para multiplicación/división): pedir únicamente una operación no
+  // debe mezclarse con la otra de la misma familia en los ejercicios.
+  // Nota: las formas en plural ("multiplicaciones", "divisiones") deben
+  // reconocerse igual que el singular — antes "es?" no estaba cubierto y
+  // esas frases caían silenciosamente en el enfoque genérico.
   const pideSuma = /\b(suma|sumas|sumar|adicion|addition|add)\b/.test(normalized)
   const pideResta = /\b(resta|restas|restar|sustraccion|subtraction|subtract)\b/.test(normalized)
-  const pideMultDiv = /\b(multiplicaci[oa]n|multiplicar|division|dividir|producto|cociente|multiplication|divide|divid[ei]ng)\b/.test(normalized)
+  const pideMult = /\b(multiplicaci[oa]n(es)?|multiplicar|producto|multiplication|multiply|multiplying)\b/.test(normalized)
+  const pideDiv = /\b(division(es)?|dividir|cociente|divide|divid[ei]ng)\b/.test(normalized)
 
   if (pideSuma && pideResta) return 'suma_resta'
-  if (pideSuma && !pideMultDiv) return 'suma'
-  if (pideResta && !pideMultDiv) return 'resta'
-  if (pideMultDiv && !pideSuma && !pideResta) return 'multiplicacion_division'
+  if (pideSuma && !pideMult && !pideDiv) return 'suma'
+  if (pideResta && !pideMult && !pideDiv) return 'resta'
+  if (pideMult && pideDiv) return 'multiplicacion_division'
+  if (pideMult && !pideSuma && !pideResta) return 'multiplicacion'
+  if (pideDiv && !pideSuma && !pideResta) return 'division'
 
   return 'general'
 }
 
-const ENFOQUES_PRACTICA_VALIDOS: MathPracticeFocus[] = ['equation', 'decimal', 'suma_resta', 'multiplicacion_division', 'suma', 'resta']
+const ENFOQUES_PRACTICA_VALIDOS: MathPracticeFocus[] = ['equation', 'decimal', 'suma_resta', 'multiplicacion_division', 'suma', 'resta', 'multiplicacion', 'division']
 
 // El historial que llega al backend es una ventana corta (ultimos 6 mensajes),
 // asi que a partir del 3er-4to ejercicio la frase original ("sumas y restas")
