@@ -346,14 +346,17 @@ export function inferMathPracticeFocus(texts: Array<string | null | undefined>):
     .replace(/[\u0300-\u036f]/g, '')
 
   if (
-    /\b(ecuacion|ecuaciones|equation|equations|algebra|despej|variable|variables)\b/.test(normalized) ||
+    /\b(ecuacion|ecuaciones|equation|equations|algebra|variable|variables)\b/.test(normalized) ||
+    // "despej" es la raiz de despejar/despejando/despeje/despejamos, etc. —
+    // sin limite de palabra al final para cubrir cualquier conjugacion.
+    /\bdespej\w*/.test(normalized) ||
     /[0-9)]\s*\*?\s*x\s*[+\-*/=]/i.test(normalized) ||
     /x\s*[+\-*/=]/i.test(normalized)
   ) {
     return 'equation'
   }
 
-  if (/\b(decimal|decimales|porcentaje|porcentajes|percent|fraction|fraccion|fracciones)\b/.test(normalized)) {
+  if (/\b(decimal|decimales|porcentaje|porcentajes|percent(age)?s?|fraccion(es)?|fraction(s)?)\b/.test(normalized)) {
     return 'decimal'
   }
 

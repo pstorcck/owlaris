@@ -256,6 +256,30 @@ async function main() {
     })
   }
 
+  // ── Auditoría proactiva del mismo patrón de bug (formas no cubiertas por
+  // la expresión regular) en las categorías "equation" y "decimal". ──
+  const equationConjugationPhrases = [
+    'quiero despejar la variable', 'ayudame despejando x', 'cual es el despeje aqui',
+    'necesito despejamos juntos', 'como despejo esta ecuacion', 'practiquemos despejes',
+  ]
+  for (let i = 0; i < 18; i += 1) {
+    test(`focus-detects-despejar-conjugations-${i}`, () => {
+      const focus = inferMathPracticeFocus([equationConjugationPhrases[i % equationConjugationPhrases.length]])
+      assert.equal(focus, 'equation')
+    })
+  }
+
+  const decimalEnglishPluralPhrases = [
+    'quiero practicar percentages', 'lets work on percentage problems', 'quiero fractions',
+    'practice with fractions please', 'help me with percentage', 'quiero practicar fractions y percentages',
+  ]
+  for (let i = 0; i < 18; i += 1) {
+    test(`focus-detects-decimal-english-plurals-${i}`, () => {
+      const focus = inferMathPracticeFocus([decimalEnglishPluralPhrases[i % decimalEnglishPluralPhrases.length]])
+      assert.equal(focus, 'decimal')
+    })
+  }
+
   for (let i = 0; i < 60; i += 1) {
     const level = (i % 8) + 1
     test(`suma-resta-pool-is-pure-${i}`, () => {
@@ -358,7 +382,7 @@ async function main() {
     assert.equal(focusSinPersistencia, 'general')
   })
 
-  assert.equal(total, 1000 + 20 + 20 + 20 + 20 + 20 + 20 + 60 + 30 + 30 + 60 + 30 + 30 + 25 + 20 + 20 + 1)
+  assert.equal(total, 1000 + 20 + 20 + 20 + 20 + 20 + 20 + 18 + 18 + 60 + 30 + 30 + 60 + 30 + 30 + 25 + 20 + 20 + 1)
 
   if (failures.length > 0) {
     console.error(`math practice stress failed: ${failures.length}/${total}`)
