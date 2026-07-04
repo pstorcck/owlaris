@@ -40,6 +40,7 @@ import {
   buildNextMathExercise,
   calculateAdaptiveDifficulty,
   collectRecentMathOperations,
+  describeMathTopic,
   isRepeatedMathOperation,
   isWorkedExampleRequest,
   resolveMathPracticeFocus,
@@ -1500,7 +1501,7 @@ export async function POST(req: NextRequest) {
           : reforzarDiagnosticoPorFallos(evaluacionProtocolo.feedback, idiomaIngles, fallosConsecutivos)
       const { data: evaluacionInsertada } = await supabase.from('interacciones').insert({
         usuario_id: user.id, colegio_id: perfil.colegio_id, materia_id: materia_uuid,
-        grado: gradoEfectivo, tema_detectado: pregunta.substring(0, 100),
+        grado: gradoEfectivo, tema_detectado: describeMathTopic(evaluacionProtocolo.op, idiomaIngles),
         pregunta, respuesta, tokens_usados: 0, costo_usd: 0,
         modelo_usado: 'calculadora', documento_fuente: fuentePractica.archivo, sospecha_copia: false,
         operacion_canonica: siguienteEjercicio?.op || evaluacionProtocolo?.op || null,

@@ -51,6 +51,19 @@ export function isRepeatedMathOperation(op: string | null | undefined, recentOps
   return recentOps.some((recent) => normalizePracticeOperation(recent) === key)
 }
 
+// Nombre de tema legible para reportes/registros, a partir de la operación
+// canónica evaluada — NUNCA a partir de la respuesta libre del alumno (un
+// número o "perdon 46" no es un tema).
+export function describeMathTopic(op: string | null | undefined, idiomaIngles = false): string {
+  const clean = String(op || '')
+  if (/x/i.test(clean) && clean.includes('=')) return idiomaIngles ? 'Equations' : 'Ecuaciones'
+  if (/\d+\.\d+|%/.test(clean)) return idiomaIngles ? 'Decimals and percentages' : 'Decimales y porcentajes'
+  if (/[+\-]/.test(clean) && /[*/]/.test(clean)) return idiomaIngles ? 'Order of operations' : 'Orden de operaciones'
+  if (/[+-]/.test(clean)) return idiomaIngles ? 'Addition and subtraction' : 'Suma y resta'
+  if (/[*/]/.test(clean)) return idiomaIngles ? 'Multiplication and division' : 'Multiplicación y división'
+  return idiomaIngles ? 'Math practice' : 'Práctica de matemática'
+}
+
 function randInt(min: number, max: number) {
   return min + Math.floor(Math.random() * (max - min + 1))
 }
