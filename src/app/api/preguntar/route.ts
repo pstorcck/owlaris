@@ -1343,13 +1343,14 @@ export async function POST(req: NextRequest) {
             // peticiones llegan casi al mismo tiempo, solo la primera consigue
             // filasActualizadas.length > 0 y solo esa debe generar el siguiente
             // ejercicio. La segunda detecta que perdio la carrera.
-            const { data: filasActualizadas } = await supabase.from('interacciones')
+            const { data: filasActualizadas, error: errorCas } = await supabase.from('interacciones')
               .update({ op_estado: 'evaluada', op_evaluada_en: new Date().toISOString(), op_respuesta_alumno: pregunta })
               .eq('id', pendingMathId).eq('usuario_id', user.id).eq('op_estado', 'pendiente')
               .select('id')
             if (!filasActualizadas || filasActualizadas.length === 0) {
               respuestaDuplicadaPorConcurrencia = true
             }
+            console.log('DIAG CAS update:', JSON.stringify({ pendingMathId, filas: filasActualizadas?.length ?? 0, error: errorCas?.message ?? null, respuestaDuplicadaPorConcurrencia }))
           }
           // Si incorrecto: mantener pendiente — no actualizar, el frontend conserva el mismo ID
         } else {
