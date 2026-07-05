@@ -87,6 +87,18 @@ function main() {
   const todasFiltradas = filtrarRecomendaciones(['Ver este video externo'], ['Usar la opción Revisemos mis errores'])
   assert.deepEqual(todasFiltradas, ['Usar la opción Revisemos mis errores'])
 
+  // Bug real encontrado con un escaneo de las palabras clave curriculares:
+  // "enlace" (Química: enlace químico/covalente/iónico) y "artículo"
+  // (Español: el artículo determinado/indeterminado) son temas reales que
+  // NO deben confundirse con "enlace"/"artículo" como recurso externo.
+  assert.equal(esRecomendacionConRecursoExterno('Revisar el tipo de enlace químico que se formó'), false)
+  assert.equal(esRecomendacionConRecursoExterno('Practicar enlace covalente y enlace iónico'), false)
+  assert.equal(esRecomendacionConRecursoExterno('Repasar el uso del artículo determinado e indeterminado'), false)
+  // Pero un enlace o artículo EXTERNO de verdad sí debe seguir detectándose.
+  assert.equal(esRecomendacionConRecursoExterno('Compartir este enlace externo con el estudiante'), true)
+  assert.equal(esRecomendacionConRecursoExterno('Leer un articulo externo sobre el tema'), true)
+  assert.equal(esRecomendacionConRecursoExterno('Check this link for more information'), true)
+
   console.log('reporte-actividad smoke passed')
 }
 

@@ -3,6 +3,7 @@ import {
   detectarMateriaDesdeTexto,
   materiaActualEnSistemaCNB,
   normalizarMateria,
+  TEMAS_POR_MATERIA,
 } from '../src/lib/materiaDetection'
 
 function main() {
@@ -45,6 +46,23 @@ function main() {
   assert.equal(materiaActualEnSistemaCNB('Historia'), true)
   assert.equal(detectarMateriaDesdeTexto('quiero entender la revolución francesa'), 'Historia')
   assert.notEqual(detectarMateriaDesdeTexto('quiero entender la fotosíntesis'), normalizarMateria('Historia'))
+
+  // Escaneo exhaustivo: cada palabra clave de cada materia debe clasificarse
+  // en SU PROPIA materia, no en otra por colisión de substring — este mismo
+  // escaneo encontró el bug real de "revolución" (Historia) confundida con
+  // "evolución" (Biología) por un match de substring sin límite de palabra.
+  // "ecosistema" es la única excepción conocida y aceptada: aparece tal
+  // cual en Biología Y en Ciencias Naturales (tema legítimamente
+  // compartido, no un error de substring), así que gana la primera materia
+  // en orden de declaración.
+  const EXCEPCIONES_CONOCIDAS = new Set(['ecosistema'])
+  for (const [materiaEsperada, temas] of Object.entries(TEMAS_POR_MATERIA)) {
+    for (const tema of temas) {
+      if (EXCEPCIONES_CONOCIDAS.has(tema)) continue
+      const detectada = detectarMateriaDesdeTexto(`quiero entender ${tema}`)
+      assert.equal(detectada, materiaEsperada, `"${tema}" debería detectarse como ${materiaEsperada}, no ${detectada}`)
+    }
+  }
 
   console.log('materia-detection smoke passed')
 }

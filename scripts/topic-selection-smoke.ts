@@ -34,6 +34,15 @@ function main() {
   assert.equal(matchNumberedListSelection('quiero el segundo', listaBiologia), null)
   assert.equal(matchNumberedListSelection('genética por favor', listaBiologia), null)
 
+  // Bug real encontrado con datos realistas: si el tutor numera preguntas o
+  // instrucciones de ejercicio (no temas reales), un número suelto del
+  // alumno NO debe interpretarse como selección de "tema" — sigue siendo
+  // (o debería seguir siendo) una respuesta de ejercicio en otro lugar.
+  const preguntasNumeradas = '1. ¿Cuánto es 5 + 3?\n2. ¿Cuánto es 8 - 2?'
+  assert.equal(matchNumberedListSelection('2', preguntasNumeradas), null)
+  const instruccionesNumeradas = '1) Explica la Revolución Francesa\n2) Explica la Revolución Industrial'
+  assert.equal(matchNumberedListSelection('1', instruccionesNumeradas), null)
+
   console.log('topic-selection smoke passed')
 }
 

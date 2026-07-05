@@ -30,14 +30,22 @@ function convertMarkdownTables(text: string): string {
   return result.join('\n')
 }
 
+// Quita las marcas ``` de un bloque de código, dejando el contenido como
+// texto plano — la interfaz del alumno no lo renderiza como bloque, así que
+// mostrar los backticks crudos se ve tan roto como un encabezado sin procesar.
+function stripCodeFences(text: string): string {
+  return text.replace(/```[a-zA-Z0-9_-]*\n([\s\S]*?)```/g, (_match, contenido) => contenido.trim())
+}
+
 // La interfaz del alumno no renderiza markdown técnico (encabezados con #,
-// negritas con **, tablas con pipes). El prompt ya le pide al modelo que no
-// lo use, pero esta limpieza es la red de seguridad determinística cuando el
-// modelo lo genera de todas formas.
+// negritas con **, tablas con pipes, bloques de código). El prompt ya le
+// pide al modelo que no lo use, pero esta limpieza es la red de seguridad
+// determinística cuando el modelo lo genera de todas formas.
 export function sanitizeChatFormatting(text: string): string {
   if (!text) return text
 
   let out = text
+  out = stripCodeFences(out)
   out = out.replace(/^\s{0,3}#{1,6}\s+(.+?)\s*#*\s*$/gm, '$1')
   out = out.replace(/\*\*(.+?)\*\*/g, '$1')
   out = convertMarkdownTables(out)

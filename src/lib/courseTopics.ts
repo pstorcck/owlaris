@@ -22,6 +22,13 @@ function isProbablyTopic(value: string) {
   const normalized = normalizeText(cleaned)
   if (/^(objetivo|competencia|indicador|evaluacion|actividad|material|recurso|descripcion|introduccion|instruccion|nota|fuente|pagina|resumen|aprendizaje esperado)/.test(normalized)) return false
   if (/^(objective|assessment|activity|material|resource|description|introduction|instruction|note|source|page|summary)/.test(normalized)) return false
+  // Un tema real es un nombre de concepto/habilidad, no una pregunta ni una
+  // instrucción de ejercicio — sin esto, una lista numerada de preguntas o
+  // instrucciones de práctica ("1. ¿Cuánto es...? 2. Explica...") se leía
+  // como si fuera un menú de temas seleccionable por número.
+  if (/[?¿]/.test(cleaned)) return false
+  if (/^(explica|resuelve|calcula|responde|describe|analiza|identifica|menciona|define|desarrolla|justifica)\b/.test(normalized)) return false
+  if (/^(explain|solve|calculate|answer|describe|analyze|identify|define|discuss|justify)\b/.test(normalized)) return false
   return /[a-zA-ZáéíóúÁÉÍÓÚñÑ]/.test(cleaned)
 }
 

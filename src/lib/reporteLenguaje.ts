@@ -38,9 +38,26 @@ export function stripUngroundedEmotionalClaims(text: string, idiomaIngles = fals
   return { text: cleaned || fallback, guardActivado: true }
 }
 
-const NEEDLES_RECURSOS_EXTERNOS = [
-  'youtube', 'youtu.be', 'video', 'articulo', 'article', 'lectura recomendada', 'recommended reading',
-  'enlace', 'link', 'pagina web', 'website', 'khan academy',
+// Palabras sin ambigüedad: nunca aparecen como contenido curricular legítimo.
+const NEEDLES_RECURSOS_EXTERNOS_SIMPLES = [
+  'youtube', 'youtu.be', 'video', 'khan academy', 'pagina web', 'website',
+  'lectura recomendada', 'recommended reading',
+]
+
+// "enlace" y "articulo/article" son ambiguos: "enlace" es un tema real de
+// Química (enlace químico/covalente/iónico) y "artículo" es un tema real de
+// Español/Inglés (el artículo determinado/indeterminado como parte de la
+// gramática) — un escaneo de las palabras clave curriculares reales
+// encontró esta colisión exacta. Requieren contexto explícito de recurso
+// externo, no basta con que la palabra aparezca.
+const PATRONES_RECURSOS_EXTERNOS_AMBIGUOS = [
+  /enlace\s+(?:externo|web|de\s+internet)/i,
+  /(?:compartir|visita|aqu[ií]\s+est[aá])\s+(?:un\s+|este\s+)?enlace\b/i,
+  /\blink\b/i,
+  /articulo\s+(?:externo|de\s+internet)/i,
+  /\b(?:leer|revisar|ver)\s+(?:un\s+|este\s+)?articulo\s+sobre\b/i,
+  /\ban?\s+article\s+about\b/i,
+  /\ba\s+reading\s+about\b/i,
 ]
 
 const COMBINING_MARKS = new RegExp('[\\u0300-\\u036f]', 'g')
@@ -51,7 +68,8 @@ function normalize(value: string) {
 
 export function esRecomendacionConRecursoExterno(texto: string): boolean {
   const t = normalize(texto)
-  return NEEDLES_RECURSOS_EXTERNOS.some((needle) => t.includes(normalize(needle)))
+  if (NEEDLES_RECURSOS_EXTERNOS_SIMPLES.some((needle) => t.includes(normalize(needle)))) return true
+  return PATRONES_RECURSOS_EXTERNOS_AMBIGUOS.some((pattern) => pattern.test(t))
 }
 
 // Filtra cualquier recomendación que sugiera un recurso externo no aprobado;
