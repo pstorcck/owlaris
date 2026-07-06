@@ -149,6 +149,7 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
   const [modoConversacion, setModoConversacion] = useState(false)
   const [grabando, setGrabando]               = useState(false)
   const [reproduciendo, setReproduciendo]     = useState(false)
+  const [pausado, setPausado]                 = useState(false)
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const audioChunksRef   = useRef<Blob[]>([])
   const audioRef         = useRef<HTMLAudioElement | null>(null)
@@ -160,6 +161,31 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
   const [transcripcionVoz, setTranscripcionVoz] = useState('')
   const [vozNavegadorActiva, setVozNavegadorActiva] = useState(false)
   const [audioPendiente, setAudioPendiente] = useState('')
+  // Refs espejo de estado para leer el valor vigente dentro de callbacks
+  // async/temporizadores (onended de <audio>, setInterval del VAD) sin
+  // depender de closures de useState que pueden quedar obsoletas.
+  const pausadoRef          = useRef(false)
+  const modoConversacionRef = useRef(false)
+  const reproduciendoRef    = useRef(false)
+  const grabandoRef         = useRef(false)
+  useEffect(() => { pausadoRef.current = pausado }, [pausado])
+  useEffect(() => { modoConversacionRef.current = modoConversacion }, [modoConversacion])
+  useEffect(() => { reproduciendoRef.current = reproduciendo }, [reproduciendo])
+  useEffect(() => { grabandoRef.current = grabando }, [grabando])
+  // Detección de silencio (VAD) para conversación continua: analiza el
+  // volumen del micrófono mientras se graba y corta sola cuando el
+  // alumno deja de hablar, sin que tenga que presionar un botón.
+  const vadAudioCtxRef   = useRef<AudioContext | null>(null)
+  const vadIntervalRef   = useRef<ReturnType<typeof setInterval> | null>(null)
+  const vadMaxTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const vadHasSpokenRef  = useRef(false)
+  const vadSilenceStartRef = useRef<number | null>(null)
+  const autoEscuchaTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // Cuando se pausa o se termina la conversación mientras se está
+  // grabando, la grabación se corta pero NO debe transcribirse ni
+  // enviarse — este flag le avisa al onstop del MediaRecorder que la
+  // descarte en silencio.
+  const grabacionCanceladaRef = useRef(false)
 
   // Estado onboarding
   const gradoGuardado = usuario.grado || ''
@@ -180,6 +206,20 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
   const iniciales = usuario.nombre_completo.split(' ').map((n:string) => n[0]).join('').substring(0,2).toUpperCase()
 
   useEffect(() => { finalRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [mensajes, cargando])
+
+  // Al desmontar (el alumno navega fuera del chat), corta cualquier
+  // grabación/temporizador de voz activo para no dejar el micrófono
+  // abierto ni el ciclo de reescucha automática corriendo en segundo plano.
+  useEffect(() => {
+    return () => {
+      if (autoEscuchaTimeoutRef.current) clearTimeout(autoEscuchaTimeoutRef.current)
+      if (vadIntervalRef.current) clearInterval(vadIntervalRef.current)
+      if (vadMaxTimeoutRef.current) clearTimeout(vadMaxTimeoutRef.current)
+      if (vadAudioCtxRef.current) { try { vadAudioCtxRef.current.close() } catch { /* */ } }
+      try { recognitionRef.current?.stop() } catch { /* */ }
+      try { mediaRecorderRef.current?.stop() } catch { /* */ }
+    }
+  }, [])
 
   function reiniciarVentanaReporte() {
     sessionStartedAtRef.current = new Date().toISOString()
@@ -307,8 +347,8 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
         || voices.find(v => /^en/i.test(v.lang))
       if (preferred) utterance.voice = preferred
       utterance.onstart = () => { setVozNavegadorActiva(true); setReproduciendo(true); setAudioPendiente('') }
-      utterance.onend = () => { setVozNavegadorActiva(false); setReproduciendo(false) }
-      utterance.onerror = () => { setVozNavegadorActiva(false); setReproduciendo(false); setAudioPendiente(frase) }
+      utterance.onend = () => { setVozNavegadorActiva(false); finalizarReproduccion() }
+      utterance.onerror = () => { setVozNavegadorActiva(false); finalizarReproduccion(); setAudioPendiente(frase) }
       window.speechSynthesis.speak(utterance)
       return true
     } catch {
@@ -366,7 +406,10 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
   function iniciarConversacionIngles() {
     asegurarAudioDesbloqueado()
     reiniciarVentanaReporte()
+    modoConversacionRef.current = true
     setModoConversacion(true)
+    pausadoRef.current = false
+    setPausado(false)
     setIdiomaIngles(true)
     setMateriaAlumno('Inglés')
     setEstadoChat('activo')
@@ -501,6 +544,23 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
     finally { setCargando(false); inputRef.current?.focus() }
   }
 
+  // Conversación continua: cuando el búho termina de hablar, reactiva el
+  // micrófono solo (sin que el alumno tenga que presionar nada), a menos
+  // que la conversación esté pausada o ya se haya salido de ese modo.
+  function programarReanudarEscucha() {
+    if (autoEscuchaTimeoutRef.current) clearTimeout(autoEscuchaTimeoutRef.current)
+    autoEscuchaTimeoutRef.current = setTimeout(() => {
+      if (modoConversacionRef.current && !pausadoRef.current && !grabandoRef.current && !reproduciendoRef.current) {
+        iniciarGrabacion()
+      }
+    }, 450)
+  }
+
+  function finalizarReproduccion() {
+    setReproduciendo(false)
+    programarReanudarEscucha()
+  }
+
   async function reproducirTTS(texto: string, force = false) {
     if (!force && !modoConversacion) return
     const textoVoz = limpiarTextoParaVoz(texto)
@@ -522,18 +582,17 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
       })
       if (!res.ok) {
         const pudoHablar = hablarConVozDelNavegador(textoVoz)
-        if (!pudoHablar) setAudioPendiente(textoVoz)
-        setReproduciendo(false)
+        if (!pudoHablar) { setAudioPendiente(textoVoz); finalizarReproduccion() }
         return
       }
 
       const blob = await res.blob()
-      
+
       // Detectar Safari iOS
       const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent)
-      
+
       let audio: HTMLAudioElement
-      
+
       if (isSafari) {
         // Safari: usar FileReader para convertir a base64
         const base64 = await new Promise<string>((resolve, reject) => {
@@ -546,105 +605,206 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
       } else {
         const url = URL.createObjectURL(blob)
         audio = new Audio(url)
-        audio.onended = () => { setReproduciendo(false); URL.revokeObjectURL(url) }
-        audio.onerror = () => { setReproduciendo(false); URL.revokeObjectURL(url) }
+        audio.onended = () => { finalizarReproduccion(); URL.revokeObjectURL(url) }
+        audio.onerror = () => { finalizarReproduccion(); URL.revokeObjectURL(url) }
       }
-      
+
       audioRef.current = audio
       audio.onplay = () => setReproduciendo(true)
       if (isSafari) {
-        audio.onended = () => setReproduciendo(false)
-        audio.onerror = () => setReproduciendo(false)
+        audio.onended = () => finalizarReproduccion()
+        audio.onerror = () => finalizarReproduccion()
       }
       audio.playbackRate = 1.0
-      
+
       setReproduciendo(true)
       const playPromise = audio.play()
       if (playPromise !== undefined) {
         playPromise.catch(() => {
           // Safari puede rechazar si no hay gesto del usuario reciente
           const pudoHablar = hablarConVozDelNavegador(textoVoz)
-          if (!pudoHablar) setAudioPendiente(textoVoz)
-          setReproduciendo(false)
+          if (!pudoHablar) { setAudioPendiente(textoVoz); finalizarReproduccion() }
         })
       }
     } catch {
       const pudoHablar = hablarConVozDelNavegador(textoVoz)
-      if (!pudoHablar) setAudioPendiente(textoVoz)
-      setReproduciendo(false)
+      if (!pudoHablar) { setAudioPendiente(textoVoz); finalizarReproduccion() }
     }
   }
 
-  async function toggleGrabacion() {
-    if (grabando) {
-      // Detener grabación
-      detenerReconocimientoVoz()
-      mediaRecorderRef.current?.stop()
-      setGrabando(false)
-    } else {
-      // Iniciar grabación — detener audio si está sonando
-      await asegurarAudioDesbloqueado()
-      setReproduciendo(false)
-      setTranscribiendo(false)
-      setTranscripcionVoz('')
-      transcriptRef.current = ''
-      confidenceValuesRef.current = []
-      if (audioRef.current) { try { audioRef.current.pause() } catch { /* */ } }
-      if (typeof window !== 'undefined' && 'speechSynthesis' in window) window.speechSynthesis.cancel()
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-        const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') 
-          ? 'audio/webm;codecs=opus'
-          : MediaRecorder.isTypeSupported('audio/mp4')
-          ? 'audio/mp4'
-          : 'audio/webm'
-        const mr = new MediaRecorder(stream, { mimeType })
-        iniciarReconocimientoVoz()
-        audioChunksRef.current = []
-        mr.ondataavailable = e => audioChunksRef.current.push(e.data)
-        mr.onstop = async () => {
-          stream.getTracks().forEach(t => t.stop())
-          setTranscribiendo(true)
-          await new Promise(resolve => setTimeout(resolve, 180))
-          const textoReconocido = transcriptRef.current.trim()
-          if (textoReconocido) {
-            setTranscripcionVoz(textoReconocido)
-            setTranscribiendo(false)
-            enviarPregunta(textoReconocido, {
+  function limpiarVAD() {
+    if (vadIntervalRef.current) { clearInterval(vadIntervalRef.current); vadIntervalRef.current = null }
+    if (vadMaxTimeoutRef.current) { clearTimeout(vadMaxTimeoutRef.current); vadMaxTimeoutRef.current = null }
+    if (vadAudioCtxRef.current) { try { vadAudioCtxRef.current.close() } catch { /* */ } vadAudioCtxRef.current = null }
+    vadHasSpokenRef.current = false
+    vadSilenceStartRef.current = null
+  }
+
+  // Analiza el volumen del micrófono mientras se graba para detectar
+  // sola cuándo el alumno dejó de hablar (conversación continua sin
+  // botón). Si el navegador no soporta AudioContext, no pasa nada: el
+  // alumno igual puede presionar el botón para cortar manualmente.
+  function iniciarVAD(stream: MediaStream) {
+    if (typeof window === 'undefined') return
+    const win = window as WindowWithSpeechTools
+    const AudioContextCtor = window.AudioContext || win.webkitAudioContext
+    if (!AudioContextCtor) return
+    try {
+      const ctx = new AudioContextCtor()
+      const source = ctx.createMediaStreamSource(stream)
+      const analyser = ctx.createAnalyser()
+      analyser.fftSize = 512
+      source.connect(analyser)
+      const datos = new Uint8Array(analyser.frequencyBinCount)
+      vadAudioCtxRef.current = ctx
+      vadHasSpokenRef.current = false
+      vadSilenceStartRef.current = null
+      const UMBRAL_VOZ = 14
+      const SILENCIO_MS = 1100
+      const DURACION_MAX_MS = 20000
+      vadIntervalRef.current = setInterval(() => {
+        analyser.getByteTimeDomainData(datos)
+        let suma = 0
+        for (let i = 0; i < datos.length; i++) {
+          const v = datos[i] - 128
+          suma += v * v
+        }
+        const rms = Math.sqrt(suma / datos.length)
+        if (rms > UMBRAL_VOZ) {
+          vadHasSpokenRef.current = true
+          vadSilenceStartRef.current = null
+        } else if (vadHasSpokenRef.current) {
+          if (vadSilenceStartRef.current === null) vadSilenceStartRef.current = Date.now()
+          else if (Date.now() - vadSilenceStartRef.current > SILENCIO_MS) detenerGrabacion()
+        }
+      }, 120)
+      vadMaxTimeoutRef.current = setTimeout(() => detenerGrabacion(), DURACION_MAX_MS)
+    } catch { /* sin VAD disponible: queda el corte manual */ }
+  }
+
+  async function iniciarGrabacion() {
+    // Anti-eco: nunca se graba mientras el búho está hablando.
+    if (reproduciendoRef.current || grabandoRef.current || pausadoRef.current) return
+    await asegurarAudioDesbloqueado()
+    setReproduciendo(false)
+    setTranscribiendo(false)
+    setTranscripcionVoz('')
+    transcriptRef.current = ''
+    confidenceValuesRef.current = []
+    if (audioRef.current) { try { audioRef.current.pause() } catch { /* */ } }
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) window.speechSynthesis.cancel()
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      if (reproduciendoRef.current || pausadoRef.current) { stream.getTracks().forEach(t => t.stop()); return }
+      const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+        ? 'audio/webm;codecs=opus'
+        : MediaRecorder.isTypeSupported('audio/mp4')
+        ? 'audio/mp4'
+        : 'audio/webm'
+      const mr = new MediaRecorder(stream, { mimeType })
+      iniciarReconocimientoVoz()
+      iniciarVAD(stream)
+      audioChunksRef.current = []
+      mr.ondataavailable = e => audioChunksRef.current.push(e.data)
+      mr.onstop = async () => {
+        stream.getTracks().forEach(t => t.stop())
+        limpiarVAD()
+        if (grabacionCanceladaRef.current) { grabacionCanceladaRef.current = false; setTranscribiendo(false); return }
+        setTranscribiendo(true)
+        await new Promise(resolve => setTimeout(resolve, 180))
+        const textoReconocido = transcriptRef.current.trim()
+        if (textoReconocido) {
+          setTranscripcionVoz(textoReconocido)
+          setTranscribiendo(false)
+          enviarPregunta(textoReconocido, {
+            forceConversation: true,
+            forceEnglish: true,
+            forceEstado: 'activo',
+            forceMateria: 'Inglés',
+            fromVoice: true,
+            speechConfidence: promedioConfianzaVoz(),
+          })
+          return
+        }
+        const blob = new Blob(audioChunksRef.current, { type: mimeType })
+        const ext = mimeType.includes('mp4') ? 'mp4' : 'webm'
+        const fd   = new FormData()
+        fd.append('audio', blob, `audio.${ext}`)
+        try {
+          const res  = await fetch('/api/transcribir', { method: 'POST', body: fd })
+          const data = await res.json()
+          if (data.texto?.trim()) {
+            setTranscripcionVoz(data.texto.trim())
+            enviarPregunta(data.texto, {
               forceConversation: true,
               forceEnglish: true,
               forceEstado: 'activo',
               forceMateria: 'Inglés',
               fromVoice: true,
-              speechConfidence: promedioConfianzaVoz(),
+              speechConfidence: null,
             })
-            return
+          } else {
+            // Silencio total (nada que transcribir): reanuda la escucha
+            // en vez de dejar la conversación colgada.
+            programarReanudarEscucha()
           }
-          const blob = new Blob(audioChunksRef.current, { type: mimeType })
-          const ext = mimeType.includes('mp4') ? 'mp4' : 'webm'
-          const fd   = new FormData()
-          fd.append('audio', blob, `audio.${ext}`)
-          try {
-            const res  = await fetch('/api/transcribir', { method: 'POST', body: fd })
-            const data = await res.json()
-            if (data.texto?.trim()) {
-              setTranscripcionVoz(data.texto.trim())
-              enviarPregunta(data.texto, {
-                forceConversation: true,
-                forceEnglish: true,
-                forceEstado: 'activo',
-                forceMateria: 'Inglés',
-                fromVoice: true,
-                speechConfidence: null,
-              })
-            }
-          } catch { setError('No se pudo transcribir el audio.') }
-          finally { setTranscribiendo(false) }
-        }
-        mr.start(250)
-        mediaRecorderRef.current = mr
-        setGrabando(true)
-      } catch { setError('No se pudo acceder al micrófono.') }
+        } catch { setError('No se pudo transcribir el audio.') }
+        finally { setTranscribiendo(false) }
+      }
+      mr.start(250)
+      mediaRecorderRef.current = mr
+      setGrabando(true)
+    } catch { setError('No se pudo acceder al micrófono.') }
+  }
+
+  function detenerGrabacion() {
+    if (!grabandoRef.current) return
+    detenerReconocimientoVoz()
+    limpiarVAD()
+    try { mediaRecorderRef.current?.stop() } catch { /* ya estaba detenida */ }
+    setGrabando(false)
+  }
+
+  async function toggleGrabacion() {
+    if (grabando) {
+      detenerGrabacion()
+    } else if (pausado) {
+      // pausadoRef se actualiza aquí también de forma síncrona: el
+      // useEffect que lo espeja corre después del render, y iniciarGrabacion
+      // se llama en el mismo tick, así que si solo dependiera del efecto
+      // se cortaría sola por su propia guarda de "está pausado".
+      pausadoRef.current = false
+      setPausado(false)
+      await iniciarGrabacion()
+    } else {
+      await iniciarGrabacion()
+    }
+  }
+
+  // Pausa/reanuda la conversación continua. Al pausar, si había una
+  // grabación en curso se descarta (no se transcribe ni se envía) y se
+  // detiene cualquier audio del búho; al reanudar, vuelve a escuchar sola.
+  function alternarPausa() {
+    if (pausado) {
+      pausadoRef.current = false
+      setPausado(false)
+      if (!reproduciendoRef.current && !grabandoRef.current && !cargando && !transcribiendo) {
+        iniciarGrabacion()
+      }
+    } else {
+      pausadoRef.current = true
+      setPausado(true)
+      if (autoEscuchaTimeoutRef.current) { clearTimeout(autoEscuchaTimeoutRef.current); autoEscuchaTimeoutRef.current = null }
+      if (grabandoRef.current) {
+        grabacionCanceladaRef.current = true
+        detenerReconocimientoVoz()
+        limpiarVAD()
+        try { mediaRecorderRef.current?.stop() } catch { /* ya estaba detenida */ }
+        setGrabando(false)
+      }
+      if (audioRef.current) { try { audioRef.current.pause() } catch { /* */ } }
+      if (typeof window !== 'undefined' && 'speechSynthesis' in window) window.speechSynthesis.cancel()
+      setReproduciendo(false)
     }
   }
 
@@ -1213,8 +1373,12 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
               <button onClick={()=>{
                 setIdiomaIngles(!idiomaIngles)
                 if(modoConversacion) {
+                  modoConversacionRef.current = false
                   setModoConversacion(false)
+                  if (autoEscuchaTimeoutRef.current) { clearTimeout(autoEscuchaTimeoutRef.current); autoEscuchaTimeoutRef.current = null }
                   detenerReconocimientoVoz()
+                  limpiarVAD()
+                  if (grabando) { grabacionCanceladaRef.current = true; try { mediaRecorderRef.current?.stop() } catch { /* ya estaba detenida */ } setGrabando(false) }
                   if (audioRef.current) { try { audioRef.current.pause() } catch { /* */ } }
                   if (typeof window !== 'undefined' && 'speechSynthesis' in window) window.speechSynthesis.cancel()
                 }
@@ -1435,39 +1599,52 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
               <div style={{background:'rgba(255,255,255,.82)',border:'1px solid rgba(109,40,217,.1)',borderRadius:'14px',padding:'8px 14px',boxShadow:'0 4px 18px rgba(109,40,217,.08)',fontSize:'12px',fontWeight:800,color:'#1E1B4B',letterSpacing:'.2px'}}>
                 English Speaking
               </div>
-              <button onClick={()=>{
-                setModoConversacion(false)
-                setEstadoChat('esperando_materia')
-                setSugerencias([])
-                setAudioPendiente('')
-                detenerReconocimientoVoz()
-                if (typeof window !== 'undefined' && 'speechSynthesis' in window) window.speechSynthesis.cancel()
-                if (audioRef.current) { try { audioRef.current.pause() } catch { /* */ } }
-                if(grabando){mediaRecorderRef.current?.stop();setGrabando(false)}
-              }}
-                style={{background:'rgba(220,38,38,.08)',border:'1px solid rgba(220,38,38,.2)',borderRadius:'12px',padding:'8px 16px',fontSize:'12px',fontWeight:600,color:'#DC2626',cursor:'pointer',display:'flex',alignItems:'center',gap:'6px'}}>
-                <span>✕</span><span>End</span>
-              </button>
+              <div style={{display:'flex',alignItems:'center',gap:'8px'}}>
+                <button onClick={alternarPausa}
+                  style={{background:pausado?'rgba(16,185,129,.1)':'rgba(109,40,217,.08)',border:`1px solid ${pausado?'rgba(16,185,129,.25)':'rgba(109,40,217,.2)'}`,borderRadius:'12px',padding:'8px 16px',fontSize:'12px',fontWeight:600,color:pausado?'#059669':'#6D28D9',cursor:'pointer',display:'flex',alignItems:'center',gap:'6px'}}>
+                  <span>{pausado ? '▶' : '⏸'}</span><span>{pausado ? 'Resume' : 'Pause'}</span>
+                </button>
+                <button onClick={()=>{
+                  modoConversacionRef.current = false
+                  setModoConversacion(false)
+                  pausadoRef.current = false
+                  setPausado(false)
+                  setEstadoChat('esperando_materia')
+                  setSugerencias([])
+                  setAudioPendiente('')
+                  if (autoEscuchaTimeoutRef.current) { clearTimeout(autoEscuchaTimeoutRef.current); autoEscuchaTimeoutRef.current = null }
+                  detenerReconocimientoVoz()
+                  limpiarVAD()
+                  if (typeof window !== 'undefined' && 'speechSynthesis' in window) window.speechSynthesis.cancel()
+                  if (audioRef.current) { try { audioRef.current.pause() } catch { /* */ } }
+                  if (grabando) { grabacionCanceladaRef.current = true; try { mediaRecorderRef.current?.stop() } catch { /* ya estaba detenida */ } setGrabando(false) }
+                }}
+                  style={{background:'rgba(220,38,38,.08)',border:'1px solid rgba(220,38,38,.2)',borderRadius:'12px',padding:'8px 16px',fontSize:'12px',fontWeight:600,color:'#DC2626',cursor:'pointer',display:'flex',alignItems:'center',gap:'6px'}}>
+                  <span>✕</span><span>End</span>
+                </button>
+              </div>
             </div>
 
             {/* Centro — búho */}
             <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:'16px',flex:1,justifyContent:'center'}}>
               
-              {/* Estado label */}
-              <div style={{background:'white',borderRadius:'20px',padding:'10px 20px',boxShadow:'0 4px 20px rgba(109,40,217,.12)',border:'1px solid rgba(109,40,217,.08)',fontSize:'14px',fontWeight:600,color:grabando?'#DC2626':transcribiendo?'#0EA5E9':cargando?'#D97706':reproduciendo?'#6D28D9':'#10B981',display:'flex',alignItems:'center',gap:'8px',transition:'all .3s'}}>
-                <span style={{width:'8px',height:'8px',borderRadius:'50%',background:grabando?'#DC2626':transcribiendo?'#0EA5E9':cargando?'#D97706':reproduciendo?'#6D28D9':'#10B981',display:'inline-block',animation:'dotBlink 1s infinite'}}/>
-                {grabando ? 'Listening...' : transcribiendo ? 'Transcribing...' : cargando ? 'Coaching...' : reproduciendo ? (vozNavegadorActiva ? 'Speaking fast...' : 'Speaking...') : 'Tap to speak'}
+              {/* Estado label — Escuchando / Pensando / Hablando / Pausado */}
+              <div style={{background:'white',borderRadius:'20px',padding:'10px 20px',boxShadow:'0 4px 20px rgba(109,40,217,.12)',border:'1px solid rgba(109,40,217,.08)',fontSize:'14px',fontWeight:600,color:pausado?'#9490B8':grabando?'#DC2626':transcribiendo?'#0EA5E9':cargando?'#D97706':reproduciendo?'#6D28D9':'#10B981',display:'flex',alignItems:'center',gap:'8px',transition:'all .3s'}}>
+                <span style={{width:'8px',height:'8px',borderRadius:'50%',background:pausado?'#9490B8':grabando?'#DC2626':transcribiendo?'#0EA5E9':cargando?'#D97706':reproduciendo?'#6D28D9':'#10B981',display:'inline-block',animation:pausado?'none':'dotBlink 1s infinite'}}/>
+                {pausado ? 'Paused' : grabando ? 'Listening...' : transcribiendo ? 'Transcribing...' : cargando ? 'Coaching...' : reproduciendo ? (vozNavegadorActiva ? 'Speaking fast...' : 'Speaking...') : 'Getting ready...'}
               </div>
 
               {/* Búho con rings */}
-              <div style={{position:'relative',width:reproduciendo?'min(86vw,620px)':'min(82vw,430px)',height:reproduciendo?'min(52vh,620px)':'min(46vh,430px)',minHeight:grabando||cargando?'360px':'320px',display:'flex',alignItems:'center',justifyContent:'center',transition:'all .3s ease'}}>
+              <div style={{position:'relative',width:reproduciendo?'min(86vw,620px)':'min(82vw,430px)',height:reproduciendo?'min(52vh,620px)':'min(46vh,430px)',minHeight:grabando||cargando?'360px':'320px',display:'flex',alignItems:'center',justifyContent:'center',transition:'all .3s ease',opacity:pausado?0.5:1,filter:pausado?'grayscale(0.4)':'none'}}>
                 {/* Ring externo — activo cuando graba o habla */}
                 <div style={{position:'absolute',width:'min(74vw,430px)',height:'min(74vw,430px)',borderRadius:'50%',border:`2px solid ${grabando?'rgba(220,38,38,.4)':reproduciendo?'rgba(109,40,217,.4)':'rgba(109,40,217,.15)'}`,animation:`ringPulse ${grabando?'0.5s':reproduciendo?'0.8s':'2s'} ease-in-out infinite`,transition:'all .3s'}}/>
                 <div style={{position:'absolute',width:'min(64vw,360px)',height:'min(64vw,360px)',borderRadius:'50%',border:`2px solid ${grabando?'rgba(220,38,38,.2)':reproduciendo?'rgba(109,40,217,.2)':'rgba(109,40,217,.08)'}`,animation:`ringPulse ${grabando?'0.5s':reproduciendo?'0.8s':'2s'} ease-in-out infinite 0.2s`}}/>
-                
-                {/* Búho 3D */}
+
+                {/* Búho 3D — hablando/pensando tienen pose propia; escuchando
+                    usa 'waving' (no existe una pose "listening" dedicada) para
+                    diferenciarla visualmente de "pensando" */}
                 <OwlarisOwl3D
-                  pose={reproduciendo ? 'talking' : cargando || transcribiendo ? 'thinking' : grabando ? 'thinking' : 'waving'}
+                  pose={reproduciendo ? 'talking' : (cargando || transcribiendo) ? 'thinking' : 'waving'}
                   size={reproduciendo ? 600 : cargando || transcribiendo || grabando ? 470 : 420}
                 />
               </div>
@@ -1505,15 +1682,15 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
               </div>
               <button
                 onClick={toggleGrabacion}
-                disabled={cargando || transcribiendo}
+                disabled={cargando || transcribiendo || reproduciendo}
                 style={{
-                  width:'86px',height:'86px',borderRadius:'50%',border:'none',cursor:(cargando||transcribiendo)?'not-allowed':'pointer',
+                  width:'86px',height:'86px',borderRadius:'50%',border:'none',cursor:(cargando||transcribiendo||reproduciendo)?'not-allowed':'pointer',
                   background:grabando?'linear-gradient(135deg,#DC2626,#B91C1C)':'linear-gradient(135deg,#7C3AED,#5B21B6)',
                   boxShadow:grabando?'0 0 0 8px rgba(220,38,38,.2),0 8px 32px rgba(220,38,38,.4)':'0 0 0 8px rgba(109,40,217,.1),0 8px 32px rgba(109,40,217,.3)',
                   display:'flex',alignItems:'center',justifyContent:'center',
-                  transform:(cargando||transcribiendo)?'scale(0.9)':'scale(1)',
+                  transform:(cargando||transcribiendo||reproduciendo)?'scale(0.9)':'scale(1)',
                   transition:'all .2s',
-                  opacity:(cargando||transcribiendo)?0.5:1,
+                  opacity:(cargando||transcribiendo||reproduciendo)?0.5:1,
                   animation:grabando?'micPulse 1s ease-in-out infinite':'none',
                 }}>
                 {grabando ? (
@@ -1528,7 +1705,7 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
                 )}
               </button>
               <p style={{fontSize:'11px',color:'#9490B8',fontWeight:500}}>
-                {grabando ? 'Tap to send' : transcribiendo ? 'Preparing your answer...' : 'Tap to speak'}
+                {pausado ? 'Tap Resume to keep talking' : grabando ? 'Listening — pauses itself when you stop talking' : transcribiendo ? 'Preparing your answer...' : reproduciendo ? 'Listening resumes automatically' : cargando ? 'Coaching...' : 'Go ahead, just start talking'}
               </p>
               {audioPendiente && (
                 <button onClick={() => hablarConVozDelNavegador(audioPendiente)}
