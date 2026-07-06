@@ -561,38 +561,27 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
     programarReanudarEscucha()
   }
 
-  async function reproducirTTS(texto: string, force = false) {
-    if (!force && !modoConversacion) return
-    const textoVoz = limpiarTextoParaVoz(texto)
-    if (!textoVoz) return
-    setAudioPendiente('')
-    await asegurarAudioDesbloqueado()
-    try {
-      // Detener audio anterior
-      if (audioRef.current) {
-        audioRef.current.pause()
-        audioRef.current = null
-      }
-      if (typeof window !== 'undefined' && 'speechSynthesis' in window) window.speechSynthesis.cancel()
+  // Divide la respuesta en oraciones para reproducirlas una por una con
+  // una pausa breve entre cada una, en vez de un solo bloque de audio
+  // continuo que suena apurado y de un solo golpe.
+  function dividirEnOraciones(texto: string): string[] {
+    return texto.split(/(?<=[.!?])\s+/).map(s => s.trim()).filter(Boolean)
+  }
 
+  // Pide y reproduce el audio de UNA oración. Devuelve true si sonó bien
+  // completa, false si falló (fetch, decodificación o autoplay bloqueado).
+  async function reproducirUnaOracionOpenAI(oracion: string): Promise<boolean> {
+    try {
       const res = await fetch('/api/tts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ texto: textoVoz, modo: 'conversation' }),
+        body: JSON.stringify({ texto: oracion, modo: 'conversation' }),
       })
-      if (!res.ok) {
-        const pudoHablar = hablarConVozDelNavegador(textoVoz)
-        if (!pudoHablar) { setAudioPendiente(textoVoz); finalizarReproduccion() }
-        return
-      }
-
+      if (!res.ok) return false
       const blob = await res.blob()
-
-      // Detectar Safari iOS
       const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent)
-
       let audio: HTMLAudioElement
-
+      let url: string | null = null
       if (isSafari) {
         // Safari: usar FileReader para convertir a base64
         const base64 = await new Promise<string>((resolve, reject) => {
@@ -603,33 +592,62 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
         })
         audio = new Audio(base64)
       } else {
-        const url = URL.createObjectURL(blob)
+        url = URL.createObjectURL(blob)
         audio = new Audio(url)
-        audio.onended = () => { finalizarReproduccion(); URL.revokeObjectURL(url) }
-        audio.onerror = () => { finalizarReproduccion(); URL.revokeObjectURL(url) }
       }
-
       audioRef.current = audio
-      audio.onplay = () => setReproduciendo(true)
-      if (isSafari) {
-        audio.onended = () => finalizarReproduccion()
-        audio.onerror = () => finalizarReproduccion()
-      }
       audio.playbackRate = 1.0
-
-      setReproduciendo(true)
-      const playPromise = audio.play()
-      if (playPromise !== undefined) {
-        playPromise.catch(() => {
-          // Safari puede rechazar si no hay gesto del usuario reciente
-          const pudoHablar = hablarConVozDelNavegador(textoVoz)
-          if (!pudoHablar) { setAudioPendiente(textoVoz); finalizarReproduccion() }
-        })
-      }
+      return await new Promise<boolean>(resolve => {
+        let resuelto = false
+        const terminar = (ok: boolean) => {
+          if (resuelto) return
+          resuelto = true
+          if (url) { try { URL.revokeObjectURL(url as string) } catch { /* */ } }
+          resolve(ok)
+        }
+        audio.onended = () => terminar(true)
+        audio.onerror = () => terminar(false)
+        // Si se pausa a la mitad (el alumno presionó Pausa o End), no
+        // cuenta como error: simplemente se corta la secuencia.
+        audio.onpause = () => terminar(false)
+        const playPromise = audio.play()
+        if (playPromise !== undefined) playPromise.catch(() => terminar(false))
+      })
     } catch {
-      const pudoHablar = hablarConVozDelNavegador(textoVoz)
-      if (!pudoHablar) { setAudioPendiente(textoVoz); finalizarReproduccion() }
+      return false
     }
+  }
+
+  async function reproducirTTS(texto: string, force = false) {
+    if (!force && !modoConversacion) return
+    const textoVoz = limpiarTextoParaVoz(texto)
+    if (!textoVoz) return
+    setAudioPendiente('')
+    await asegurarAudioDesbloqueado()
+    // Detener audio/voz anterior
+    if (audioRef.current) { try { audioRef.current.pause() } catch { /* */ } audioRef.current = null }
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) window.speechSynthesis.cancel()
+
+    const oraciones = dividirEnOraciones(textoVoz)
+    if (oraciones.length === 0) return
+    setReproduciendo(true)
+    reproduciendoRef.current = true
+
+    for (let i = 0; i < oraciones.length; i++) {
+      if (!reproduciendoRef.current) return // se pausó/terminó antes de empezar esta oración
+      const ok = await reproducirUnaOracionOpenAI(oraciones[i])
+      if (!reproduciendoRef.current) return // se pausó/terminó mientras sonaba esta oración
+      if (!ok) {
+        // Si falla el TTS de OpenAI a media conversación, se lee el resto
+        // completo con la voz del navegador en vez de dejarla a medias.
+        const resto = oraciones.slice(i).join(' ')
+        const pudoHablar = hablarConVozDelNavegador(resto)
+        if (!pudoHablar) { setAudioPendiente(resto); finalizarReproduccion() }
+        return
+      }
+      if (i < oraciones.length - 1) await new Promise(resolve => setTimeout(resolve, 220))
+    }
+    finalizarReproduccion()
   }
 
   function limpiarVAD() {
@@ -804,6 +822,7 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
       }
       if (audioRef.current) { try { audioRef.current.pause() } catch { /* */ } }
       if (typeof window !== 'undefined' && 'speechSynthesis' in window) window.speechSynthesis.cancel()
+      reproduciendoRef.current = false
       setReproduciendo(false)
     }
   }
@@ -1379,8 +1398,10 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
                   detenerReconocimientoVoz()
                   limpiarVAD()
                   if (grabando) { grabacionCanceladaRef.current = true; try { mediaRecorderRef.current?.stop() } catch { /* ya estaba detenida */ } setGrabando(false) }
+                  reproduciendoRef.current = false
                   if (audioRef.current) { try { audioRef.current.pause() } catch { /* */ } }
                   if (typeof window !== 'undefined' && 'speechSynthesis' in window) window.speechSynthesis.cancel()
+                  setReproduciendo(false)
                 }
               }}
                 style={{background:idiomaIngles?'linear-gradient(135deg,#1d4ed8,#1e40af)':'#F3F0FF',border:idiomaIngles?'none':'1px solid rgba(109,40,217,.2)',borderRadius:'10px',padding:'6px 12px',fontSize:'12px',fontWeight:700,color:idiomaIngles?'white':'#7C3AED',cursor:'pointer',display:'flex',alignItems:'center',gap:'5px',transition:'all .2s',flexShrink:0}}>
@@ -1616,6 +1637,8 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
                   detenerReconocimientoVoz()
                   limpiarVAD()
                   if (typeof window !== 'undefined' && 'speechSynthesis' in window) window.speechSynthesis.cancel()
+                  reproduciendoRef.current = false
+                  setReproduciendo(false)
                   if (audioRef.current) { try { audioRef.current.pause() } catch { /* */ } }
                   if (grabando) { grabacionCanceladaRef.current = true; try { mediaRecorderRef.current?.stop() } catch { /* ya estaba detenida */ } setGrabando(false) }
                 }}
