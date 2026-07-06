@@ -63,8 +63,8 @@ export default function LoginPage() {
         .ow-owl-3d-wrap {
           position: relative;
           z-index: 1;
-          width: 300px;
-          height: 300px;
+          width: 360px;
+          height: 360px;
           display: grid;
           place-items: center;
         }
@@ -72,8 +72,8 @@ export default function LoginPage() {
           content: "";
           position: absolute;
           bottom: 6px;
-          width: 130px;
-          height: 26px;
+          width: 155px;
+          height: 30px;
           border-radius: 50%;
           background: radial-gradient(ellipse, rgba(0,0,0,.28) 0%, rgba(0,0,0,0) 70%);
           z-index: -1;
@@ -233,7 +233,7 @@ export default function LoginPage() {
         @media (max-width: 860px) {
           .ow-page { grid-template-columns: 1fr; }
           .ow-hero { padding: 40px 24px 44px; gap: 18px; }
-          .ow-owl-3d-wrap { width: 200px; height: 200px; }
+          .ow-owl-3d-wrap { width: 240px; height: 240px; }
           .ow-hero-name { font-size: 32px; }
           .ow-hero-tagline { font-size: 15px; }
           .ow-formside { padding: 30px 22px 44px; }
@@ -243,7 +243,7 @@ export default function LoginPage() {
       <main className="ow-page">
         <section className="ow-hero">
           <div className="ow-owl-3d-wrap">
-            <OwlarisOwlHero size={260} />
+            <OwlarisOwlHero size={320} />
           </div>
           <div className="ow-hero-text">
             <h1 className="ow-hero-name">Owlaris</h1>
