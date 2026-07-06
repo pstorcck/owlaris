@@ -8,12 +8,13 @@ import { useEffect } from 'react'
 
 interface Props {
   size?: number
+  progressBarColor?: string
 }
 
 // El script y los decodificadores Draco se sirven localmente (public/vendor)
 // en vez de desde unpkg/gstatic: el login es la primera impresión de la app
 // y no debe depender de que un CDN externo esté disponible en ese momento.
-export default function OwlarisOwlHero({ size = 260 }: Props) {
+export default function OwlarisOwlHero({ size = 260, progressBarColor = '#7C3AED' }: Props) {
   useEffect(() => {
     if (customElements.get('model-viewer')) {
       const ModelViewerElement = customElements.get('model-viewer') as unknown as { dracoDecoderLocation: string }
@@ -33,6 +34,9 @@ export default function OwlarisOwlHero({ size = 260 }: Props) {
   return (
     <model-viewer
       src="/models/owlaris-owl-waving.glb"
+      poster="/buho.png"
+      loading="eager"
+      reveal="auto"
       autoplay
       shadow-intensity="0"
       exposure="1.2"
@@ -43,6 +47,7 @@ export default function OwlarisOwlHero({ size = 260 }: Props) {
         maxWidth: '100%',
         maxHeight: '100%',
         background: 'transparent',
+        '--progress-bar-color': progressBarColor,
       } as React.CSSProperties}
     />
   )

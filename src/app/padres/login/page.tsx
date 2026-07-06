@@ -221,7 +221,7 @@ export default function PadresLoginPage() {
       <main className="ow-page">
         <section className="ow-hero">
           <div className="ow-owl-3d-wrap">
-            <OwlarisOwlHero size={260} />
+            <OwlarisOwlHero size={260} progressBarColor="#0F9C8C" />
           </div>
           <div className="ow-hero-text">
             <h1 className="ow-hero-name">Owlaris</h1>

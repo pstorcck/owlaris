@@ -21,6 +21,9 @@ declare global {
         'camera-controls'?: string | boolean
         'disable-zoom'?: boolean | string
         'interaction-prompt'?: string
+        poster?: string
+        reveal?: string
+        loading?: string
       }, HTMLElement>
     }
   }
