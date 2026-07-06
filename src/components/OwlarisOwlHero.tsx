@@ -30,9 +30,8 @@ const MODEL_SRC = '/models/owlaris-owl-waving.glb'
 // owlaris-owl-waving.glb (igual que los otros 3 modelos del chat de voz)
 // es una malla estática posada, sin ninguna animación real incluida
 // (availableAnimations siempre vacío, confirmado inspeccionando el chunk
-// JSON del .glb) — autoplay no tiene nada que reproducir. El movimiento
-// visible viene de auto-rotate (gira la cámara lentamente) más un balanceo
-// suave por CSS en el contenedor de la página.
+// JSON del .glb). Se muestra como pose fija, sin auto-rotate ni balanceo:
+// se probó con rotación de cámara y no convenció, así que queda estático.
 export default function OwlarisOwlHero({ progressBarColor = '#7C3AED' }: Props) {
   const ref = useRef<HTMLElement>(null)
 
@@ -59,10 +58,6 @@ export default function OwlarisOwlHero({ progressBarColor = '#7C3AED' }: Props) 
       poster="/buho.png"
       loading="eager"
       reveal="auto"
-      camera-controls
-      auto-rotate
-      rotation-per-second="12deg"
-      camera-orbit="5deg 78deg 105%"
       shadow-intensity="0"
       exposure="1.2"
       tone-mapping="aces"
@@ -71,7 +66,6 @@ export default function OwlarisOwlHero({ progressBarColor = '#7C3AED' }: Props) 
         width: '100%',
         height: '100%',
         background: 'transparent',
-        pointerEvents: 'none',
         '--progress-bar-color': progressBarColor,
       } as React.CSSProperties}
     />
