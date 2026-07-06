@@ -14,6 +14,7 @@ import {
   type FilaInteraccion,
 } from '@/lib/reporteActividad'
 import { filtrarRecomendaciones, stripUngroundedEmotionalClaims } from '@/lib/reporteLenguaje'
+import { ventanaHoyGuatemala } from '@/lib/fechaGuatemala'
 
 function hashString(value: string) {
   let hash = 0
@@ -109,22 +110,6 @@ function resumenDificultad(
   if (bajadas > 0) partes.push(`reforzó bases o bajó dificultad ${bajadas} vez${bajadas === 1 ? '' : 'es'}`)
   const cierre = ultimo?.nivel_nuevo ? ` Terminó trabajando en nivel ${ultimo.nivel_nuevo}.` : ''
   return `Durante la sesión, Owlaris ${partes.join(' y ')} según la racha del estudiante.${cierre}`
-}
-
-// Ventana del día calendario completo en Guatemala (UTC-6), SIEMPRE — el
-// "Reporte de hoy" debe cubrir toda la actividad del día, sin importar
-// cuántas veces el alumno cambió de materia o de sesión (cada cambio de
-// materia reiniciaba antes la ventana en el cliente, perdiendo la actividad
-// previa del mismo día).
-function ventanaHoyGuatemala() {
-  const now = new Date()
-  const guatemalaOffsetMs = 6 * 60 * 60 * 1000
-  const gtNow = new Date(now.getTime() - guatemalaOffsetMs)
-  const startUtc = new Date(Date.UTC(gtNow.getUTCFullYear(), gtNow.getUTCMonth(), gtNow.getUTCDate(), 6, 0, 0, 0))
-  return {
-    start: startUtc,
-    end: new Date(startUtc.getTime() + 24 * 60 * 60 * 1000),
-  }
 }
 
 function extraerNombreMateria(row: FilaInteraccionCruda): string | null {

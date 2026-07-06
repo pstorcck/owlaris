@@ -7,6 +7,7 @@ import { sanitizeChatFormatting } from '@/lib/chatFormatting'
 import { detectarMateriaDesdeTexto, materiaActualEnSistemaCNB, normalizarMateria } from '@/lib/materiaDetection'
 import { isReviewMistakesRequest, primeraOperacionValida, temaMasFrecuente } from '@/lib/mistakeReview'
 import { limpiarTemaGeneral } from '@/lib/temaGeneral'
+import { ventanaHoyGuatemala } from '@/lib/fechaGuatemala'
 import {
   buildCourseTopicListResponse,
   extractCourseTopicIndex,
@@ -990,8 +991,13 @@ export async function POST(req: NextRequest) {
 
     const limite = parseInt(cfg.limite_preguntas_diarias || '999')
     if (limite < 999) {
-      const hoy = new Date().toISOString().split('T')[0]
-      const { count } = await supabase.from('interacciones').select('*', { count: 'exact', head: true }).eq('usuario_id', user.id).gte('creado_en', `${hoy}T00:00:00`)
+      // Ventana del día calendario en Guatemala, no el día UTC crudo — usar
+      // la fecha UTC hacía que el "día" reiniciara a las 6pm hora de
+      // Guatemala (medianoche UTC) en vez de medianoche real en Guatemala,
+      // permitiendo hasta el doble del límite configurado en un mismo día
+      // real si el alumno preguntaba antes y después de esa hora.
+      const { start: inicioDiaGT } = ventanaHoyGuatemala()
+      const { count } = await supabase.from('interacciones').select('*', { count: 'exact', head: true }).eq('usuario_id', user.id).gte('creado_en', inicioDiaGT.toISOString())
       if ((count || 0) >= limite) return NextResponse.json({ error: `Limite de ${limite} preguntas alcanzado.` }, { status: 429 })
     }
 

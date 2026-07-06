@@ -26,7 +26,8 @@
     "test:reporte-actividad": "tsx scripts/reporte-actividad-smoke.ts",
     "test:tema-general": "tsx scripts/tema-general-smoke.ts",
     "test:todays-changes": "tsx scripts/todays-changes-integration-test.ts",
-    "test": "npm run test:math && npm run test:humanistic && npm run test:pedagogy && npm run test:stress && npm run test:escholaris-math && npm run test:practice && npm run test:safety-sensitive && npm run test:exercise-repetition && npm run test:sensitive-topics && npm run test:openai-reliability && npm run test:reporte-seguridad && npm run test:all-classes && npm run test:chat-formatting && npm run test:topic-selection && npm run test:materia-detection && npm run test:mistake-review && npm run test:reporte-actividad && npm run test:tema-general && npm run test:todays-changes"
+    "test:fecha-guatemala": "tsx scripts/fecha-guatemala-smoke.ts",
+    "test": "npm run test:math && npm run test:humanistic && npm run test:pedagogy && npm run test:stress && npm run test:escholaris-math && npm run test:practice && npm run test:safety-sensitive && npm run test:exercise-repetition && npm run test:sensitive-topics && npm run test:openai-reliability && npm run test:reporte-seguridad && npm run test:all-classes && npm run test:chat-formatting && npm run test:topic-selection && npm run test:materia-detection && npm run test:mistake-review && npm run test:reporte-actividad && npm run test:tema-general && npm run test:todays-changes && npm run test:fecha-guatemala"
   },
   "dependencies": {
     "@supabase/ssr": "^0.5.1",
