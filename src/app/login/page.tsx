@@ -67,6 +67,7 @@ export default function LoginPage() {
           height: 360px;
           display: grid;
           place-items: center;
+          overflow: hidden;
         }
         .ow-owl-3d-wrap::after {
           content: "";
@@ -232,18 +233,24 @@ export default function LoginPage() {
         .ow-signup-line a:hover { text-decoration: underline; }
         @media (max-width: 860px) {
           .ow-page { grid-template-columns: 1fr; }
-          .ow-hero { padding: 40px 24px 44px; gap: 18px; }
-          .ow-owl-3d-wrap { width: 240px; height: 240px; }
-          .ow-hero-name { font-size: 32px; }
-          .ow-hero-tagline { font-size: 15px; }
-          .ow-formside { padding: 30px 22px 44px; }
+          .ow-hero { padding: 32px 24px 30px; gap: 12px; }
+          .ow-owl-3d-wrap { width: 180px; height: 180px; }
+          .ow-hero-name { font-size: 28px; }
+          .ow-hero-tagline { font-size: 14px; }
+          .ow-hero-chips { max-width: 300px; }
+          .ow-chip { font-size: 11.5px; padding: 6px 12px; }
+          .ow-formside { padding: 24px 22px 36px; }
+        }
+        @media (max-width: 420px) {
+          .ow-owl-3d-wrap { width: 150px; height: 150px; }
+          .ow-hero { padding: 24px 20px 22px; gap: 10px; }
         }
       `}</style>
 
       <main className="ow-page">
         <section className="ow-hero">
           <div className="ow-owl-3d-wrap">
-            <OwlarisOwlHero size={320} />
+            <OwlarisOwlHero />
           </div>
           <div className="ow-hero-text">
             <h1 className="ow-hero-name">Owlaris</h1>

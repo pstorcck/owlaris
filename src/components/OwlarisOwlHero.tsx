@@ -7,14 +7,19 @@ import { useEffect } from 'react'
 // programa, no hace falta repetirla.
 
 interface Props {
-  size?: number
   progressBarColor?: string
 }
 
 // El script y los decodificadores Draco se sirven localmente (public/vendor)
 // en vez de desde unpkg/gstatic: el login es la primera impresión de la app
 // y no debe depender de que un CDN externo esté disponible en ese momento.
-export default function OwlarisOwlHero({ size = 260, progressBarColor = '#7C3AED' }: Props) {
+//
+// El tamaño lo controla siempre el contenedor (.ow-owl-3d-wrap en cada
+// página), no un ancho/alto fijo aquí: <model-viewer> no respeta
+// max-width/max-height cuando también se le da un width/height explícito
+// en px (se queda con el valor fijo e ignora el tope), así que el único
+// tamaño confiable es 100% relativo a un padre con dimensiones definidas.
+export default function OwlarisOwlHero({ progressBarColor = '#7C3AED' }: Props) {
   useEffect(() => {
     if (customElements.get('model-viewer')) {
       const ModelViewerElement = customElements.get('model-viewer') as unknown as { dracoDecoderLocation: string }
@@ -42,10 +47,9 @@ export default function OwlarisOwlHero({ size = 260, progressBarColor = '#7C3AED
       exposure="1.2"
       tone-mapping="aces"
       style={{
-        width: `${size}px`,
-        height: `${size}px`,
-        maxWidth: '100%',
-        maxHeight: '100%',
+        display: 'block',
+        width: '100%',
+        height: '100%',
         background: 'transparent',
         '--progress-bar-color': progressBarColor,
       } as React.CSSProperties}
