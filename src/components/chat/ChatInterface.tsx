@@ -736,6 +736,7 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
         page: (i: number, total: number) => `Page ${i} of ${total}`,
         sessionShort: (m: number) => (m <= 1 ? '1 min' : m + ' minutes'),
         shortSession: 'short session',
+        timezoneLabel: 'Guatemala time (GMT-6)',
       } : {
         reportSubtitle: 'Reporte de hoy para familia',
         defaultSchool: 'Centro educativo',
@@ -780,6 +781,7 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
         page: (i: number, total: number) => `Página ${i} de ${total}`,
         sessionShort: (m: number) => (m <= 1 ? '1 min' : m + ' minutos'),
         shortSession: 'sesión corta',
+        timezoneLabel: 'Hora de Guatemala (GMT-6)',
       }
 
       const { jsPDF } = await import('jspdf')
@@ -880,7 +882,12 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
       text(L.reportSubtitle, margin, 39, 12, false, [226, 232, 240])
       doc.setFontSize(9); doc.setFont('helvetica', 'normal'); doc.setTextColor(226, 232, 240)
       doc.text(usuario.colegio?.nombre || L.defaultSchool, W - margin, 29, { align: 'right' })
-      doc.text(new Date().toLocaleString(idiomaIngles ? 'en-US' : 'es-GT', { day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' }), W - margin, 39, { align: 'right' })
+      // timeZone explícito: sin esto, la fecha/hora se muestra en el huso
+      // horario del dispositivo donde se genera el PDF (que puede no ser
+      // Guatemala), no en la hora real del colegio.
+      doc.text(new Date().toLocaleString(idiomaIngles ? 'en-US' : 'es-GT', { day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit', timeZone: 'America/Guatemala' }), W - margin, 39, { align: 'right' })
+      doc.setFontSize(7.5); doc.setTextColor(148, 163, 184)
+      doc.text(L.timezoneLabel, W - margin, 44, { align: 'right' })
 
       y = 68
       doc.setFillColor(255, 255, 255); doc.roundedRect(margin, y, maxW, 42, 4, 4, 'F')
@@ -990,7 +997,9 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
       addPage()
       doc.setFillColor(20,28,45); doc.rect(0, 0, W, 16, 'F')
       doc.setFontSize(11); doc.setFont('helvetica','bold'); doc.setTextColor(255,255,255)
-      doc.text(L.annexTitle, margin, 11); y = 26
+      doc.text(L.annexTitle, margin, 11); y = 20
+      doc.setFontSize(7.5); doc.setFont('helvetica', 'normal'); doc.setTextColor(palette.muted[0], palette.muted[1], palette.muted[2])
+      doc.text(L.timezoneLabel, margin, y); y = 30
       if (evidenciaHoy.length === 0) {
         wrapped(L.noEvidence, margin, y, maxW, 9.2, palette.muted)
         y += 12

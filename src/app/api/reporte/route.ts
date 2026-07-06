@@ -171,8 +171,13 @@ function construirEvidenciaHoy(filas: FilaInteraccion[], idiomaIngles = false) {
     .filter(i => !esDeSeguridad(i))
     .map((i, idx) => ({
       secuencia: idx + 1,
+      // timeZone explícito: sin esto, el runtime del servidor (normalmente
+      // UTC en Vercel) determina la hora mostrada, no la hora de Guatemala
+      // — un evento de las 7pm en Guatemala se vería como "01:00" (del día
+      // siguiente en UTC), aunque la ventana del día (ventanaHoyGuatemala)
+      // ya filtre las filas correctamente por el día real en Guatemala.
       hora: i.creado_en
-        ? new Date(i.creado_en).toLocaleTimeString(idiomaIngles ? 'en-US' : 'es-GT', { hour: '2-digit', minute: '2-digit' })
+        ? new Date(i.creado_en).toLocaleTimeString(idiomaIngles ? 'en-US' : 'es-GT', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Guatemala' })
         : '',
       materia: (i.materia_nombre || '').trim(),
       calificable: esCalificable(i),
