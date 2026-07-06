@@ -1499,7 +1499,14 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
                 </p>
                 {!mostrandoSubOlimpiadas ? (
                   <div style={{display:'flex',gap:'8px',flexWrap:'wrap'}}>
-                    {chipsMateria.map((mat, i) => {
+                    {chipsMateria
+                      // El modo "Conversar en Inglés" (voz continua) se
+                      // esconde temporalmente: el alumno reportó que quedó
+                      // peor que antes. La función sigue en el código para
+                      // poder arreglarla sin rehacer todo, pero no debe
+                      // poder alcanzarse desde la UI mientras tanto.
+                      .filter(mat => !(mat.includes('Conversar') || mat.includes('Conversation') || mat.includes('»')))
+                      .map((mat, i) => {
                       const esOlimpiadas = mat.toLowerCase().includes('olimpiadas') || mat.toLowerCase().includes('olympiad')
                       const esIngles = mat.includes('Conversar') || mat.includes('Conversation') || mat.includes('»')
                       const colores: Record<string,string> = {
