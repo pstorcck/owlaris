@@ -232,12 +232,12 @@ export default function PadresLoginPage() {
           </div>
           <div className="ow-hero-text">
             <h1 className="ow-hero-name">Owlaris</h1>
-            <p className="ow-hero-tagline">Reportes claros y acompañamiento para el aprendizaje de tu hijo o hija.</p>
+            <p className="ow-hero-tagline">Orientación y consejos prácticos para acompañar el aprendizaje de tu hijo o hija en casa.</p>
           </div>
           <div className="ow-hero-chips">
-            <span className="ow-chip">Reportes pedagógicos</span>
-            <span className="ow-chip">Logros y áreas de mejora</span>
-            <span className="ow-chip">Acompañamiento en casa</span>
+            <span className="ow-chip">Guía pedagógica</span>
+            <span className="ow-chip">Consejos prácticos</span>
+            <span className="ow-chip">Disponible cuando lo necesites</span>
           </div>
         </section>
 
