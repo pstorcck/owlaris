@@ -287,7 +287,7 @@ export default function PadresLoginPage() {
           .ow-chip { font-size: 11.5px; padding: 6px 12px; }
           .ow-formside { padding: 24px 22px 36px; }
           .ow-card-panel { padding: 30px 24px; box-shadow: 0 14px 34px -14px rgba(6,36,33,.14); }
-          .ow-decor-item:nth-child(n+5) { display: none; }
+          .ow-decor-item:nth-child(n+9) { display: none; }
         }
         @media (max-width: 420px) {
           .ow-owl-3d-outer { width: 165px; height: 165px; }
@@ -321,6 +321,19 @@ export default function PadresLoginPage() {
             <span className="ow-decor-item" style={{ top: '79%', left: '40%', fontSize: 24, opacity: .09, transform: 'rotate(10deg)' }}>guía</span>
             <span className="ow-decor-item ow-decor-icon" style={{ top: '87%', left: '62%', opacity: .10, transform: 'rotate(-12deg)' }}><BookOpen size={26} strokeWidth={2.2} /></span>
             <span className="ow-decor-item" style={{ top: '84%', left: '30%', fontSize: 20, opacity: .09, transform: 'rotate(-7deg)' }}>confianza</span>
+
+            <span className="ow-decor-item" style={{ top: '4%', left: '46%', fontSize: 20, opacity: .10, transform: 'rotate(-6deg)' }}>hábito</span>
+            <span className="ow-decor-item ow-decor-icon" style={{ top: '9%', left: '30%', opacity: .11, transform: 'rotate(10deg)' }}><MessageCircle size={22} strokeWidth={2.2} /></span>
+            <span className="ow-decor-item" style={{ top: '10%', right: '28%', fontSize: 20, opacity: .10, transform: 'rotate(7deg)' }}>guía</span>
+            <span className="ow-decor-item ow-decor-icon" style={{ top: '45%', left: '20%', opacity: .12, transform: 'rotate(9deg)' }}><Check size={24} strokeWidth={2.4} /></span>
+            <span className="ow-decor-item ow-decor-icon" style={{ top: '45%', right: '20%', opacity: .12, transform: 'rotate(-9deg)' }}><TrendingUp size={24} strokeWidth={2.2} /></span>
+            <span className="ow-decor-item" style={{ top: '65%', left: '22%', fontSize: 20, opacity: .10, transform: 'rotate(6deg)' }}>progreso</span>
+            <span className="ow-decor-item" style={{ top: '65%', right: '24%', fontSize: 18, opacity: .10, transform: 'rotate(-6deg)' }}>confianza</span>
+            <span className="ow-decor-item ow-decor-icon" style={{ top: '92%', left: '46%', opacity: .11, transform: 'rotate(8deg)' }}><Heart size={22} strokeWidth={2.2} /></span>
+            <span className="ow-decor-item" style={{ top: '80%', left: '18%', fontSize: 18, opacity: .10, transform: 'rotate(-8deg)' }}>guía</span>
+            <span className="ow-decor-item" style={{ top: '80%', right: '16%', fontSize: 18, opacity: .10, transform: 'rotate(8deg)' }}>hábito</span>
+            <span className="ow-decor-item ow-decor-icon" style={{ top: '25%', left: '20%', opacity: .11, transform: 'rotate(-8deg)' }}><Check size={20} strokeWidth={2.4} /></span>
+            <span className="ow-decor-item ow-decor-icon" style={{ top: '25%', right: '20%', opacity: .11, transform: 'rotate(8deg)' }}><Calendar size={22} strokeWidth={2.2} /></span>
           </div>
 
           <div className="ow-owl-3d-outer">
