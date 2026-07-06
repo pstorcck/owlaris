@@ -55,7 +55,74 @@ export function isPendingContextQuestion(value: string) {
     'how do i start',
     'i do not understand',
     "i don't understand",
+    // Pedir aclarar/repetir el mismo paso NO debe cambiar de ejercicio —
+    // bug real: "explícame ese paso otra vez" generaba un ejercicio nuevo.
+    'ese paso otra vez',
+    'ese paso de nuevo',
+    'no entendi ese paso',
+    'repite eso',
+    'repitelo',
+    'por que hiciste eso',
+    'explicalo mas facil',
+    'explicalo de otra forma',
+    'de otra forma',
+    'otra manera',
+    'empieza desde cero',
+    'desde cero',
+    'no cambies de ejercicio',
+    'sigo sin entender',
+    'como si no supiera nada',
+    'explicamelo mas simple',
+    'that step again',
+    "didn't understand that step",
+    'repeat that',
+    'why did you do that',
+    'explain it more simply',
+    'another way',
+    'start from scratch',
+    "don't change the exercise",
+    "still don't understand",
+    'like i know nothing',
   ].some((needle) => text.includes(needle))
+}
+
+// "¿Cuál era el ejercicio?" debe recuperar el ejercicio activo, no generar
+// uno nuevo — bug real detectado en el instructivo de mejoras.
+export function isExerciseRecallRequest(value: string): boolean {
+  const text = normalizeText(value)
+  if (!text) return false
+  return [
+    'cual era el ejercicio',
+    'cual era la pregunta',
+    'cual era la ecuacion',
+    'cual era el problema',
+    'que estabamos haciendo',
+    'donde ibamos',
+    'recuerdame el problema',
+    'recuerdame el ejercicio',
+    'recuerdame la pregunta',
+    'volvamos al ejercicio',
+    'what was the exercise',
+    'what was the question',
+    'what was the equation',
+    'what was the problem',
+    'what were we doing',
+    'where were we',
+    'remind me of the problem',
+    'remind me the exercise',
+  ].some((needle) => text.includes(needle))
+}
+
+export function buildExerciseRecallResponse(input: {
+  activeOperation?: string | null
+  activePrompt?: string | null
+  idiomaIngles?: boolean
+}): string | null {
+  const operation = formatOperation(input.activeOperation)
+  if (!operation) return null
+  return input.idiomaIngles
+    ? `The exercise we were working on was:\n${operation}\nLet's keep solving it step by step. What is the next step you would try?`
+    : `El ejercicio que estábamos trabajando era:\n${operation}\nSigamos resolviéndolo paso a paso. ¿Cuál sería el siguiente paso que intentarías?`
 }
 
 function extractActiveFraction(operation?: string | null, prompt?: string | null) {
@@ -116,8 +183,8 @@ export function buildPendingContextResponse(input: PendingContextResponseInput) 
 
   if (operation && /x/i.test(operation) && operation.includes('=')) {
     return input.idiomaIngles
-      ? `${complaintPrefix}Yes, you can work it out step by step. Let us stay with the active equation: ${operation}. First, identify which term is attached to x and which term is separate. What operation would undo the separate term on both sides?`
-      : `${complaintPrefix}Sí, puedes resolverlo paso a paso. Sigamos con la ecuación activa: ${operation}. Primero identifica qué término acompaña a x y qué término está separado. ¿Qué operación harías en ambos lados para deshacer el término separado?`
+      ? `${complaintPrefix}Yes, you can work it out step by step. Let us stay with the active equation: ${operation}. First identify the number that is adding or subtracting right next to x, and think about the opposite operation that removes it. What would you do to both sides of the equation to leave x alone?`
+      : `${complaintPrefix}Sí, puedes resolverlo paso a paso. Sigamos con la ecuación activa: ${operation}. Primero identifica el número que está sumando o restando junto a la x, y piensa en la operación contraria que lo quita. ¿Qué harías en ambos lados de la ecuación para dejar la x sola?`
   }
 
   if (operation) {

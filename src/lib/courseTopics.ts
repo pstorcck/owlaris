@@ -133,27 +133,67 @@ export function extractCourseTopicIndex(content: string): CourseTopicIndex {
   }
 }
 
-const BARE_NUMBER_SELECTION = /^\s*(?:opci[oó]n\s+|n[uú]mero\s+|el\s+|la\s+)?(\d{1,3})\s*[.)]?\s*$/i
+// Número al final de una frase corta de selección: "2", "el 2", "quiero el
+// tema 6", "dame el número 8", "explícame el 4". No exige que TODO el
+// mensaje sea el número — el alumno rara vez responde con un número pelado.
+const NUMERO_AL_FINAL_DE_FRASE_CORTA = /^.{0,40}?(\d{1,3})\s*[.)]?$/
+
+const ORDINALES: Record<string, number> = {
+  primero: 1, primer: 1, primera: 1,
+  segundo: 2, segunda: 2,
+  tercero: 3, tercer: 3, tercera: 3,
+  cuarto: 4, cuarta: 4,
+  quinto: 5, quinta: 5,
+  sexto: 6, sexta: 6,
+  septimo: 7, septima: 7,
+  octavo: 8, octava: 8,
+  noveno: 9, novena: 9,
+  decimo: 10, decima: 10,
+}
+
+function normalizeSeleccion(value: string) {
+  return normalizeText(value)
+}
 
 // Cuando el tutor acaba de mostrar una lista numerada (temas, subtemas,
-// opciones) y el alumno responde solo con un número, ese número selecciona un
-// elemento de la lista — no es la respuesta a un ejercicio matemático. Se basa
-// en extractCourseTopicIndex, que ya sabe reconocer listas numeradas o con
-// viñetas en texto libre (no solo en el índice oficial del curso).
+// opciones) y el alumno la referencia — por número, por ordinal ("el
+// primero", "el último") o por nombre ("el de genética") — eso selecciona
+// un elemento de la lista, no es la respuesta a un ejercicio matemático.
+// Se basa en extractCourseTopicIndex, que ya sabe reconocer listas
+// numeradas o con viñetas en texto libre (no solo en el índice oficial).
 export function matchNumberedListSelection(
   pregunta: string,
   ultimoMensajeAsistente: string
 ): { indice: number; tema: string } | null {
-  const match = BARE_NUMBER_SELECTION.exec((pregunta || '').trim())
-  if (!match) return null
-  const n = parseInt(match[1], 10)
-  if (!n || n < 1) return null
+  const texto = (pregunta || '').trim()
+  if (!texto || texto.split(/\s+/).length > 8) return null
 
   const { topics } = extractCourseTopicIndex(ultimoMensajeAsistente || '')
   if (topics.length < 2) return null
-  if (n > topics.length) return null
 
-  return { indice: n, tema: topics[n - 1] }
+  const matchNumero = NUMERO_AL_FINAL_DE_FRASE_CORTA.exec(texto)
+  if (matchNumero) {
+    const n = parseInt(matchNumero[1], 10)
+    if (n >= 1 && n <= topics.length) return { indice: n, tema: topics[n - 1] }
+  }
+
+  const normalizado = normalizeSeleccion(texto)
+
+  if (/\b[uú]ltimo\b/i.test(normalizado)) return { indice: topics.length, tema: topics[topics.length - 1] }
+  for (const [palabra, indice] of Object.entries(ORDINALES)) {
+    if (indice <= topics.length && new RegExp(`\\b${palabra}\\b`).test(normalizado)) {
+      return { indice, tema: topics[indice - 1] }
+    }
+  }
+
+  const matchNombre = /\b(?:el|la)\s+de\s+(.+)$/i.exec(texto)
+  const fraseBuscada = matchNombre ? normalizeSeleccion(matchNombre[1]) : null
+  if (fraseBuscada && fraseBuscada.length >= 3) {
+    const idx = topics.findIndex((tema) => normalizeSeleccion(tema).includes(fraseBuscada))
+    if (idx !== -1) return { indice: idx + 1, tema: topics[idx] }
+  }
+
+  return null
 }
 
 export function buildCourseTopicListResponse(input: {

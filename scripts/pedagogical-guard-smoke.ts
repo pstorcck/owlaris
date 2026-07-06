@@ -1,7 +1,9 @@
 import assert from 'node:assert/strict'
 import { guardNoFinalAnswer, shouldGuideWithoutFinalAnswer } from '../src/lib/pedagogicalGuard'
 import {
+  buildExerciseRecallResponse,
   buildPendingContextResponse,
+  isExerciseRecallRequest,
   isLikelyMathAnswerText,
   isPendingContextQuestion,
   stripUnapprovedExternalResources,
@@ -68,6 +70,16 @@ function main() {
   assert.match(fractionContext, /3 ÷ 8/)
   assert.doesNotMatch(fractionContext, /0\.375/)
 
+  // Instructivo de mejoras, sección E: nada de jerga algebraica al aclarar
+  // una ecuación activa ("término separado", "deshacer el término").
+  const equationClarification = buildPendingContextResponse({
+    studentQuestion: 'no entiendo, me ayudas?',
+    activeOperation: 'x+30=61',
+    activePrompt: 'Resuelve: x + 30 = 61',
+  })
+  assert.doesNotMatch(equationClarification, /término separado|estructura algebraica|componente operacional|elemento aislado|deshacer el término/i)
+  assert.match(equationClarification, /sumando o restando|dejar la x sola/i)
+
   const complaintContext = buildPendingContextResponse({
     studentQuestion: 'te pregunté esto pero no me respondiste',
     activeOperation: '3/8',
@@ -116,6 +128,43 @@ Mapa del curso
   })
   assert.match(incompleteResponse, /36 temas/)
   assert.match(incompleteResponse, /solo puedo recuperar 2/)
+
+  // ── Bugs reales del instructivo: pedir aclarar el mismo paso NO debe
+  // cambiar de ejercicio ──
+  for (const frase of [
+    'Explícame ese paso otra vez',
+    'No entendí ese paso',
+    'Repite eso',
+    '¿Por qué hiciste eso?',
+    'Explícalo más fácil',
+    'Empieza desde cero',
+    'No cambies de ejercicio',
+    'Sigo sin entender',
+    '¿Me lo puedes decir de otra forma?',
+    'Explícamelo como si no supiera nada',
+  ]) {
+    assert.equal(isPendingContextQuestion(frase), true, `"${frase}" debería mantener el ejercicio activo`)
+  }
+
+  // ── "¿Cuál era el ejercicio?" debe recuperar el ejercicio activo ──
+  for (const frase of [
+    '¿Cuál era el ejercicio que estábamos haciendo?',
+    '¿Qué estábamos haciendo?',
+    '¿Cuál era la pregunta anterior?',
+    'Recuérdame el problema',
+    'Volvamos al ejercicio',
+    '¿Dónde íbamos?',
+    '¿Cuál era la ecuación?',
+    'What was the exercise?',
+    'Where were we?',
+  ]) {
+    assert.equal(isExerciseRecallRequest(frase), true, `"${frase}" debería reconocerse como solicitud de recordar el ejercicio`)
+  }
+  assert.equal(isExerciseRecallRequest('quiero practicar'), false)
+
+  const recall = buildExerciseRecallResponse({ activeOperation: '2*(x+3)=14', idiomaIngles: false })
+  assert.match(recall || '', /2 \* \(x \+ 3\) = 14/)
+  assert.equal(buildExerciseRecallResponse({ activeOperation: null, idiomaIngles: false }), null)
 
   console.log('pedagogical-guard smoke passed')
 }

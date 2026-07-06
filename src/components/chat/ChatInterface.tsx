@@ -422,7 +422,18 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
           speech_confidence: opciones.speechConfidence ?? null,
         })
       })
-      if (!res.ok) throw new Error()
+      if (!res.ok) {
+        // El backend distingue el tipo de error técnico (fuente no
+        // disponible, materia no disponible, servicio saturado) y manda un
+        // mensaje específico en "respuesta" — antes se descartaba el
+        // cuerpo entero y siempre se mostraba el mismo mensaje genérico.
+        let mensajeTecnico = 'Hubo un problema. Intenta de nuevo.'
+        try {
+          const dataError = await res.json()
+          if (typeof dataError?.respuesta === 'string' && dataError.respuesta.trim()) mensajeTecnico = dataError.respuesta
+        } catch { /* cuerpo no es JSON o está vacío, se usa el mensaje genérico */ }
+        throw new Error(mensajeTecnico)
+      }
       const data = await res.json()
 
       // Actualizar estado onboarding
@@ -486,7 +497,7 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
           { icon: '↺', text: 'Revisemos mis errores' },
         ])
       }
-    } catch { setError('Hubo un problema. Intenta de nuevo.') }
+    } catch (e) { setError(e instanceof Error && e.message ? e.message : 'Hubo un problema. Intenta de nuevo.') }
     finally { setCargando(false); inputRef.current?.focus() }
   }
 

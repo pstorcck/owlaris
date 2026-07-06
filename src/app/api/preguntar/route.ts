@@ -5,6 +5,7 @@ import { guardHumanisticResponse } from '@/lib/humanisticSafety'
 import { guardNoFinalAnswer } from '@/lib/pedagogicalGuard'
 import { sanitizeChatFormatting } from '@/lib/chatFormatting'
 import { detectarMateriaDesdeTexto, materiaActualEnSistemaCNB, normalizarMateria } from '@/lib/materiaDetection'
+import { isExplicitCourseSwitchRequest } from '@/lib/courseSwitchDetection'
 import { isReviewMistakesRequest, primeraOperacionValida, temaMasFrecuente } from '@/lib/mistakeReview'
 import { limpiarTemaGeneral } from '@/lib/temaGeneral'
 import { ventanaHoyGuatemala } from '@/lib/fechaGuatemala'
@@ -55,7 +56,9 @@ import {
   type MathPracticeFocus,
 } from '@/lib/mathPractice'
 import {
+  buildExerciseRecallResponse,
   buildPendingContextResponse,
+  isExerciseRecallRequest,
   isLikelyMathAnswerText,
   isPendingContextQuestion,
   stripUnapprovedExternalResources,
@@ -63,6 +66,7 @@ import {
 import { withOpenAIRetry } from '@/lib/openaiRetry'
 import { calcularCostoUSD } from '@/lib/openaiCost'
 import { registrarAlertaTecnica } from '@/lib/technicalAlerts'
+import { clasificarErrorTecnico, construirContextoErrorTecnico, mensajeErrorTecnico } from '@/lib/technicalErrors'
 
 const PROMPT_BASE = `Eres Owlaris, Tu tutor AI. Eres un profesor paciente cuyo objetivo es ayudar a los estudiantes a entender, practicar y aprender por sí mismos. Hablas de forma clara, cercana, motivadora y respetuosa. Tratas al usuario de tú. No usas emoticones.
 
@@ -89,6 +93,18 @@ Owlaris es exclusivamente un tutor académico dentro de la materia seleccionada.
 En cambio, indica con amabilidad que estás para ayudar con la materia seleccionada y pregunta si tiene una duda académica de esa materia. Ejemplo de tono: "Eso no tiene relación con [materia], así que no puedo ayudarte con eso aquí. ¿Tienes alguna duda de [materia] en la que te pueda ayudar?"
 Esta regla aplica incluso si la materia sí tiene contenido oficial cargado — el contenido disponible en la materia no autoriza responder preguntas que no tengan relación con ese contenido.
 Una pregunta SÍ es académica (y debe responderse normalmente) si se relaciona con conceptos, ejemplos o aplicaciones de la materia, aunque use un objeto cotidiano para ilustrar (ej. "cómo funciona el motor de un carro" en Física SÍ es académico; "qué opinas de esta camioneta" en cualquier materia NO lo es).
+
+REGLA — NO PRACTICAR SIN TEMA CLARO:
+Si el alumno pide practicar, estudiar, que le ayudes o que le expliques con un ejemplo, pero NO hay un tema activo claro (ni lo mencionó en su mensaje ni hay un ejercicio pendiente), NO generes un ejercicio al azar. Pregunta primero qué tema quiere trabajar dentro de la materia seleccionada. Ejemplo: "Claro. ¿Qué tema quieres practicar de [materia]?"
+
+REGLA — FIDELIDAD A LAS FUENTES OFICIALES:
+Nunca inventes temas, unidades ni contenido que no esté en el material oficial disponible. No completes el índice del curso con temas que "normalmente se abordan" en esa materia, no reorganices el currículo y no presentes contenido no oficial como si lo fuera. Si el alumno pide agregar un tema nuevo a la clase, indica con claridad que no puedes agregar temas nuevos, solo trabajar con los que están en el contenido oficial del curso. Si no tienes suficiente información para listar los temas con seguridad, dilo directamente en vez de inventar.
+
+REGLA — RECURSOS EXTERNOS, TONO SEGURO:
+Cuando el alumno pida videos, páginas web, canales o lecturas externas, no los recomiendes, no inventes enlaces ni menciones autores o canales externos. Responde con seguridad y tono positivo, no defensivo: tú eres su tutor y puedes ayudarle directamente aquí, no necesita salir a otra página. Ofrece explicar, resumir o practicar el tema pedido con el contenido oficial disponible.
+
+REGLA — NO SUGERIR TEMAS SIN BASE CLARA:
+No recomiendes un tema de estudio arbitrario si no tienes una base clara para hacerlo (historial reciente, errores recientes, la materia o tema que el alumno ya seleccionó, progreso, la lista oficial de temas, o una recomendación explícita del maestro). Si no tienes esa base, pregunta primero de qué materia o tema quiere estudiar hoy.
 
 REGLA DE PROFUNDIDAD:
 No respondas demasiado corto cuando el alumno necesite entender. Desarrolla la explicación. Usa ejemplos breves. Busca que la respuesta no solo conteste, sino que enseñe.
@@ -911,6 +927,14 @@ async function registrarAlertaContenido(
 
 export async function POST(req: NextRequest) {
   let colegioIdParaAlerta: string | null = null
+  // Contexto para diferenciar el mensaje de error técnico y enriquecer la
+  // alerta interna — instructivo de mejoras, punto 22. Declarados fuera del
+  // try porque el catch general no puede ver variables declaradas dentro de
+  // su bloque.
+  let usuarioIdParaAlerta: string | null = null
+  let materiaIdParaAlerta = ''
+  let gradoParaAlerta = ''
+  let idiomaInglesParaAlerta = false
   try {
     const OpenAI = (await import('openai')).default
     const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
@@ -918,22 +942,27 @@ export async function POST(req: NextRequest) {
     const admin = createAdminClient()
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+    usuarioIdParaAlerta = user.id
 
     const body = await req.json()
     const { pregunta, historial, alerta_comprension = false, alerta_materia = '', alerta_tema = '' } = body
     const materia_id = body.materia_id || body.materia_detectada || ''
+    materiaIdParaAlerta = materia_id
     const userId: string = body.user_id || ''
     const idiomaIngles: boolean = body.idioma_ingles || false
+    idiomaInglesParaAlerta = idiomaIngles
     const practicaEnfoquePersistido = body.practica_enfoque
     const practicaEnfoqueEstable: MathPracticeFocus = ENFOQUES_PRACTICA_VALIDOS.includes(practicaEnfoquePersistido as MathPracticeFocus)
       ? practicaEnfoquePersistido as MathPracticeFocus
       : 'general'
 
     const grado_override = body.grado_override || body.grado_detectado || ''
+    gradoParaAlerta = grado_override
     if (!pregunta?.trim()) return NextResponse.json({ error: 'Pregunta vacía' }, { status: 400 })
 
     const { data: perfil } = await supabase.from('usuarios').select('*, colegio:colegios(*)').eq('id', user.id).single()
     if (!perfil) return NextResponse.json({ error: 'Perfil no encontrado' }, { status: 404 })
+    gradoParaAlerta = gradoParaAlerta || perfil.grado || ''
     colegioIdParaAlerta = perfil.colegio_id
 
     // CONTENT SAFETY - proteccion deterministica para menores
@@ -1133,6 +1162,36 @@ export async function POST(req: NextRequest) {
           Array.from(indiceDocumentos.keys()).forEach(key => { if (key.includes(materia_id)) indiceDocumentos.delete(key) })
           return NextResponse.json({ respuesta: 'Claro, cambiamos a ' + nuevaMateria + '. ¿Tienes una duda específica o quieres que te proponga un tema?', nuevo_estado: 'activo', materia_detectada: nuevaMateria, tokens: 0, pending_math_interaction_id: null, nivel_dificultad: 1, aciertos_consecutivos: 0, fallos_consecutivos: 0, practica_enfoque: 'general' })
         }
+      } else {
+        // MATERIAS_KEYWORDS solo conoce las 8 materias CNB en español, así
+        // que colegios con cursos granulares en inglés (eScholaris: "Science
+        // Grade 8", "Geometry", "Algebra 2") nunca activaban este cambio —
+        // bug real confirmado en el instructivo de mejoras (sección G,
+        // punto 12). isExplicitCourseSwitchRequest reconoce esos nombres de
+        // curso sin depender del set CNB; solo se cambia si además coincide
+        // con una materia realmente disponible para el alumno.
+        const materiasDisponiblesBody: string[] = Array.isArray(body.materias_disponibles) ? body.materias_disponibles : []
+        const cursoExplicito = isExplicitCourseSwitchRequest(pregunta, materiasDisponiblesBody)
+        if (cursoExplicito.detectado && cursoExplicito.coincideDisponible &&
+          normalizarMateria(cursoExplicito.coincideDisponible) !== normalizarMateria(materia_id) &&
+          cursoExplicito.coincideDisponible.toLowerCase() !== String(materia_id).toLowerCase()) {
+          const materiaConfirmada = cursoExplicito.coincideDisponible
+          Array.from(cacheContenido.keys()).forEach(key => { if (key.includes(materia_id)) cacheContenido.delete(key) })
+          Array.from(indiceDocumentos.keys()).forEach(key => { if (key.includes(materia_id)) indiceDocumentos.delete(key) })
+          return NextResponse.json({
+            respuesta: idiomaIngles
+              ? `Sure, let's switch to ${materiaConfirmada}. Do you have a specific question or would you like me to suggest a topic?`
+              : `Claro, cambiamos a ${materiaConfirmada}. ¿Tienes una duda específica o quieres que te proponga un tema?`,
+            nuevo_estado: 'activo',
+            materia_detectada: materiaConfirmada,
+            tokens: 0,
+            pending_math_interaction_id: null,
+            nivel_dificultad: 1,
+            aciertos_consecutivos: 0,
+            fallos_consecutivos: 0,
+            practica_enfoque: 'general',
+          })
+        }
       }
     }
 
@@ -1203,6 +1262,19 @@ export async function POST(req: NextRequest) {
     const esBienvenida = esSaludo(pregunta) && (!historial || historial.length === 0)
     const nivelDificultadActual = Math.min(8, Math.max(1, parseInt(String(body.nivel_dificultad || '1'), 10) || 1))
     const rachaAprendizaje = await obtenerRachaAprendizaje(admin, user.id, materia_uuid)
+
+    // Clasificador de intención (src/lib/intentClassifier.ts) — instructivo
+    // de mejoras, puntos 2-3, 25 y 28. La cascada de checks que sigue
+    // (cambio de materia/grado ya resuelto arriba, selección de lista,
+    // revisar errores, recordar ejercicio, aclarar el mismo paso, protocolo
+    // matemático, lista de temas) implementa a propósito el mismo orden de
+    // prioridad que clasificarIntencion(): seguridad y cambio de materia ya
+    // se resolvieron antes de llegar aquí; selección de lista tiene
+    // prioridad sobre evaluar como respuesta; y las solicitudes directas
+    // (recordar, aclarar, revisar errores, listar temas) se revisan antes
+    // que el protocolo matemático. Cualquier nuevo detector de intención
+    // debe agregarse primero en intentClassifier.ts y replicarse aquí en el
+    // mismo orden, para no romper esta prioridad ya verificada con pruebas.
 
     // Si el tutor acaba de mostrar una lista numerada (temas, subtemas,
     // opciones) y el alumno responde solo con un número, es una selección de
@@ -1375,7 +1447,7 @@ export async function POST(req: NextRequest) {
     let pendingMathDocumentoFuente: string | null = null
     let pendingMathPrompt: string | null = null
 
-    if (!pendingMathId && (isLikelyMathAnswerText(pregunta) || isPendingContextQuestion(pregunta) || isWorkedExampleRequest(pregunta))) {
+    if (!pendingMathId && (isLikelyMathAnswerText(pregunta) || isPendingContextQuestion(pregunta) || isWorkedExampleRequest(pregunta) || isExerciseRecallRequest(pregunta))) {
       try {
         let pendingQuery = supabase
           .from('interacciones')
@@ -1414,6 +1486,50 @@ export async function POST(req: NextRequest) {
           pendingMathOperation = preguntaPendiente.operacion_canonica
           pendingMathDocumentoFuente = preguntaPendiente.documento_fuente || null
           pendingMathPrompt = preguntaPendiente.respuesta || null
+
+          // "¿Cuál era el ejercicio?" debe recuperar el ejercicio activo, no
+          // generar uno nuevo — se revisa antes que isPendingContextQuestion
+          // porque es una pregunta más específica sobre el mismo problema.
+          if (isExerciseRecallRequest(pregunta)) {
+            const respuestaRecall = buildExerciseRecallResponse({
+              activeOperation: pendingMathOperation,
+              activePrompt: pendingMathPrompt,
+              idiomaIngles,
+            })
+            if (respuestaRecall) {
+              const { data: insertedRow } = await supabase.from('interacciones').insert({
+                usuario_id: user.id,
+                colegio_id: perfil.colegio_id,
+                materia_id: materia_uuid,
+                grado: gradoEfectivo,
+                tema_detectado: 'Recordar ejercicio activo',
+                pregunta,
+                respuesta: respuestaRecall,
+                tokens_usados: 0,
+                costo_usd: 0,
+                modelo_usado: 'exercise_recall_guard',
+                documento_fuente: pendingMathDocumentoFuente,
+                sospecha_copia: false,
+                operacion_canonica: null,
+                op_estado: null,
+                estado_evaluacion: 'contexto_pendiente',
+                guard_activado: true,
+              }).select('id').single()
+              supabase.from('usuarios').update({ ultimo_acceso: new Date().toISOString() }).eq('id', user.id).then(() => {})
+              return NextResponse.json({
+                respuesta: respuestaRecall,
+                source: 'exercise_recall_guard',
+                tokens: 0,
+                documento_fuente: pendingMathDocumentoFuente,
+                interaction_id: insertedRow?.id || null,
+                pending_math_interaction_id: pendingMathId,
+                nivel_dificultad: nivelDificultadActual,
+                aciertos_consecutivos: rachaAprendizaje.correctas,
+                fallos_consecutivos: rachaAprendizaje.incorrectas,
+                practica_enfoque: practicaEnfoqueEstable,
+              })
+            }
+          }
 
           if (isPendingContextQuestion(pregunta) && !isLikelyMathAnswerText(pregunta)) {
             const respuesta = buildPendingContextResponse({
@@ -2006,10 +2122,29 @@ ${contextoContenido}`
 
   } catch (err) {
     console.error('Error /api/preguntar:', err)
-    const status = (err as { status?: number } | null)?.status
-    const tipoError = status === 429 || (typeof status === 'number' && status >= 500) ? 'openai_agotado' : 'error_interno'
-    await registrarAlertaTecnica(createAdminClient(), colegioIdParaAlerta, tipoError, `Ruta:/api/preguntar | ${err instanceof Error ? err.message : String(err)}`.substring(0, 280))
-    return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 })
+    const tipoError = clasificarErrorTecnico(err)
+    const mensajeTecnico = mensajeErrorTecnico({
+      tipo: tipoError,
+      materiaNombre: materiaIdParaAlerta || null,
+      idiomaIngles: idiomaInglesParaAlerta,
+    })
+    const detalleError = err instanceof Error ? err.message : String(err)
+    await registrarAlertaTecnica(
+      createAdminClient(),
+      colegioIdParaAlerta,
+      tipoError,
+      construirContextoErrorTecnico({
+        ruta: '/api/preguntar',
+        usuarioId: usuarioIdParaAlerta,
+        materia: materiaIdParaAlerta || null,
+        grado: gradoParaAlerta || null,
+        accion: 'responder_pregunta',
+        fuenteEsperada: materiaIdParaAlerta || null,
+        mensajeMostrado: mensajeTecnico,
+        detalleError,
+      })
+    )
+    return NextResponse.json({ error: 'Error interno del servidor', respuesta: mensajeTecnico }, { status: 500 })
   }
 }
 

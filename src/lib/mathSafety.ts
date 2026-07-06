@@ -1,5 +1,188 @@
 import { evaluate } from 'mathjs'
 
+const NUMERO_ES_REFERENCIA_NO_RESPUESTA = /\b(grado|grade|tema|unidad|unit|nivel|level|cap[ií]tulo|chapter|lecci[oó]n|lesson|p[aá]gina|page|grupo|curso|course)\s+-?\d+(?:[.,]\d+)?\b/i
+
+const UNIDADES: Record<string, number> = {
+  cero: 0, un: 1, uno: 1, una: 1, dos: 2, tres: 3, cuatro: 4, cinco: 5,
+  seis: 6, siete: 7, ocho: 8, nueve: 9, diez: 10,
+  once: 11, doce: 12, trece: 13, catorce: 14, quince: 15,
+  dieciseis: 16, diecisiete: 17, dieciocho: 18, diecinueve: 19, veinte: 20,
+}
+
+const DECENAS: Record<string, number> = {
+  veinti: 20, treinta: 30, cuarenta: 40, cincuenta: 50,
+  sesenta: 60, setenta: 70, ochenta: 80, noventa: 90,
+}
+
+function normalizeWordNumberText(value: string) {
+  return (value || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+}
+
+function generarNumerosEnPalabras(): Record<string, number> {
+  const mapa: Record<string, number> = {}
+  const agregar = (clave: string, valor: number) => {
+    const normalizada = normalizeWordNumberText(clave)
+    mapa[normalizada] = valor
+    mapa[normalizada.replace(/\s+/g, '')] = valor
+  }
+
+  for (const [palabra, valor] of Object.entries(UNIDADES)) agregar(palabra, valor)
+  for (const [palabra, valor] of Object.entries(DECENAS)) {
+    if (palabra === 'veinti') continue
+    agregar(palabra, valor)
+  }
+
+  // 21-29: "veintiuno", "veinti uno", "veinte y uno"
+  for (const [unidad, valorUnidad] of Object.entries(UNIDADES)) {
+    if (valorUnidad < 1 || valorUnidad > 9) continue
+    agregar(`veinti${unidad}`, 20 + valorUnidad)
+    agregar(`veinti ${unidad}`, 20 + valorUnidad)
+    agregar(`veinte y ${unidad}`, 20 + valorUnidad)
+  }
+
+  // 31-99 (excluyendo decenas exactas y el rango 20-29 ya cubierto): "treinta y uno",
+  // "treinta uno", "treintaiuno", "treintiuno".
+  const decenasCompuestas: Array<[string, number]> = [
+    ['treinta', 30], ['cuarenta', 40], ['cincuenta', 50],
+    ['sesenta', 60], ['setenta', 70], ['ochenta', 80], ['noventa', 90],
+  ]
+  for (const [decenaPalabra, valorDecena] of decenasCompuestas) {
+    for (const [unidad, valorUnidad] of Object.entries(UNIDADES)) {
+      if (valorUnidad < 1 || valorUnidad > 9) continue
+      const total = valorDecena + valorUnidad
+      agregar(`${decenaPalabra} y ${unidad}`, total)
+      agregar(`${decenaPalabra} ${unidad}`, total)
+      const raizDecena = decenaPalabra.replace(/a$/, '')
+      agregar(`${raizDecena}ai${unidad}`, total)
+      agregar(`${raizDecena}i${unidad}`, total)
+    }
+  }
+
+  agregar('cien', 100)
+  agregar('cien por ciento', 100)
+
+  // Inglés: "thirty one", "twenty nine" — el toggle idiomaIngles del tutor
+  // significa que el alumno también puede responder en inglés.
+  const unidadesIngles: Record<string, number> = {
+    zero: 0, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7,
+    eight: 8, nine: 9, ten: 10, eleven: 11, twelve: 12, thirteen: 13,
+    fourteen: 14, fifteen: 15, sixteen: 16, seventeen: 17, eighteen: 18,
+    nineteen: 19, twenty: 20,
+  }
+  const decenasIngles: Record<string, number> = {
+    thirty: 30, forty: 40, fifty: 50, sixty: 60, seventy: 70, eighty: 80, ninety: 90,
+  }
+  for (const [palabra, valor] of Object.entries(unidadesIngles)) agregar(palabra, valor)
+  for (const [palabra, valor] of Object.entries(decenasIngles)) agregar(palabra, valor)
+  for (const [decenaPalabra, valorDecena] of Object.entries(decenasIngles)) {
+    for (const [unidad, valorUnidad] of Object.entries(unidadesIngles)) {
+      if (valorUnidad < 1 || valorUnidad > 9) continue
+      const total = valorDecena + valorUnidad
+      agregar(`${decenaPalabra} ${unidad}`, total)
+      agregar(`${decenaPalabra}-${unidad}`, total)
+    }
+  }
+  agregar('one hundred', 100)
+
+  return mapa
+}
+
+const NUMEROS_EN_PALABRAS = generarNumerosEnPalabras()
+
+export function parseSpanishNumberWord(texto: string): number | null {
+  const normalizado = normalizeWordNumberText(texto).replace(/[^a-z\s]/g, '').trim()
+  if (!normalizado) return null
+  if (normalizado in NUMEROS_EN_PALABRAS) return NUMEROS_EN_PALABRAS[normalizado]
+  const squished = normalizado.replace(/\s+/g, '')
+  if (squished in NUMEROS_EN_PALABRAS) return NUMEROS_EN_PALABRAS[squished]
+  return null
+}
+
+function resolverOperandoTextoONumero(token: string): number | null {
+  const directo = parseNumericAnswerToken(token.trim())
+  if (directo !== null) return directo
+  return parseSpanishNumberWord(token)
+}
+
+// Solo frases completas y simples tipo "la mitad de 22", "10 más 4" — se
+// evalúa el mensaje completo, no una subcadena dentro de una oración larga,
+// para no arriesgar falsos positivos como los demás bugs de hoy.
+export function parseExpresionEquivalente(texto: string): number | null {
+  const s = normalizeWordNumberText(texto).replace(/[¿?¡!.]+$/g, '').trim()
+  if (!s || s.split(/\s+/).length > 8) return null
+
+  const operandoToken = '([a-z]+(?:\\s+y\\s+[a-z]+)?|-?\\d+(?:[.,]\\d+)?)'
+
+  const mitad = s.match(new RegExp(`^la\\s+mitad\\s+de\\s+${operandoToken}$`))
+  if (mitad) {
+    const n = resolverOperandoTextoONumero(mitad[1])
+    return n === null ? null : n / 2
+  }
+
+  const doble = s.match(new RegExp(`^el\\s+doble\\s+de\\s+${operandoToken}$`))
+  if (doble) {
+    const n = resolverOperandoTextoONumero(doble[1])
+    return n === null ? null : n * 2
+  }
+
+  const triple = s.match(new RegExp(`^el\\s+triple\\s+de\\s+${operandoToken}$`))
+  if (triple) {
+    const n = resolverOperandoTextoONumero(triple[1])
+    return n === null ? null : n * 3
+  }
+
+  const cuadrado = s.match(new RegExp(`^${operandoToken}\\s+al\\s+cuadrado$`))
+  if (cuadrado) {
+    const n = resolverOperandoTextoONumero(cuadrado[1])
+    return n === null ? null : n * n
+  }
+
+  const cubo = s.match(new RegExp(`^${operandoToken}\\s+al\\s+cubo$`))
+  if (cubo) {
+    const n = resolverOperandoTextoONumero(cubo[1])
+    return n === null ? null : n * n * n
+  }
+
+  const dividido = s.match(new RegExp(`^${operandoToken}\\s+dividid[oa]\\s+(?:entre|por)\\s+${operandoToken}$`)) ||
+    s.match(new RegExp(`^${operandoToken}\\s+entre\\s+${operandoToken}$`))
+  if (dividido) {
+    const a = resolverOperandoTextoONumero(dividido[1])
+    const b = resolverOperandoTextoONumero(dividido[2])
+    if (a === null || b === null || b === 0) return null
+    return a / b
+  }
+
+  const multiplicado = s.match(new RegExp(`^${operandoToken}\\s+por\\s+${operandoToken}$`))
+  if (multiplicado) {
+    const a = resolverOperandoTextoONumero(multiplicado[1])
+    const b = resolverOperandoTextoONumero(multiplicado[2])
+    if (a === null || b === null) return null
+    return a * b
+  }
+
+  const mas = s.match(new RegExp(`^${operandoToken}\\s+m[aá]s\\s+${operandoToken}$`))
+  if (mas) {
+    const a = resolverOperandoTextoONumero(mas[1])
+    const b = resolverOperandoTextoONumero(mas[2])
+    if (a === null || b === null) return null
+    return a + b
+  }
+
+  const menos = s.match(new RegExp(`^${operandoToken}\\s+menos\\s+${operandoToken}$`))
+  if (menos) {
+    const a = resolverOperandoTextoONumero(menos[1])
+    const b = resolverOperandoTextoONumero(menos[2])
+    if (a === null || b === null) return null
+    return a - b
+  }
+
+  return null
+}
+
 export type MathEvaluation = {
   estado: string
   feedback: string
@@ -70,6 +253,16 @@ export function normalizeStudentAnswer(respuesta: string): number | null {
     .replace(/[¿?¡!]+$/g, '')
     .trim()
 
+  // Frases equivalentes completas ("la mitad de 22", "10 más 4") y números
+  // escritos en palabras ("treinta y uno", "veintinueve") — solo se acepta
+  // el mensaje completo, nunca una subcadena dentro de una oración más
+  // larga, para no repetir el patrón de falsos positivos de hoy.
+  const equivalente = parseExpresionEquivalente(s)
+  if (equivalente !== null) return equivalente
+
+  const numeroEnPalabras = parseSpanishNumberWord(s)
+  if (numeroEnPalabras !== null) return numeroEnPalabras
+
   // Cubre "x = 6", "x=6", "x es 6", "x vale 6", "x es igual a 6" — el alumno
   // no siempre escribe el signo "=", así que no basta con depender del caso
   // de respaldo (un único número suelto en todo el mensaje).
@@ -86,6 +279,14 @@ export function normalizeStudentAnswer(respuesta: string): number | null {
     const equations = Array.from(s.matchAll(/=\s*(-?\d+(?:[.,]\d+)?(?:\s*\/\s*-?\d+(?:[.,]\d+)?)?)/g))
     if (equations.length > 0) return parseNumericAnswerToken(equations[equations.length - 1][1])
   }
+
+  // Bug real: "Dime los temas de Science Grade 8" tiene un solo número
+  // suelto (8), y el respaldo de "un único número en todo el mensaje" lo
+  // extraía como si fuera la respuesta al ejercicio activo. Un número que
+  // acompaña a una palabra de referencia (grado, tema, unidad, lección...)
+  // casi nunca es una respuesta matemática — es parte de un nombre de
+  // materia/grado o una selección de lista, que se manejan en otro lugar.
+  if (NUMERO_ES_REFERENCIA_NO_RESPUESTA.test(s)) return null
 
   const numbers = Array.from(s.matchAll(/-?\d+(?:[.,]\d+)?(?:\s*\/\s*-?\d+(?:[.,]\d+)?)?/g))
   if (numbers.length === 1) return parseNumericAnswerToken(numbers[0][0])

@@ -30,8 +30,6 @@ function main() {
   const listaDeUnItem = 'Trabajemos con esto:\n1. Único tema disponible'
   assert.equal(matchNumberedListSelection('1', listaDeUnItem), null)
 
-  // Si el alumno no responde con un número puro, no debe activarse.
-  assert.equal(matchNumberedListSelection('quiero el segundo', listaBiologia), null)
   assert.equal(matchNumberedListSelection('genética por favor', listaBiologia), null)
 
   // Bug real encontrado con datos realistas: si el tutor numera preguntas o
@@ -42,6 +40,42 @@ function main() {
   assert.equal(matchNumberedListSelection('2', preguntasNumeradas), null)
   const instruccionesNumeradas = '1) Explica la Revolución Francesa\n2) Explica la Revolución Industrial'
   assert.equal(matchNumberedListSelection('1', instruccionesNumeradas), null)
+
+  // ── Ampliación pedida en el instructivo: número embebido en una frase de
+  // selección, ordinales, y referencia por nombre de tema ──
+  const listaAlgebra = [
+    'Podemos trabajar cualquiera de estos temas:',
+    '1. Ecuaciones y desigualdades',
+    '2. Funciones',
+    '3. Sistemas de ecuaciones',
+    '4. Polinomios',
+    '5. Radicales y exponentes',
+    '6. Progresiones',
+  ].join('\n')
+
+  assert.equal(matchNumberedListSelection('quiero el 4', listaAlgebra)?.tema, 'Polinomios')
+  assert.equal(matchNumberedListSelection('dame el número 8', listaAlgebra), null) // fuera de rango
+  assert.equal(matchNumberedListSelection('el tema 6', listaAlgebra)?.tema, 'Progresiones')
+  assert.equal(matchNumberedListSelection('quiero practicar el tema 6', listaAlgebra)?.tema, 'Progresiones')
+  assert.equal(matchNumberedListSelection('explícame el 4', listaAlgebra)?.tema, 'Polinomios')
+
+  // Ordinales: "quiero el segundo" ahora SÍ selecciona (antes no se
+  // reconocía) — cambio de comportamiento pedido explícitamente.
+  assert.equal(matchNumberedListSelection('quiero el segundo', listaBiologia)?.tema, 'Genética')
+  assert.equal(matchNumberedListSelection('volvamos al primero', listaAlgebra)?.tema, 'Ecuaciones y desigualdades')
+  assert.equal(matchNumberedListSelection('el tercero', listaAlgebra)?.tema, 'Sistemas de ecuaciones')
+  assert.equal(matchNumberedListSelection('el último', listaAlgebra)?.tema, 'Progresiones')
+
+  // Por nombre de tema.
+  assert.equal(matchNumberedListSelection('el de funciones', listaAlgebra)?.tema, 'Funciones')
+  assert.equal(matchNumberedListSelection('quiero el de radicales', listaAlgebra)?.tema, 'Radicales y exponentes')
+  assert.equal(matchNumberedListSelection('el de genética', listaBiologia)?.tema, 'Genética')
+
+  // Un mensaje largo no es una selección simple, aunque termine en número.
+  assert.equal(
+    matchNumberedListSelection('no entiendo nada de lo que me estás explicando en esta clase tan larga y confusa 4', listaAlgebra),
+    null
+  )
 
   console.log('topic-selection smoke passed')
 }

@@ -27,7 +27,13 @@
     "test:tema-general": "tsx scripts/tema-general-smoke.ts",
     "test:todays-changes": "tsx scripts/todays-changes-integration-test.ts",
     "test:fecha-guatemala": "tsx scripts/fecha-guatemala-smoke.ts",
-    "test": "npm run test:math && npm run test:humanistic && npm run test:pedagogy && npm run test:stress && npm run test:escholaris-math && npm run test:practice && npm run test:safety-sensitive && npm run test:exercise-repetition && npm run test:sensitive-topics && npm run test:openai-reliability && npm run test:reporte-seguridad && npm run test:all-classes && npm run test:chat-formatting && npm run test:topic-selection && npm run test:materia-detection && npm run test:mistake-review && npm run test:reporte-actividad && npm run test:tema-general && npm run test:todays-changes && npm run test:fecha-guatemala"
+    "test:intent-classifier": "tsx scripts/intent-classifier-smoke.ts",
+    "test:course-switch-detection": "tsx scripts/course-switch-detection-smoke.ts",
+    "test:system-prompt-content": "tsx scripts/system-prompt-content-smoke.ts",
+    "test:technical-errors": "tsx scripts/technical-errors-smoke.ts",
+    "test:route-course-switch": "tsx scripts/route-course-switch-integration-test.ts",
+    "test:instructivo-4-tests": "tsx scripts/instructivo-4-tests.ts",
+    "test": "npm run test:math && npm run test:humanistic && npm run test:pedagogy && npm run test:stress && npm run test:escholaris-math && npm run test:practice && npm run test:safety-sensitive && npm run test:exercise-repetition && npm run test:sensitive-topics && npm run test:openai-reliability && npm run test:reporte-seguridad && npm run test:all-classes && npm run test:chat-formatting && npm run test:topic-selection && npm run test:materia-detection && npm run test:mistake-review && npm run test:reporte-actividad && npm run test:tema-general && npm run test:todays-changes && npm run test:fecha-guatemala && npm run test:intent-classifier && npm run test:course-switch-detection && npm run test:system-prompt-content && npm run test:technical-errors && npm run test:route-course-switch && npm run test:instructivo-4-tests"
   },
   "dependencies": {
     "@supabase/ssr": "^0.5.1",

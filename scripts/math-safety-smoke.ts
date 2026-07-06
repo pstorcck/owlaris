@@ -186,6 +186,53 @@ D) 10
     assert.equal(evaluado?.estado, 'correcto', `"${respuestaAlumno}" debería marcarse correcto`)
   }
 
+  // Bug real: un número que acompaña a "grado/tema/unidad/..." no es una
+  // respuesta matemática — "Dime los temas de Science Grade 8" tiene un
+  // solo número suelto (8) y se extraía como si fuera la respuesta al
+  // ejercicio activo.
+  for (const mensajeSinRelacion of [
+    'Dime los temas de Science Grade 8',
+    'quiero ver Biology Grade 10',
+    'Dame los temas de Math Grade 6',
+    'el tema 6',
+    'la unidad 3',
+    'el capítulo 5',
+  ]) {
+    assert.equal(normalizeStudentAnswer(mensajeSinRelacion), null, `"${mensajeSinRelacion}" no debería normalizar a un número`)
+  }
+  // Pero una respuesta real de un solo número sigue funcionando.
+  assert.equal(normalizeStudentAnswer('8'), 8)
+  assert.equal(normalizeStudentAnswer('creo que es 8'), 8)
+
+  // Números escritos en palabras (con variantes/contracciones reales) y
+  // frases equivalentes completas — instructivo de mejoras, punto 19-20.
+  const numerosEnPalabras: Array<[string, number]> = [
+    ['treinta y uno', 31],
+    ['treintaiuno', 31],
+    ['treintiuno', 31],
+    ['treinta uno', 31],
+    ['thirty one', 31],
+    ['29', 29],
+    ['veintinueve', 29],
+    ['veinti nueve', 29],
+    ['veinti-nueve', 29],
+    ['la mitad de 22', 11],
+    ['el doble de 6', 12],
+    ['10 más 4', 14],
+    ['20 dividido entre 4', 5],
+    ['3 al cuadrado', 9],
+    ['55 dividido entre 5', 11],
+  ]
+  for (const [respuestaAlumno, esperado] of numerosEnPalabras) {
+    assert.equal(normalizeStudentAnswer(respuestaAlumno), esperado, `"${respuestaAlumno}" debería normalizar a ${esperado}`)
+  }
+
+  // Ejercicio activo x + 30 = 61, respuesta en palabras: debe marcarse
+  // correcta, nunca incorrecta (ejemplo del instructivo, prueba 2).
+  const wordAnswerEquation = await handleMathEvaluation('Resuelve: x + 30 = 61 [OP: x+30=61]', 'treinta y uno', false)
+  assert.equal(wordAnswerEquation?.estado, 'correcto')
+  assert.equal(wordAnswerEquation?.correctAnswer, 31)
+
   console.log('math-safety smoke passed')
 }
 

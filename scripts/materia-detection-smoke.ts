@@ -51,17 +51,25 @@ function main() {
   // en SU PROPIA materia, no en otra por colisión de substring — este mismo
   // escaneo encontró el bug real de "revolución" (Historia) confundida con
   // "evolución" (Biología) por un match de substring sin límite de palabra.
-  // "ecosistema" es la única excepción conocida y aceptada: aparece tal
-  // cual en Biología Y en Ciencias Naturales (tema legítimamente
-  // compartido, no un error de substring), así que gana la primera materia
-  // en orden de declaración.
-  const EXCEPCIONES_CONOCIDAS = new Set(['ecosistema'])
+  // "ecosistema" y "biodiversidad" son excepciones conocidas y aceptadas:
+  // aparecen tal cual en Biología Y en Ciencias Naturales (temas
+  // legítimamente compartidos, no un error de substring), así que gana la
+  // primera materia en orden de declaración.
+  const EXCEPCIONES_CONOCIDAS = new Set(['ecosistema', 'biodiversidad'])
   for (const [materiaEsperada, temas] of Object.entries(TEMAS_POR_MATERIA)) {
     for (const tema of temas) {
       if (EXCEPCIONES_CONOCIDAS.has(tema)) continue
       const detectada = detectarMateriaDesdeTexto(`quiero entender ${tema}`)
       assert.equal(detectada, materiaEsperada, `"${tema}" debería detectarse como ${materiaEsperada}, no ${detectada}`)
     }
+  }
+
+  // Instructivo de mejoras, sección K: genética, herencia, alelos, rasgos,
+  // anatomía, fisiología, organismos, adn, reproducción y adaptación deben
+  // reconocerse como Biología (antes solo "genética" tenía suerte por
+  // coincidir con otra palabra en la lista; el resto no estaba cubierto).
+  for (const termino of ['gen', 'genes', 'herencia', 'alelo', 'rasgo', 'anatomía', 'fisiología', 'organismos', 'adn', 'reproducción', 'adaptación']) {
+    assert.equal(detectarMateriaDesdeTexto(`quiero entender ${termino}`), 'Biología', `"${termino}" debería detectarse como Biología`)
   }
 
   console.log('materia-detection smoke passed')
