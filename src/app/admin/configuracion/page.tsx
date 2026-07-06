@@ -6,8 +6,10 @@ import { createClient } from '@/lib/supabase/client'
 
 export default function ConfiguracionPage() {
   const [colegioId, setColegioId]         = useState('')
+  const [esSuperadmin, setEsSuperadmin]   = useState(false)
   const [prompt, setPrompt]               = useState('')
   const [limite, setLimite]               = useState('999')
+  const [aplicarATodos, setAplicarATodos] = useState(false)
   const [mantenimiento, setMantenimiento] = useState(false)
   const [gradoLibre, setGradoLibre]       = useState(true)
   const [cargando, setCargando]           = useState(true)
@@ -22,10 +24,11 @@ export default function ConfiguracionPage() {
       if (!user) return
 
       const { data: perfil } = await supabase
-        .from('usuarios').select('colegio_id').eq('id', user.id).single()
+        .from('usuarios').select('colegio_id, rol').eq('id', user.id).single()
       if (!perfil) return
 
       setColegioId(perfil.colegio_id)
+      setEsSuperadmin(perfil.rol === 'superadmin')
 
       const res = await fetch(`/api/configuracion?colegio_id=${perfil.colegio_id}`)
       const data = await res.json()
@@ -40,15 +43,20 @@ export default function ConfiguracionPage() {
     cargar()
   }, [])
 
-  async function guardar(clave: string, valor: string) {
+  async function guardar(clave: string, valor: string, aplicarATodosLosColegios = false) {
     setGuardando(true)
-    await fetch('/api/configuracion', {
+    const res = await fetch('/api/configuracion', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ colegio_id: colegioId, clave, valor }),
+      body: JSON.stringify({ colegio_id: colegioId, clave, valor, aplicar_a_todos: aplicarATodosLosColegios }),
     })
+    const data = await res.json()
     setGuardando(false)
-    setMensaje('✅ Guardado correctamente')
+    setMensaje(
+      aplicarATodosLosColegios && data.colegios_actualizados
+        ? `✅ Guardado en ${data.colegios_actualizados} colegios`
+        : '✅ Guardado correctamente'
+    )
     setTimeout(() => setMensaje(''), 3000)
   }
 
@@ -140,7 +148,7 @@ export default function ConfiguracionPage() {
         <div className="bg-white/5 rounded-2xl p-6 border border-white/10">
           <h2 className="font-semibold mb-1">⏱️ Límite de preguntas por alumno/día</h2>
           <p className="text-sm text-gray-400 mb-4">Escribe 999 para sin límite. Recomendado: 50 para controlar costos.</p>
-          <div className="flex gap-3 items-center">
+          <div className="flex gap-3 items-center flex-wrap">
             <input
               type="number" value={limite} onChange={e => setLimite(e.target.value)}
               min="1" max="999"
@@ -149,12 +157,22 @@ export default function ConfiguracionPage() {
             />
             <span className="text-gray-400 text-sm">preguntas por día</span>
             {limite === '999' && <span className="text-green-400 text-xs">Sin límite</span>}
-            <button onClick={() => guardar('limite_preguntas_diarias', limite)}
+            <button onClick={() => guardar('limite_preguntas_diarias', limite, aplicarATodos)}
               disabled={guardando}
               className="bg-owlaris-primary hover:bg-purple-700 px-4 py-2 rounded-xl text-sm font-medium transition-colors disabled:opacity-50">
               {guardando ? 'Guardando...' : 'Guardar'}
             </button>
           </div>
+          {esSuperadmin && (
+            <label className="flex items-center gap-2 mt-4 text-sm text-gray-300 cursor-pointer select-none">
+              <input
+                type="checkbox" checked={aplicarATodos}
+                onChange={e => setAplicarATodos(e.target.checked)}
+                className="w-4 h-4 rounded accent-owlaris-primary"
+              />
+              Aplicar este número a todos los colegios (no solo el actual)
+            </label>
+          )}
         </div>
 
         {/* Editor de prompt */}

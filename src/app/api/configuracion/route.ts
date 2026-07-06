@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/server'
 import { canAccessColegio, requireRoles } from '@/lib/auth'
+import { construirFilasConfiguracionParaTodos } from '@/lib/configuracionMasiva'
 
 export async function GET(req: NextRequest) {
   try {
@@ -32,12 +33,30 @@ export async function POST(req: NextRequest) {
     if (!auth.ok) return auth.response
 
     const admin = createAdminClient()
-    const { colegio_id, clave, valor } = await req.json()
+    const { colegio_id, clave, valor, aplicar_a_todos } = await req.json()
     if (!colegio_id || !clave) {
       return NextResponse.json({ error: 'colegio_id y clave son requeridos' }, { status: 400 })
     }
     if (!canAccessColegio(auth.perfil, colegio_id)) {
       return NextResponse.json({ error: 'Sin permisos para este colegio' }, { status: 403 })
+    }
+
+    // "Aplicar a todos los colegios": solo superadmin puede empujar el mismo
+    // valor a TODOS los colegios de una sola vez. Antes había que repetir el
+    // guardado colegio por colegio — eso fue lo que dejó a un colegio
+    // (mismo grupo, otro colegio_id) atascado en un límite distinto al que
+    // se pensaba que ya aplicaba a todos.
+    if (aplicar_a_todos && auth.perfil.rol === 'superadmin') {
+      const { data: colegios, error: colegiosError } = await admin.from('colegios').select('id')
+      if (colegiosError) throw colegiosError
+
+      const ahora = new Date().toISOString()
+      const filas = construirFilasConfiguracionParaTodos((colegios || []).map(c => c.id), clave, valor, ahora)
+      if (filas.length === 0) return NextResponse.json({ error: 'No hay colegios registrados' }, { status: 404 })
+
+      const { error } = await admin.from('configuracion').upsert(filas, { onConflict: 'colegio_id,clave' })
+      if (error) throw error
+      return NextResponse.json({ ok: true, colegios_actualizados: filas.length })
     }
 
     const { error } = await admin
