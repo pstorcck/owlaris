@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
+import { Heart, TrendingUp, Check, Calendar, BookOpen, Star, MessageCircle, LineChart } from 'lucide-react'
 import OwlarisOwlHero from '@/components/OwlarisOwlHero'
 
 export default function PadresLoginPage() {
@@ -55,40 +56,93 @@ export default function PadresLoginPage() {
         }
         .ow-hero::before { width: 340px; height: 340px; top: -120px; left: -100px; }
         .ow-hero::after { width: 260px; height: 260px; bottom: -90px; right: -60px; background: rgba(124,58,237,.16); }
-        .ow-owl-3d-wrap {
+
+        .ow-decor-layer {
+          position: absolute;
+          inset: 0;
+          z-index: 0;
+          overflow: hidden;
+          pointer-events: none;
+          animation: ow-decor-fade 1.8s ease-out both;
+        }
+        .ow-decor-item {
+          position: absolute;
+          color: #FFFFFF;
+          font-weight: 800;
+          font-family: Georgia, ui-serif, serif;
+          line-height: 1;
+          white-space: nowrap;
+        }
+        .ow-decor-item.ow-decor-icon { display: flex; font-family: inherit; }
+        @keyframes ow-decor-fade {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+
+        .ow-owl-3d-outer {
           position: relative;
           z-index: 1;
-          width: 360px;
-          height: 360px;
+          width: 400px;
+          height: 400px;
           display: grid;
           place-items: center;
-          overflow: hidden;
         }
-        .ow-owl-3d-wrap::after {
+        .ow-owl-3d-outer::before {
           content: "";
           position: absolute;
-          bottom: 6px;
-          width: 155px;
-          height: 30px;
+          inset: 6%;
           border-radius: 50%;
-          background: radial-gradient(ellipse, rgba(0,0,0,.28) 0%, rgba(0,0,0,0) 70%);
+          background: radial-gradient(circle, rgba(255,255,255,.32) 0%, rgba(15,156,140,0) 68%);
           z-index: -1;
         }
+        .ow-owl-3d-outer::after {
+          content: "";
+          position: absolute;
+          bottom: 4px;
+          width: 190px;
+          height: 32px;
+          border-radius: 50%;
+          background: radial-gradient(ellipse, rgba(6,36,33,.34) 0%, rgba(6,36,33,0) 72%);
+          z-index: -1;
+        }
+        .ow-owl-3d-anim {
+          width: 100%;
+          height: 100%;
+          animation: ow-float 6s ease-in-out infinite;
+        }
+        @keyframes ow-float {
+          0%, 100% { transform: translateY(0); }
+          50% { transform: translateY(-10px); }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .ow-owl-3d-anim { animation: none; }
+          .ow-decor-layer { animation: none; }
+        }
+
         .ow-hero-text { position: relative; z-index: 1; text-align: center; }
         .ow-hero-name {
           margin: 0;
           color: #FFFFFF;
-          font-size: 40px;
+          font-size: 42px;
           font-weight: 900;
           letter-spacing: -.02em;
         }
         .ow-hero-tagline {
+          margin: 14px 0 0;
+          color: #FFFFFF;
+          font-size: 19px;
+          font-weight: 800;
+          max-width: 340px;
+          line-height: 1.45;
+          letter-spacing: -.01em;
+        }
+        .ow-hero-subtext {
           margin: 10px 0 0;
-          color: rgba(255,255,255,.88);
-          font-size: 17px;
-          font-weight: 600;
-          max-width: 320px;
-          line-height: 1.5;
+          color: rgba(255,255,255,.74);
+          font-size: 14px;
+          font-weight: 500;
+          max-width: 300px;
+          line-height: 1.55;
         }
         .ow-hero-chips {
           position: relative;
@@ -116,6 +170,18 @@ export default function PadresLoginPage() {
           background: #F8FBFA;
         }
         .ow-card { width: 100%; max-width: 380px; }
+        .ow-card-panel {
+          background: #FFFFFF;
+          border-radius: 24px;
+          border: 1px solid rgba(220,237,233,.8);
+          box-shadow: 0 24px 56px -16px rgba(6,36,33,.16), 0 2px 8px rgba(6,36,33,.05);
+          padding: 40px 34px;
+          animation: ow-card-in .55s ease-out both;
+        }
+        @keyframes ow-card-in {
+          from { opacity: 0; transform: translateY(10px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
         .ow-card-head { margin-bottom: 24px; }
         .ow-card-head h2 {
           margin: 0;
@@ -212,81 +278,107 @@ export default function PadresLoginPage() {
         @media (max-width: 860px) {
           .ow-page { grid-template-columns: 1fr; }
           .ow-hero { padding: 32px 24px 30px; gap: 12px; }
-          .ow-owl-3d-wrap { width: 180px; height: 180px; }
+          .ow-owl-3d-outer { width: 200px; height: 200px; }
+          .ow-owl-3d-outer::after { width: 120px; height: 22px; }
           .ow-hero-name { font-size: 28px; }
-          .ow-hero-tagline { font-size: 14px; }
+          .ow-hero-tagline { font-size: 15px; }
+          .ow-hero-subtext { font-size: 12.5px; }
           .ow-hero-chips { max-width: 300px; }
           .ow-chip { font-size: 11.5px; padding: 6px 12px; }
           .ow-formside { padding: 24px 22px 36px; }
+          .ow-card-panel { padding: 30px 24px; box-shadow: 0 14px 34px -14px rgba(6,36,33,.14); }
+          .ow-decor-item:nth-child(n+5) { display: none; }
+          .ow-decor-item { transform: scale(.85) rotate(var(--r, 0deg)); }
         }
         @media (max-width: 420px) {
-          .ow-owl-3d-wrap { width: 150px; height: 150px; }
+          .ow-owl-3d-outer { width: 165px; height: 165px; }
           .ow-hero { padding: 24px 20px 22px; gap: 10px; }
         }
       `}</style>
 
       <main className="ow-page">
         <section className="ow-hero">
-          <div className="ow-owl-3d-wrap">
-            <OwlarisOwlHero progressBarColor="#0F9C8C" />
+          <div className="ow-decor-layer">
+            <span className="ow-decor-item" style={{ top: '8%', left: '6%', fontSize: 15, opacity: .10, transform: 'rotate(-8deg)' }}>progreso</span>
+            <span className="ow-decor-item ow-decor-icon" style={{ top: '9%', right: '9%', opacity: .12, transform: 'rotate(10deg)' }}><Heart size={22} strokeWidth={2.2} /></span>
+            <span className="ow-decor-item ow-decor-icon" style={{ bottom: '10%', left: '9%', opacity: .12, transform: 'rotate(-6deg)' }}><TrendingUp size={24} strokeWidth={2.2} /></span>
+            <span className="ow-decor-item" style={{ bottom: '12%', right: '7%', fontSize: 14, opacity: .10, transform: 'rotate(9deg)' }}>confianza</span>
+            <span className="ow-decor-item ow-decor-icon" style={{ top: '24%', left: '9%', opacity: .13, transform: 'rotate(-10deg)' }}><Check size={26} strokeWidth={2.4} /></span>
+            <span className="ow-decor-item ow-decor-icon" style={{ top: '20%', right: '12%', opacity: .12, transform: 'rotate(14deg)' }}><Calendar size={24} strokeWidth={2.2} /></span>
+            <span className="ow-decor-item" style={{ top: '40%', left: '5%', fontSize: 32, opacity: .08, transform: 'rotate(6deg)' }}>guía</span>
+            <span className="ow-decor-item ow-decor-icon" style={{ top: '36%', right: '6%', opacity: .12, transform: 'rotate(-5deg)' }}><BookOpen size={26} strokeWidth={2.2} /></span>
+            <span className="ow-decor-item ow-decor-icon" style={{ top: '58%', left: '10%', opacity: .13, transform: 'rotate(8deg)' }}><Star size={22} strokeWidth={2.2} /></span>
+            <span className="ow-decor-item" style={{ top: '54%', right: '9%', fontSize: 15, opacity: .10, transform: 'rotate(-12deg)' }}>hábito</span>
+            <span className="ow-decor-item ow-decor-icon" style={{ top: '72%', left: '6%', opacity: .12, transform: 'rotate(-6deg)' }}><MessageCircle size={22} strokeWidth={2.2} /></span>
+            <span className="ow-decor-item ow-decor-icon" style={{ top: '70%', right: '11%', opacity: .12, transform: 'rotate(9deg)' }}><LineChart size={24} strokeWidth={2.2} /></span>
+          </div>
+
+          <div className="ow-owl-3d-outer">
+            <div className="ow-owl-3d-anim">
+              <OwlarisOwlHero progressBarColor="#0F9C8C" />
+            </div>
           </div>
           <div className="ow-hero-text">
-            <h1 className="ow-hero-name">Owlaris</h1>
-            <p className="ow-hero-tagline">Orientación y consejos prácticos para acompañar el aprendizaje de tu hijo o hija en casa.</p>
+            <h1 className="ow-hero-name">Owlaris Familias</h1>
+            <p className="ow-hero-tagline">Entiende cómo aprende tu hijo, paso a paso.</p>
+            <p className="ow-hero-subtext">Recibe orientación, consejos prácticos y reportes claros para acompañar mejor su progreso académico.</p>
           </div>
           <div className="ow-hero-chips">
             <span className="ow-chip">Guía pedagógica</span>
             <span className="ow-chip">Consejos prácticos</span>
+            <span className="ow-chip">Progreso académico</span>
             <span className="ow-chip">Disponible cuando lo necesites</span>
           </div>
         </section>
 
         <section className="ow-formside">
           <div className="ow-card">
-            <div className="ow-card-head">
-              <h2>Portal para padres</h2>
-              <p>Ingresa con tu cuenta para ver el progreso de tu hijo o hija.</p>
+            <div className="ow-card-panel">
+              <div className="ow-card-head">
+                <h2>Portal para padres</h2>
+                <p>Ingresa para revisar el progreso académico de tu hijo o hija.</p>
+              </div>
+
+              <form onSubmit={handleLogin} className="ow-form">
+                <div className="ow-field">
+                  <label htmlFor="email">Correo electrónico</label>
+                  <input
+                    id="email"
+                    type="email"
+                    value={email}
+                    onChange={e => setEmail(e.target.value)}
+                    placeholder="tu@correo.com"
+                    required
+                    className="ow-input"
+                    autoComplete="email"
+                  />
+                </div>
+                <div className="ow-field">
+                  <label htmlFor="password">Contraseña</label>
+                  <input
+                    id="password"
+                    type="password"
+                    value={password}
+                    onChange={e => setPassword(e.target.value)}
+                    placeholder="••••••••"
+                    required
+                    className="ow-input"
+                    autoComplete="current-password"
+                  />
+                </div>
+
+                {error && <div className="ow-error">{error}</div>}
+
+                <button type="submit" disabled={loading} className="ow-btn ow-btn-primary">
+                  {loading ? 'Entrando...' : 'Entrar al portal'}
+                </button>
+              </form>
+
+              <p className="ow-signup-line">
+                <Link href="/login">← Volver al login principal</Link>
+              </p>
+              <p className="ow-help-line">¿Olvidaste tu contraseña? Contacta al administrador del colegio.</p>
             </div>
-
-            <form onSubmit={handleLogin} className="ow-form">
-              <div className="ow-field">
-                <label htmlFor="email">Correo electrónico</label>
-                <input
-                  id="email"
-                  type="email"
-                  value={email}
-                  onChange={e => setEmail(e.target.value)}
-                  placeholder="tu@correo.com"
-                  required
-                  className="ow-input"
-                  autoComplete="email"
-                />
-              </div>
-              <div className="ow-field">
-                <label htmlFor="password">Contraseña</label>
-                <input
-                  id="password"
-                  type="password"
-                  value={password}
-                  onChange={e => setPassword(e.target.value)}
-                  placeholder="••••••••"
-                  required
-                  className="ow-input"
-                  autoComplete="current-password"
-                />
-              </div>
-
-              {error && <div className="ow-error">{error}</div>}
-
-              <button type="submit" disabled={loading} className="ow-btn ow-btn-primary">
-                {loading ? 'Entrando...' : 'Entrar'}
-              </button>
-            </form>
-
-            <p className="ow-help-line">¿Olvidaste tu contraseña? Contacta al administrador de tu colegio.</p>
-            <p className="ow-signup-line">
-              <Link href="/login">← Volver al login principal</Link>
-            </p>
           </div>
         </section>
       </main>
