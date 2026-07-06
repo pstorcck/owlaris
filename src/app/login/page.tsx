@@ -321,7 +321,6 @@ export default function LoginPage() {
           .ow-formside { padding: 24px 22px 36px; }
           .ow-card-panel { padding: 30px 24px; box-shadow: 0 14px 34px -14px rgba(25,19,51,.16); }
           .ow-decor-item:nth-child(n+5) { display: none; }
-          .ow-decor-item { transform: scale(.85) rotate(var(--r, 0deg)); }
         }
         @media (max-width: 420px) {
           .ow-owl-3d-outer { width: 165px; height: 165px; }
@@ -332,21 +331,21 @@ export default function LoginPage() {
       <main className="ow-page">
         <section className="ow-hero">
           <div className="ow-decor-layer">
-            <span className="ow-decor-item" style={{ top: '8%', left: '6%', fontSize: 16, opacity: .10, transform: 'rotate(-8deg)' }}>2x + 4 = 12</span>
-            <span className="ow-decor-item" style={{ top: '9%', right: '8%', fontSize: 42, opacity: .08, transform: 'rotate(12deg)' }}>π</span>
-            <span className="ow-decor-item ow-decor-icon" style={{ bottom: '10%', left: '9%', opacity: .12, transform: 'rotate(-6deg)' }}><TrendingUp size={24} strokeWidth={2.2} /></span>
-            <span className="ow-decor-item ow-decor-icon" style={{ bottom: '12%', right: '7%', opacity: .12, transform: 'rotate(9deg)' }}><MessageCircle size={22} strokeWidth={2.2} /></span>
-            <span className="ow-decor-item ow-decor-icon" style={{ top: '24%', left: '9%', opacity: .12, transform: 'rotate(-10deg)' }}><BookOpen size={28} strokeWidth={2.2} /></span>
-            <span className="ow-decor-item ow-decor-icon" style={{ top: '20%', right: '12%', opacity: .12, transform: 'rotate(16deg)' }}><Pencil size={24} strokeWidth={2.2} /></span>
-            <span className="ow-decor-item" style={{ top: '40%', left: '4%', fontSize: 15, opacity: .10, transform: 'rotate(6deg)' }}>√49 = 7</span>
-            <span className="ow-decor-item" style={{ top: '36%', right: '5%', fontSize: 14, opacity: .10, transform: 'rotate(-5deg)' }}>A² + B² = C²</span>
-            <span className="ow-decor-item ow-decor-icon" style={{ top: '58%', left: '10%', opacity: .12, transform: 'rotate(8deg)' }}><Lightbulb size={26} strokeWidth={2.2} /></span>
-            <span className="ow-decor-item" style={{ top: '54%', right: '9%', fontSize: 38, opacity: .08, transform: 'rotate(-14deg)' }}>∑</span>
-            <span className="ow-decor-item ow-decor-icon" style={{ top: '72%', left: '6%', opacity: .13, transform: 'rotate(-6deg)' }}><Check size={22} strokeWidth={2.4} /></span>
-            <span className="ow-decor-item" style={{ top: '70%', right: '11%', fontSize: 16, opacity: .11, transform: 'rotate(9deg)' }}>f(x)</span>
-            <span className="ow-decor-item" style={{ top: '3%', left: '28%', fontSize: 13, opacity: .10, transform: 'rotate(-6deg)' }}>3/4 = 0.75</span>
-            <span className="ow-decor-item" style={{ bottom: '3%', right: '26%', fontSize: 13, opacity: .10, transform: 'rotate(7deg)' }}>x + 7 = 15</span>
-            <span className="ow-decor-item" style={{ top: '46%', right: '2%', fontSize: 26, opacity: .09, transform: 'rotate(11deg)' }}>∆</span>
+            <span className="ow-decor-item" style={{ top: '7%', left: '4%', fontSize: 28, opacity: .13, transform: 'rotate(-8deg)' }}>2x + 4 = 12</span>
+            <span className="ow-decor-item" style={{ top: '6%', right: '5%', fontSize: 68, opacity: .10, transform: 'rotate(12deg)' }}>π</span>
+            <span className="ow-decor-item ow-decor-icon" style={{ bottom: '8%', left: '6%', opacity: .15, transform: 'rotate(-6deg)' }}><TrendingUp size={42} strokeWidth={2.2} /></span>
+            <span className="ow-decor-item ow-decor-icon" style={{ bottom: '10%', right: '4%', opacity: .15, transform: 'rotate(9deg)' }}><MessageCircle size={40} strokeWidth={2.2} /></span>
+            <span className="ow-decor-item ow-decor-icon" style={{ top: '22%', left: '5%', opacity: .14, transform: 'rotate(-10deg)' }}><BookOpen size={48} strokeWidth={2.2} /></span>
+            <span className="ow-decor-item ow-decor-icon" style={{ top: '18%', right: '7%', opacity: .14, transform: 'rotate(16deg)' }}><Pencil size={42} strokeWidth={2.2} /></span>
+            <span className="ow-decor-item" style={{ top: '38%', left: '1%', fontSize: 26, opacity: .13, transform: 'rotate(6deg)' }}>√49 = 7</span>
+            <span className="ow-decor-item" style={{ top: '34%', right: '1%', fontSize: 24, opacity: .13, transform: 'rotate(-5deg)' }}>A² + B² = C²</span>
+            <span className="ow-decor-item ow-decor-icon" style={{ top: '56%', left: '4%', opacity: .14, transform: 'rotate(8deg)' }}><Lightbulb size={46} strokeWidth={2.2} /></span>
+            <span className="ow-decor-item" style={{ top: '52%', right: '3%', fontSize: 62, opacity: .10, transform: 'rotate(-14deg)' }}>∑</span>
+            <span className="ow-decor-item ow-decor-icon" style={{ top: '71%', left: '2%', opacity: .15, transform: 'rotate(-6deg)' }}><Check size={42} strokeWidth={2.4} /></span>
+            <span className="ow-decor-item" style={{ top: '69%', right: '5%', fontSize: 30, opacity: .13, transform: 'rotate(9deg)' }}>f(x)</span>
+            <span className="ow-decor-item" style={{ top: '2%', left: '22%', fontSize: 24, opacity: .12, transform: 'rotate(-6deg)' }}>3/4 = 0.75</span>
+            <span className="ow-decor-item" style={{ bottom: '2%', right: '20%', fontSize: 24, opacity: .12, transform: 'rotate(7deg)' }}>x + 7 = 15</span>
+            <span className="ow-decor-item" style={{ top: '45%', right: '0%', fontSize: 48, opacity: .11, transform: 'rotate(11deg)' }}>∆</span>
           </div>
 
           <div className="ow-owl-3d-outer">
