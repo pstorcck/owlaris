@@ -63,6 +63,11 @@ export default function PadresLoginPage() {
           display: grid;
           place-items: center;
           overflow: hidden;
+          animation: ow-bob 3.4s ease-in-out infinite;
+        }
+        @keyframes ow-bob {
+          0%, 100% { transform: translateY(0); }
+          50% { transform: translateY(-10px); }
         }
         .ow-owl-3d-wrap::after {
           content: "";
