@@ -344,6 +344,9 @@ export default function LoginPage() {
             <span className="ow-decor-item" style={{ top: '54%', right: '9%', fontSize: 38, opacity: .08, transform: 'rotate(-14deg)' }}>∑</span>
             <span className="ow-decor-item ow-decor-icon" style={{ top: '72%', left: '6%', opacity: .13, transform: 'rotate(-6deg)' }}><Check size={22} strokeWidth={2.4} /></span>
             <span className="ow-decor-item" style={{ top: '70%', right: '11%', fontSize: 16, opacity: .11, transform: 'rotate(9deg)' }}>f(x)</span>
+            <span className="ow-decor-item" style={{ top: '3%', left: '28%', fontSize: 13, opacity: .10, transform: 'rotate(-6deg)' }}>3/4 = 0.75</span>
+            <span className="ow-decor-item" style={{ bottom: '3%', right: '26%', fontSize: 13, opacity: .10, transform: 'rotate(7deg)' }}>x + 7 = 15</span>
+            <span className="ow-decor-item" style={{ top: '46%', right: '2%', fontSize: 26, opacity: .09, transform: 'rotate(11deg)' }}>∆</span>
           </div>
 
           <div className="ow-owl-3d-outer">
