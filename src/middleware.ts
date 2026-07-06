@@ -45,5 +45,9 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/((?!_next/static|_next/image|favicon.ico|api/signup|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)'],
+  // vendor/ y models/ sirven el búho 3D (model-viewer + decodificador Draco
+  // + .glb) en el login público — sin excluirlos, un visitante SIN sesión
+  // hace que estas peticiones estáticas se redirijan a /login en vez de
+  // servirse, y el búho nunca carga.
+  matcher: ['/((?!_next/static|_next/image|favicon.ico|vendor/|models/|api/signup|.*\\.(?:svg|png|jpg|jpeg|gif|webp|js|wasm|glb)$).*)'],
 }

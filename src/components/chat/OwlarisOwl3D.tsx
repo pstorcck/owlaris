@@ -12,6 +12,7 @@ declare global {
     interface IntrinsicElements {
       'model-viewer': React.DetailedHTMLProps<React.HTMLAttributes<HTMLElement> & {
         src?: string
+        autoplay?: boolean | string
         'auto-rotate'?: boolean | string
         'rotation-per-second'?: string
         'shadow-intensity'?: string

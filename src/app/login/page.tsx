@@ -1,10 +1,10 @@
 'use client'
 
 import { useState } from 'react'
-import Image from 'next/image'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { Users } from 'lucide-react'
+import OwlarisOwlHero from '@/components/OwlarisOwlHero'
 
 export default function LoginPage() {
   const [email, setEmail] = useState('')
@@ -60,21 +60,23 @@ export default function LoginPage() {
         }
         .ow-hero::before { width: 340px; height: 340px; top: -120px; left: -100px; }
         .ow-hero::after { width: 260px; height: 260px; bottom: -90px; right: -60px; background: rgba(20,184,166,.16); }
-        .ow-owl-badge {
+        .ow-owl-3d-wrap {
           position: relative;
           z-index: 1;
-          width: 176px;
-          height: 176px;
-          border-radius: 50%;
+          width: 300px;
+          height: 300px;
           display: grid;
           place-items: center;
-          background: #FFFFFF;
-          box-shadow: 0 20px 0 rgba(76,29,149,.4), 0 30px 60px rgba(0,0,0,.22);
-          animation: ow-bob 3.4s ease-in-out infinite;
         }
-        @keyframes ow-bob {
-          0%, 100% { transform: translateY(0) rotate(-1.5deg); }
-          50% { transform: translateY(-10px) rotate(1.5deg); }
+        .ow-owl-3d-wrap::after {
+          content: "";
+          position: absolute;
+          bottom: 6px;
+          width: 130px;
+          height: 26px;
+          border-radius: 50%;
+          background: radial-gradient(ellipse, rgba(0,0,0,.28) 0%, rgba(0,0,0,0) 70%);
+          z-index: -1;
         }
         .ow-hero-text { position: relative; z-index: 1; text-align: center; }
         .ow-hero-name {
@@ -231,7 +233,7 @@ export default function LoginPage() {
         @media (max-width: 860px) {
           .ow-page { grid-template-columns: 1fr; }
           .ow-hero { padding: 40px 24px 44px; gap: 18px; }
-          .ow-owl-badge { width: 132px; height: 132px; }
+          .ow-owl-3d-wrap { width: 200px; height: 200px; }
           .ow-hero-name { font-size: 32px; }
           .ow-hero-tagline { font-size: 15px; }
           .ow-formside { padding: 30px 22px 44px; }
@@ -240,8 +242,8 @@ export default function LoginPage() {
 
       <main className="ow-page">
         <section className="ow-hero">
-          <div className="ow-owl-badge">
-            <Image src="/buho.png" alt="Owlaris" width={124} height={124} priority style={{ objectFit: 'contain' }} />
+          <div className="ow-owl-3d-wrap">
+            <OwlarisOwlHero size={260} />
           </div>
           <div className="ow-hero-text">
             <h1 className="ow-hero-name">Owlaris</h1>
