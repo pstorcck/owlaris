@@ -382,7 +382,49 @@ async function main() {
     assert.equal(focusSinPersistencia, 'general')
   })
 
-  assert.equal(total, 1000 + 20 + 20 + 20 + 20 + 20 + 20 + 18 + 18 + 60 + 30 + 30 + 60 + 30 + 30 + 25 + 20 + 20 + 1)
+  // Reporte real de un alumno (2026-07-07): eligió "multiplicaciones" como
+  // tema, los primeros ejercicios salieron bien, pero después de unos turnos
+  // el tutor empezó a mezclar restas/sumas/orden de operaciones sin que el
+  // alumno pidiera cambiar de tema. La causa real estaba en /api/preguntar,
+  // no en esta librería: esa ruta nunca llamaba a resolveMathPracticeFocus
+  // sobre la elección de tema en sí ("multiplicaciones") — se quedaba con
+  // el enfoque ya persistido (o "general" en el primer turno de la sesión).
+  // Este bloque reproduce la sesión completa con el texto pedagógico REAL
+  // que el tutor genera para explicar multiplicación (que menciona "suma
+  // repetida"/"sumar" — la razón por la que el enfoque se perdía en cuanto
+  // esa frase quedaba fuera de la ventana de contexto reciente).
+  const explicacionMultiplicacionReal = 'Muy bien, hablemos de multiplicaciones.\n\nLa multiplicación es una suma repetida. Por ejemplo, si tienes 3 grupos de 4 manzanas, en lugar de sumar 4 + 4 + 4, puedes multiplicar 3 por 4. Esto se escribe así: 3 × 4.\n\nAhora, ¿puedes intentar resolver esta multiplicación? ¿Cuánto es 5 × 6?'
+  test('explicacion-real-de-multiplicacion-confunde-el-detector-de-contexto', () => {
+    // Documenta el hallazgo: este texto pedagógico real, usado solo, cae en
+    // 'general' porque "sumar"/"suma" y "multiplicar"/"multiplicación"
+    // aparecen juntos — exactamente por qué depender solo del contexto
+    // reciente (sin fijar el enfoque desde el turno del tema) fallaba.
+    assert.equal(inferMathPracticeFocus([explicacionMultiplicacionReal]), 'general')
+  })
+
+  const focusDesdeEleccionDeTema = resolveMathPracticeFocus(['multiplicaciones'], 'general')
+  test('elegir-tema-multiplicaciones-fija-el-enfoque', () => {
+    assert.equal(focusDesdeEleccionDeTema, 'multiplicacion')
+  })
+
+  let enfoqueSesionReal = focusDesdeEleccionDeTema
+  const sesionRealOps: string[] = []
+  const respuestasDelTutor = [
+    explicacionMultiplicacionReal,
+    '¡Correcto! Tu respuesta está bien. Vamos con un ejercicio distinto.\n\nYa llevas una buena racha, así que voy a subir un poco el reto.\n\nIntenta este ejercicio distinto: 3 * 10. ¿Cual es el resultado?',
+  ]
+  for (let i = 0; i < 20; i += 1) {
+    const respuestaPrevia = respuestasDelTutor[i] || respuestasDelTutor[respuestasDelTutor.length - 1]
+    enfoqueSesionReal = resolveMathPracticeFocus([String(i * 3), respuestaPrevia, respuestaPrevia], enfoqueSesionReal)
+    const next = buildNextMathExercise(sesionRealOps, 1, false, enfoqueSesionReal)
+    test(`sesion-real-multiplicaciones-no-se-desvia-${i}`, () => {
+      assert.equal(enfoqueSesionReal, 'multiplicacion', `enfoque se perdió en el turno ${i}`)
+      assert.doesNotMatch(next.op, /[+\-/]/, `se coló suma/resta/división en el turno ${i}: ${next.op}`)
+    })
+    sesionRealOps.push(next.op)
+  }
+
+  assert.equal(total, 1000 + 20 + 20 + 20 + 20 + 20 + 20 + 18 + 18 + 60 + 30 + 30 + 60 + 30 + 30 + 25 + 20 + 20 + 1 + 1 + 1 + 20)
 
   if (failures.length > 0) {
     console.error(`math practice stress failed: ${failures.length}/${total}`)

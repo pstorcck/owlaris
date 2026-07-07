@@ -2042,7 +2042,20 @@ ${contextoContenido}`
       : null
     let opFinalRespuesta = _opExtraida || opInferida || opDesdeAlumno
     let opValidaEnRespuesta = isSafeCanonicalOperation(opFinalRespuesta) ? opFinalRespuesta : null
-    let practicaEnfoqueFinal: MathPracticeFocus = practicaEnfoqueEstable
+    // Antes esta rama (la que responde cuando el alumno recién elige un
+    // tema, ej. "multiplicaciones") nunca llamaba a resolveMathPracticeFocus
+    // — se quedaba con el enfoque ya persistido (o "general" si era la
+    // primera pregunta de la sesión) sin importar lo que el alumno acabara
+    // de escribir. Eso hacía que, en cuanto los ejercicios generados por
+    // buildNextMathExercise (mas adelante en la sesión) dejaran de tener la
+    // palabra clave en el contexto reciente, el enfoque quedara en
+    // "general" para siempre y el generador aleatorio de nivel 1 mezclara
+    // suma/resta/multiplicación/división aunque el alumno solo hubiera
+    // pedido multiplicaciones. Resolviendolo aquí también, con la pregunta
+    // actual como señal principal, el enfoque queda bien fijado desde el
+    // turno en que el alumno nombra el tema y se mantiene correcto en los
+    // turnos siguientes vía el valor persistido.
+    let practicaEnfoqueFinal: MathPracticeFocus = resolveMathPracticeFocus([pregunta, respuesta], practicaEnfoqueEstable)
     if (opValidaEnRespuesta) {
       const operacionesHistorial = collectRecentMathOperations(
         Array.isArray(historial) ? historial.map((msg: { contenido?: string }) => msg.contenido || '') : []
