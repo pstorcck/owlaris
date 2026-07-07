@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { guardNoFinalAnswer, shouldGuideWithoutFinalAnswer } from '../src/lib/pedagogicalGuard'
+import { describeFinalAnswerPolicyForPrompt, guardNoFinalAnswer, shouldGuideWithoutFinalAnswer } from '../src/lib/pedagogicalGuard'
 import {
   buildExerciseRecallResponse,
   buildPendingContextResponse,
@@ -184,6 +184,69 @@ Mapa del curso
   const recall = buildExerciseRecallResponse({ activeOperation: '2*(x+3)=14', idiomaIngles: false })
   assert.match(recall || '', /2 \* \(x \+ 3\) = 14/)
   assert.equal(buildExerciseRecallResponse({ activeOperation: null, idiomaIngles: false }), null)
+
+  // ── Sprint de estabilización (2026-07-07): el guard de "no dar la
+  // respuesta final" debe aplicarse también en materias conceptuales cuando
+  // piden completar un trabajo evaluable — ensayo, tesis, conclusión,
+  // argumento — no solo en matemática. ──
+  for (const pregunta of [
+    'Escribe la conclusión de mi ensayo sobre la Revolución Francesa',
+    'Necesito el argumento final para mi trabajo de Filosofía',
+    'Dame la tesis completa de mi análisis literario',
+    'Responde la pregunta del examen de Biología',
+    'Write the essay conclusion for my history paper',
+  ]) {
+    assert.equal(
+      shouldGuideWithoutFinalAnswer({ pregunta, tipoPregunta: 'academica', materiaNumerica: false }),
+      true,
+      `"${pregunta}" debería activar el guard en materia conceptual`
+    )
+  }
+
+  // Riesgo identificado en el plan: una pregunta conceptual legítima (pedir
+  // una explicación o un resumen) NO debe activar el guard — solo pedir un
+  // trabajo evaluable completo debe hacerlo.
+  for (const pregunta of [
+    '¿Qué es la fotosíntesis?',
+    'Resume el tema de la Revolución Francesa',
+    'Explícame qué causó la Segunda Guerra Mundial',
+    '¿Qué significa democracia?',
+  ]) {
+    assert.equal(
+      shouldGuideWithoutFinalAnswer({ pregunta, tipoPregunta: 'academica', materiaNumerica: false }),
+      false,
+      `"${pregunta}" es una pregunta conceptual legítima, no debería activar el guard`
+    )
+  }
+
+  // El guard debe recortar un anuncio de "aquí está tu ensayo/conclusión
+  // completa", sin depender de que el modelo use jerga matemática.
+  const ensayoCompleto = guardNoFinalAnswer(
+    'Aquí tienes la conclusión completa de tu ensayo: la Revolución Francesa transformó Europa para siempre.',
+    { pregunta: 'Escribe la conclusión de mi ensayo', tipoPregunta: 'academica', materiaNumerica: false }
+  )
+  assert.equal(ensayoCompleto.guardActivado, true)
+  assert.doesNotMatch(ensayoCompleto.text, /conclusi[oó]n completa de tu ensayo/i)
+
+  // Una explicación legítima que naturalmente cierra con "en conclusión..."
+  // como parte de guiar (no de entregar un ensayo terminado) no debe
+  // dispararse, porque el patrón exige "la conclusión de TU ensayo/trabajo",
+  // no la palabra "conclusión" sola.
+  const explicacionNormal = guardNoFinalAnswer(
+    'La Revolución Francesa tuvo varias causas. En conclusión, fue un evento clave para la democracia moderna. ¿Qué causa te parece más importante?',
+    { pregunta: 'Explícame la Revolución Francesa', tipoPregunta: 'academica', materiaNumerica: false }
+  )
+  assert.equal(explicacionNormal.guardActivado, false)
+  assert.match(explicacionNormal.text, /En conclusi[oó]n, fue un evento clave/i)
+
+  // La descripción centralizada de la política debe existir y mencionar
+  // explícitamente el caso conceptual (ensayo/tesis/argumento), no solo el
+  // numérico, para que el prompt y el guard de código no queden
+  // desincronizados.
+  const politica = describeFinalAnswerPolicyForPrompt()
+  assert.match(politica, /RESPUESTAS FINALES/)
+  assert.match(politica, /ensayo/i)
+  assert.match(politica, /no te voy a dar la respuesta/i)
 
   console.log('pedagogical-guard smoke passed')
 }

@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import path from 'node:path'
+import { describeFinalAnswerPolicyForPrompt } from '../src/lib/pedagogicalGuard'
+import { describeSameExercisePolicyForPrompt } from '../src/lib/tutorContext'
+import { buildGradeAdaptationInstruction } from '../src/lib/gradeAdaptation'
 
 // route.ts importa clientes de Supabase/OpenAI a nivel de módulo y no puede
 // cargarse en este entorno sin credenciales, así que este smoke test valida
@@ -39,6 +42,27 @@ function main() {
   // turno), verificado en su propio bloque de construcción más abajo.
   assert.match(contenido, /EJERCICIO ACTIVO PENDIENTE: \$\{pendingMathOperation\}/)
   assert.match(contenido, /NO le preguntes de nuevo qué tema quiere trabajar/)
+
+  // Sprint de estabilización (2026-07-07): "qué es revelar la respuesta" y
+  // "qué es seguir con el mismo ejercicio" ahora se generan desde un único
+  // módulo fuente en vez de vivir como texto duplicado dentro de
+  // PROMPT_BASE — se verifica que route.ts siga llamando a esas funciones
+  // (no que alguien haya revertido a texto hardcodeado) y que el contenido
+  // real que devuelven siga siendo el esperado.
+  assert.match(promptBase, /\$\{describeSameExercisePolicyForPrompt\(\)\}/)
+  assert.match(promptBase, /\$\{describeFinalAnswerPolicyForPrompt\(\)\}/)
+  const politicaMismoEjercicio = describeSameExercisePolicyForPrompt()
+  assert.match(politicaMismoEjercicio, /ejercicio pendiente/i)
+  assert.match(politicaMismoEjercicio, /NO cambies de ejercicio ni de tema/i)
+  const politicaRespuestaFinal = describeFinalAnswerPolicyForPrompt()
+  assert.match(politicaRespuestaFinal, /RESPUESTAS FINALES/)
+  assert.match(politicaRespuestaFinal, /ensayo/i)
+
+  // La adaptación por grado se inyecta por turno (depende de gradoEfectivo),
+  // no dentro de PROMPT_BASE estático — se verifica que route.ts la
+  // construya y que el módulo produzca contenido real por banda.
+  assert.match(contenido, /buildGradeAdaptationInstruction\(gradoEfectivo, idiomaIngles\)/)
+  assert.match(buildGradeAdaptationInstruction('4to Primaria', false), /ADAPTACIÓN POR GRADO/)
 
   console.log('system-prompt-content smoke passed')
 }

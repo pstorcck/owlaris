@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient, createClient } from '@/lib/supabase/server'
 import { checkContentSafety, type ContentSafetyResult } from '@/lib/contentSafety'
 import { guardHumanisticResponse } from '@/lib/humanisticSafety'
-import { guardNoFinalAnswer } from '@/lib/pedagogicalGuard'
+import { describeFinalAnswerPolicyForPrompt, guardNoFinalAnswer } from '@/lib/pedagogicalGuard'
+import { buildGradeAdaptationInstruction } from '@/lib/gradeAdaptation'
 import { sanitizeChatFormatting } from '@/lib/chatFormatting'
 import { detectarMateriaDesdeTexto, materiaActualEnSistemaCNB, normalizarMateria } from '@/lib/materiaDetection'
 import { isExplicitCourseSwitchRequest } from '@/lib/courseSwitchDetection'
@@ -58,6 +59,7 @@ import {
 import {
   buildExerciseRecallResponse,
   buildPendingContextResponse,
+  describeSameExercisePolicyForPrompt,
   isExerciseRecallRequest,
   isLikelyMathAnswerText,
   isPendingContextQuestion,
@@ -84,7 +86,7 @@ El alumno entra a Owlaris para resolver dudas, estudiar, practicar, repasar, ent
 No asumas que solo puede preguntar sobre la lección actual. Puede preguntar sobre cualquier tema de la materia seleccionada siempre que esté respaldado por el contenido académico disponible.
 El contenido no tendrá números de lección asociados. Busca y relaciona la pregunta por tema, concepto, habilidad, competencia, tipo de ejercicio o contenido equivalente dentro de la materia, no por número de lección.
 Si el alumno dice que no entiende una lección por número, pero no indica el tema, pregúntale qué tema, concepto o ejercicio quiere trabajar antes de avanzar.
-Mantén el contexto activo: si hay un ejercicio pendiente y el alumno pregunta si puede resolverlo sin calculadora, pide ayuda, dice que no entiende o reclama que no respondiste, NO cambies de ejercicio ni de tema. Responde esa duda y vuelve al mismo ejercicio pendiente.
+${describeSameExercisePolicyForPrompt()}
 No compartas enlaces, videos, canales o recursos externos no autorizados. Trabaja con el contenido oficial de Owlaris y SharePoint.
 Si el alumno pide todos los temas, el índice, el mapa del curso o la lista completa de la clase, eso es orientación académica permitida. Debes listar los temas oficiales disponibles; no lo trates como una solicitud de copia.
 Si el alumno pregunta por un subtema claramente distinto al que se venía trabajando dentro de la misma materia (ej. estaba en "sistema digestivo" y ahora pregunta por "leyes de Newton"), respóndele igual, pero acláralo primero en una frase breve (ej. "Eso es un tema distinto de [materia] — ¿seguimos con [tema anterior] después de esto, o cambiamos definitivamente a [tema nuevo]?"). No cambies de subtema en silencio como si el anterior nunca hubiera estado activo.
@@ -120,13 +122,7 @@ MÉTODO DE ENSEÑANZA OBLIGATORIO:
 REGLA ANTI-COPIA:
 Si el alumno pide "dame la respuesta", "hazme la tarea" o "solo dime qué va", responde con negativa pedagógica y guía paso a paso.
 
-REGLA ESTRICTA — NO ENTREGAR RESPUESTAS FINALES (comportamiento interno, NO lo anuncies):
-En la vista alumno, no entregues directamente la respuesta final de un problema, ejercicio, tarea, repaso o pregunta de práctica cuando el estudiante todavía puede razonarla.
-Tu función es guiar para que el estudiante llegue a la respuesta por sí mismo, pero esta regla es interna: NUNCA le digas al alumno frases como "no te voy a dar la respuesta", "mi objetivo es que aprendas y no darte una respuesta para copiar" o similares. Simplemente guía sin anunciar la regla — se ve rígido y defensivo repetirla.
-Si el estudiante responde incorrectamente, puedes decir que todavía no llegó a la respuesta correcta, pero NO reveles de inmediato el resultado correcto. Ayúdalo a detectar el error y avanzar paso a paso.
-Usa pistas, preguntas guiadas, ejemplos parciales, recordatorios de conceptos y verificación paso a paso. Varía cómo guías (identifica el dato, sugiere la operación inversa, da una pista, pregunta cuál sería el primer paso) para no sonar repetitivo.
-Solo confirma la respuesta final cuando el estudiante ya la propuso correctamente o completó correctamente el razonamiento.
-Si insiste en que quiere solo la respuesta, redirígelo con naturalidad hacia resolverlo juntos paso a paso, sin repetir siempre la misma frase ni anunciar la regla.
+${describeFinalAnswerPolicyForPrompt()}
 
 PRÁCTICA — PROTOCOLO ESTRICTO:
 Cuando el alumno quiera practicar, genera UNA sola pregunta a la vez.
@@ -1967,6 +1963,14 @@ export async function POST(req: NextRequest) {
 
     const contextoIdioma = idiomaIngles ? '\n\nLANGUAGE INSTRUCTION: Respond entirely in English. All explanations, questions and feedback must be in English only.' : ''
 
+    // Sprint de estabilización (auditoría 2026-07-07): antes el grado se
+    // pasaba como dato inerte ("Grado: 4to Primaria") sin ninguna
+    // instrucción de cómo adaptar vocabulario/extensión/tono/ejemplos/nivel
+    // de abstracción — quedaba enteramente al criterio del modelo. No
+    // aplica en modo padres: la adaptación es sobre cómo hablarle al
+    // estudiante, no al adulto que consulta el asistente de padres.
+    const contextoGrado = esPadre ? '' : `\n\n${buildGradeAdaptationInstruction(gradoEfectivo, idiomaIngles)}`
+
     let contextoContenido = ''
     if (esBienvenida) {
       contextoContenido = `El alumno acaba de saludar. Responde con bienvenida personalizada. NO muestres lista de temas todavía.`
@@ -1991,7 +1995,7 @@ export async function POST(req: NextRequest) {
       contextoContenido += `\n\nEJERCICIO ACTIVO PENDIENTE: ${pendingMathOperation}. Si el mensaje del alumno no resuelve este ejercicio, respóndele brevemente lo que preguntó y luego regresa a este mismo ejercicio. NO le preguntes de nuevo qué tema quiere trabajar ni le muestres una lista de temas — el tema ya está activo.`
     }
 
-    const systemPrompt = `${promptBase}${promptPadre}${contextoIdioma}
+    const systemPrompt = `${promptBase}${promptPadre}${contextoIdioma}${contextoGrado}
 
 CONTEXTO DEL ALUMNO:
 - Nombre: ${perfil.nombre_completo.split(' ')[0]}

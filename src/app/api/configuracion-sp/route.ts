@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { requireRoles } from '@/lib/auth'
 
 const cacheConfig = new Map<string, { contenido: string; timestamp: number }>()
 const CACHE_TTL = 1000 * 60 * 30
@@ -11,7 +12,14 @@ const DOCS_CONFIGURACION = [
   'Exclusiones y Adjuntos Permitidos - Agente Alumno.docx',
 ]
 
+// Mini-revisión de seguridad (sprint de estabilización 2026-07-07): esta
+// ruta devuelve el prompt interno y la política pedagógica oficial del
+// agente — información interna que nunca debe llegar a un alumno o padre.
+// No tenía ningún chequeo de rol; solo el middleware global (cualquier
+// usuario autenticado) la protegía.
 export async function GET(req: NextRequest) {
+  const auth = await requireRoles(['maestro', 'director', 'admin', 'superadmin'])
+  if (!auth.ok) return auth.response
   try {
     const cacheKey = '_configuracion'
     const cached = cacheConfig.get(cacheKey)

@@ -234,6 +234,15 @@ export function buildPendingContextResponse(input: PendingContextResponseInput) 
     : `${complaintPrefix}Sí. Sigamos con el mismo tema y resolvámoslo paso a paso. ¿Qué parte no está clara todavía: el concepto, el primer paso o el cálculo?`
 }
 
+// Centraliza en un solo lugar qué cuenta como "seguir con el mismo
+// ejercicio" — el mismo módulo que lo detecta en código (isPendingContextQuestion
+// más arriba) genera ahora también el texto que se lo pide al modelo en el
+// prompt, para que ampliar la regla aquí no la deje desincronizada con lo
+// que el prompt dice (sprint de estabilización, auditoría 2026-07-07).
+export function describeSameExercisePolicyForPrompt(): string {
+  return 'Mantén el contexto activo: si hay un ejercicio pendiente y el alumno pregunta si puede resolverlo sin calculadora, pide ayuda, dice que no entiende, reclama que no respondiste, o pide intentarlo él mismo, NO cambies de ejercicio ni de tema. Responde esa duda y vuelve al mismo ejercicio pendiente.'
+}
+
 export function stripUnapprovedExternalResources(value: string, idiomaIngles = false) {
   const original = value || ''
   const lines = original

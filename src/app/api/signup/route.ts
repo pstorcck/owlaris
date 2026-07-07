@@ -33,8 +33,6 @@ export async function POST(req: NextRequest) {
     const body = await req.json()
     const { nombre_completo, email, grado, rol, colegio_id } = body
 
-    console.log('Signup request:', { nombre_completo, email, grado })
-
     if (!nombre_completo?.trim() || !email?.trim()) {
       return NextResponse.json({ error: 'Nombre y email son requeridos' }, { status: 400 })
     }
@@ -96,10 +94,18 @@ export async function POST(req: NextRequest) {
 
     if (authError) {
       console.error('Auth error:', authError)
+      // Mini-revisión de seguridad (sprint de estabilización 2026-07-07): no
+      // devolver el mensaje crudo de Supabase/Postgres al usuario final —
+      // puede incluir detalles técnicos internos. Se reconocen los casos
+      // útiles y seguros de mostrar tal cual; cualquier otro cae a un
+      // mensaje genérico (el detalle completo ya quedó en el log de arriba).
       if (authError.message.includes('already registered') || authError.message.includes('already been registered')) {
         return NextResponse.json({ error: 'Este correo ya está registrado' }, { status: 409 })
       }
-      return NextResponse.json({ error: authError.message }, { status: 400 })
+      if (authError.message.toLowerCase().includes('password')) {
+        return NextResponse.json({ error: 'La contraseña no cumple los requisitos mínimos' }, { status: 400 })
+      }
+      return NextResponse.json({ error: 'No se pudo crear la cuenta. Intenta de nuevo.' }, { status: 400 })
     }
 
     console.log('Usuario creado en Auth:', authData.user.id)
@@ -116,7 +122,7 @@ export async function POST(req: NextRequest) {
 
     if (perfilError) {
       console.error('Perfil error:', perfilError)
-      return NextResponse.json({ error: perfilError.message }, { status: 500 })
+      return NextResponse.json({ error: 'No se pudo completar el registro. Intenta de nuevo.' }, { status: 500 })
     }
 
     console.log('Perfil creado, enviando email...')
