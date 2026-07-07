@@ -1248,7 +1248,7 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
       // descargado el PDF y volvía a hacer clic, generando duplicados.
       setReportePdfListo(true)
       if (reportePdfListoTimeoutRef.current) clearTimeout(reportePdfListoTimeoutRef.current)
-      reportePdfListoTimeoutRef.current = setTimeout(() => setReportePdfListo(false), 5000)
+      reportePdfListoTimeoutRef.current = setTimeout(() => setReportePdfListo(false), 8000)
     } catch(e) { console.error(e) }
     finally { setGenerandoPDF(false) }
   }
