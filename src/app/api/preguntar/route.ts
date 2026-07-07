@@ -4,6 +4,7 @@ import { checkContentSafety, type ContentSafetyResult } from '@/lib/contentSafet
 import { guardHumanisticResponse } from '@/lib/humanisticSafety'
 import { describeFinalAnswerPolicyForPrompt, guardNoFinalAnswer } from '@/lib/pedagogicalGuard'
 import { buildGradeAdaptationInstruction } from '@/lib/gradeAdaptation'
+import { buscarStaffColegio, buscarSuperadmins, elegirFuenteDestinatariosAlerta, type DestinatarioAlerta } from '@/lib/alertaEmergencia'
 import { sanitizeChatFormatting } from '@/lib/chatFormatting'
 import { detectarMateriaDesdeTexto, materiaActualEnSistemaCNB, normalizarMateria } from '@/lib/materiaDetection'
 import { isExplicitCourseSwitchRequest } from '@/lib/courseSwitchDetection'
@@ -910,12 +911,38 @@ async function registrarAlertaContenido(
 
     const alumno = perfil.nombre_completo || 'Alumno'
     const resumenPregunta = pregunta.replace(/\s+/g, ' ').trim().substring(0, 280)
+
+    // Hallazgo real (auditoría 2026-07-07): si el alumno no tiene guía
+    // asignado (ni por alumno ni por grado), antes la alerta quedaba SOLO en
+    // la tabla `alertas` — cero notificación humana. Se busca staff del
+    // colegio (director/admin) y, si tampoco hay, un superadmin global, para
+    // que una crisis real nunca quede en silencio.
+    let destinatarios: DestinatarioAlerta[] = []
+    const guiaAsignado = asig?.guia ? [asig.guia as unknown as DestinatarioAlerta] : []
+    let staffColegio: DestinatarioAlerta[] = []
+    let superadmins: DestinatarioAlerta[] = []
+    if (guiaAsignado.length === 0) {
+      staffColegio = await buscarStaffColegio(admin, perfil.colegio_id)
+      if (staffColegio.length === 0) {
+        superadmins = await buscarSuperadmins(admin)
+      }
+    }
+    const fuente = elegirFuenteDestinatariosAlerta({
+      hayGuiaAsignado: guiaAsignado.length > 0,
+      hayStaffColegio: staffColegio.length > 0,
+      haySuperadmin: superadmins.length > 0,
+    })
+    if (fuente === 'guia_asignado') destinatarios = guiaAsignado
+    else if (fuente === 'staff_colegio') destinatarios = staffColegio
+    else if (fuente === 'superadmin') destinatarios = superadmins
+
     const contexto = [
       `Categoria: ${safety.tipo}`,
       `Severidad: ${safety.severidad}`,
       `Grado: ${gradoEfectivo || perfil.grado || 'N/D'}`,
       `Materia: ${materiaSeleccionada || 'N/D'}`,
       `Pregunta: ${resumenPregunta}`,
+      `Notificado via: ${fuente}`,
     ].join(' | ')
 
     await admin.from('alertas').insert({
@@ -927,17 +954,19 @@ async function registrarAlertaContenido(
       contexto,
     })
 
-    if (asig?.guia && process.env.RESEND_API_KEY) {
-      try {
-        const guia = asig.guia as unknown as { email: string; nombre_completo: string }
-        const { Resend } = await import('resend')
-        await new Resend(process.env.RESEND_API_KEY).emails.send({
-          from: 'Owlaris <noreply@owlaris.app>',
-          to: guia.email,
-          subject: 'Alerta de seguridad (' + safety.severidad + ') - ' + alumno,
-          html: '<p>Hola ' + guia.nombre_completo + ',</p><p><strong>' + alumno + '</strong> activó una alerta de seguridad en Owlaris.</p><p><strong>Categoría:</strong> ' + safety.tipo + '<br/><strong>Severidad:</strong> ' + safety.severidad + '</p><p>Contexto: ' + contexto + '</p><a href="https://owlaris.app/guia">Ver en Owlaris</a>'
-        })
-      } catch (e) { console.error('Email alerta seguridad:', e) }
+    if (destinatarios.length > 0 && process.env.RESEND_API_KEY) {
+      const { Resend } = await import('resend')
+      const resend = new Resend(process.env.RESEND_API_KEY)
+      for (const destinatario of destinatarios) {
+        try {
+          await resend.emails.send({
+            from: 'Owlaris <noreply@owlaris.app>',
+            to: destinatario.email,
+            subject: 'Alerta de seguridad (' + safety.severidad + ') - ' + alumno,
+            html: '<p>Hola ' + destinatario.nombre_completo + ',</p><p><strong>' + alumno + '</strong> activó una alerta de seguridad en Owlaris.</p><p><strong>Categoría:</strong> ' + safety.tipo + '<br/><strong>Severidad:</strong> ' + safety.severidad + '</p><p>Contexto: ' + contexto + '</p><a href="https://owlaris.app/guia">Ver en Owlaris</a>'
+          })
+        } catch (e) { console.error('Email alerta seguridad:', e) }
+      }
     }
   } catch (e) {
     console.error('Error registrando alerta de contenido:', e)
