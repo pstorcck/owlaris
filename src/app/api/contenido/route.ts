@@ -7,6 +7,7 @@ import {
   sharePointNameMatchesSubject,
   sharePointTextMatchesGrade,
 } from '@/lib/sharepointFolders'
+import { requireRoles } from '@/lib/auth'
 
 const cache = new Map<string, { contenido: string; archivo: string; timestamp: number }>()
 const CACHE_TTL = 1000 * 60 * 30
@@ -55,7 +56,13 @@ async function extraerTexto(downloadUrl: string, nombreArchivo = ''): Promise<st
   return value
 }
 
+// Mini-revisión de seguridad (2026-07-07): esta ruta busca y devuelve
+// contenido curricular real de SharePoint a partir de colegio_slug/grado/
+// materia enviados por el cliente, sin ningún chequeo de rol — solo el
+// middleware global (cualquier usuario autenticado) la protegía.
 export async function POST(req: NextRequest) {
+  const auth = await requireRoles(['maestro', 'director', 'admin', 'superadmin'])
+  if (!auth.ok) return auth.response
   try {
     const { colegio_slug, grado, materia, pregunta } = await req.json()
     if (!colegio_slug || !grado || !materia) return NextResponse.json({ contenido: '', archivo: null })
