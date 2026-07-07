@@ -233,6 +233,24 @@ D) 10
   assert.equal(wordAnswerEquation?.estado, 'correcto')
   assert.equal(wordAnswerEquation?.correctAnswer, 31)
 
+  // Hallazgo real (auditoría QA 2026-07-07, seguimiento): cuando el alumno
+  // pide explícitamente un tipo de ejercicio ("Dame un ejercicio con la
+  // incógnita en ambos lados") y el modelo responde SIN "?" ni tag [OP:]
+  // limpio (ej. "Intenta resolverlo y dime el valor de x."), el ejercicio
+  // debía seguir detectándose como una pregunta de práctica para poder
+  // quedar marcado como pendiente — antes exigir "?" hacía que se perdiera
+  // y la siguiente respuesta del alumno se evaluara contra un ejercicio
+  // viejo ya abandonado.
+  const respuestaSinSignoDePregunta = 'Aquí tienes un ejercicio con la incógnita en ambos lados:\n3x + 5 = 2x + 12\nIntenta resolverlo y dime el valor de x.\n(Fuente: Owlaris - Math Grade 8.md)'
+  assert.doesNotMatch(respuestaSinSignoDePregunta, /\?/)
+  assert.equal(looksLikeMathPracticePrompt(respuestaSinSignoDePregunta), true)
+  const opDetectada = inferCanonicalOperationFromText(respuestaSinSignoDePregunta)
+  assert.equal(opDetectada, '3x+5=2x+12')
+  const evalAmbosLados = await handleMathEvaluation(respuestaSinSignoDePregunta, 'x = 3', false)
+  assert.equal(evalAmbosLados?.estado, 'incorrecto')
+  assert.equal(evalAmbosLados?.correctAnswer, 7)
+  assert.match(evalAmbosLados?.feedback || '', /ambos lados|un mismo lado/i)
+
   console.log('math-safety smoke passed')
 }
 

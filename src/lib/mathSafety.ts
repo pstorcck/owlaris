@@ -610,12 +610,16 @@ function selectRelevantMathText(text: string): string {
 
   if (questionChunks.length > 0) return questionChunks[questionChunks.length - 1]
 
-  const practiceLines = normalized
-    .split('\n')
-    .map((line) => line.trim())
-    .filter((line) => /(?:cu[aá]nto|resuelve|calcula|resultado|what is|solve|calculate)/i.test(line))
-
-  if (practiceLines.length > 0) return practiceLines[practiceLines.length - 1]
+  // Hallazgo real (auditoría QA 2026-07-07, seguimiento): cuando el modelo
+  // presenta el ejercicio en una línea y la instrucción ("Intenta
+  // resolverlo y dime el valor de x.") en la línea siguiente, recortar a
+  // SOLO la línea que contiene la palabra clave descartaba la línea con la
+  // ecuación real — inferCanonicalOperationFromText nunca la veía. Si hay
+  // una señal de práctica en cualquier parte del texto, se usa el texto
+  // completo (las expresiones/ecuaciones se extraen después con sus propias
+  // reglas, ya bastante específicas), en vez de una sola línea.
+  const tienePalabraClave = /(?:cu[aá]nto|resuelve|calcula|resultado|what is|solve|calculate)/i.test(normalized)
+  if (tienePalabraClave) return normalized
   return text
 }
 
@@ -659,9 +663,15 @@ export function inferCanonicalOperationFromText(text: string): string | null {
 }
 
 export function looksLikeMathPracticePrompt(text: string): boolean {
+  // Hallazgo real (auditoría QA 2026-07-07): exigir "?" dejaba sin detectar
+  // ejercicios que el modelo presenta en modo imperativo, sin signo de
+  // interrogación (ej. "Intenta resolverlo y dime el valor de x."). Cuando
+  // eso pasaba y el modelo tampoco incluía el tag [OP:], el ejercicio nunca
+  // quedaba marcado como pendiente — así que la siguiente respuesta del
+  // alumno se evaluaba contra un ejercicio viejo y ya abandonado, dando una
+  // pista que no correspondía al ejercicio realmente en pantalla.
   const lower = text.toLowerCase()
-  return lower.includes('?') &&
-    /(cu[aá]nto|resuelve|calcula|resultado|intenta|dame tu respuesta|what is|solve|calculate|answer)/i.test(lower)
+  return /(cu[aá]nto|resuelve|resu[eé]lvelo|resolverlo|calcula|resultado|intenta|dame tu respuesta|el valor de|what is|solve|calculate|answer)/i.test(lower)
 }
 
 export function hasIncorrectVerdict(text: string): boolean {
