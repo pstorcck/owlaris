@@ -60,6 +60,22 @@ function main() {
   assert.match(bachilleratoEn, /GRADE ADAPTATION — High school/)
   assert.notEqual(bachilleratoEn, bachillerato)
 
+  // ── Hallazgo real (QA post-despliegue, 2026-07-07): pedir "¿Qué es la
+  // fotosíntesis?" en Grado 6 y en Grado 12 dio respuestas casi idénticas,
+  // ambas con terminología avanzada (ATP, NADPH, ciclo de Calvin). La
+  // instrucción original ("vocabulario cotidiano") era demasiado blanda
+  // frente al sesgo del modelo a dar la explicación técnica completa. La
+  // banda primaria/básico ahora debe prohibir explícitamente ese nivel de
+  // detalle salvo que el alumno lo pida, no solo sugerir simplicidad. ──
+  assert.match(primaria, /OBLIGATORIO/)
+  assert.match(primaria, /PROHIBIDO/)
+  assert.match(primaria, /a menos que el alumno pida/i)
+  assert.match(basico, /OBLIGATORIO/)
+  assert.match(basico, /(?:a menos que|salvo que) el alumno pida/i)
+  // Bachillerato NO debe llevar esa restricción — ahí sí corresponde el
+  // detalle técnico completo por defecto.
+  assert.doesNotMatch(bachillerato, /PROHIBIDO/)
+
   console.log('grade-adaptation smoke passed')
 }
 

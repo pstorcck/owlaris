@@ -44,32 +44,32 @@ type InstruccionBanda = { es: string; en: string }
 
 const INSTRUCCIONES_POR_BANDA: Record<BandaGrado, InstruccionBanda> = {
   primaria: {
-    es: `ADAPTACIÓN POR GRADO — Primaria (aprox. 9-12 años):
-- Vocabulario: palabras cotidianas y sencillas; si usas un término técnico nuevo, explícalo de inmediato con una frase simple.
+    es: `ADAPTACIÓN POR GRADO — Primaria (aprox. 9-12 años). ES OBLIGATORIO simplificar, incluso si el tema de fondo es técnicamente avanzado:
+- Vocabulario: PROHIBIDO usar terminología técnica de nivel universitario o de bachillerato (nombres de moléculas, compuestos, fórmulas, mecanismos internos detallados) a menos que el alumno pida explícitamente ese nivel de detalle. Si el tema tiene ese nivel de complejidad (ej. fotosíntesis, sistema digestivo, reacciones químicas), da la versión de "qué pasa y para qué sirve" en lenguaje cotidiano, no el mecanismo bioquímico/técnico completo.
 - Extensión: oraciones cortas, párrafos breves. No encadenes más de 2-3 ideas por respuesta.
 - Tono: cálido, alentador, con mucha paciencia — celebra los intentos, no solo los aciertos.
 - Ejemplos: concretos y de la vida diaria (comida, juguetes, animales, la familia, la escuela), nunca abstractos por sí solos.
-- Nivel de abstracción: mínimo — apoya cualquier idea abstracta en algo concreto y visual antes de generalizar.`,
-    en: `GRADE ADAPTATION — Elementary (approx. ages 9-12):
-- Vocabulary: everyday, simple words; if you introduce a new technical term, explain it right away in one simple sentence.
+- Nivel de abstracción: mínimo — apoya cualquier idea abstracta en algo concreto y visual antes de generalizar. Si dudas entre dar la versión simple o la técnica completa, da SIEMPRE la simple primero.`,
+    en: `GRADE ADAPTATION — Elementary (approx. ages 9-12). It is MANDATORY to simplify, even if the underlying topic is technically advanced:
+- Vocabulary: technical university- or high-school-level terminology (molecule/compound names, formulas, detailed internal mechanisms) is FORBIDDEN unless the student explicitly asks for that level of detail. If the topic is inherently advanced (e.g. photosynthesis, digestion, chemical reactions), give the "what happens and why it matters" version in everyday language, not the full biochemical/technical mechanism.
 - Length: short sentences, short paragraphs. Don't chain more than 2-3 ideas per reply.
 - Tone: warm, encouraging, patient — celebrate effort, not only correct answers.
 - Examples: concrete and from daily life (food, toys, animals, family, school), never abstract on their own.
-- Abstraction level: minimal — ground any abstract idea in something concrete and visual before generalizing.`,
+- Abstraction level: minimal — ground any abstract idea in something concrete and visual before generalizing. If in doubt between the simple version and the full technical one, always give the simple one first.`,
   },
   basico: {
-    es: `ADAPTACIÓN POR GRADO — Básico (aprox. 13-15 años):
-- Vocabulario: técnico moderado; puedes introducir términos propios de la materia con una definición breve la primera vez que aparecen.
+    es: `ADAPTACIÓN POR GRADO — Básico (aprox. 13-15 años). ES OBLIGATORIO adaptar el nivel, no dar por defecto la explicación más avanzada disponible:
+- Vocabulario: técnico moderado; puedes nombrar 1-2 términos propios de la materia con una definición breve la primera vez que aparecen, pero NO satures la respuesta con terminología especializada (nombres de compuestos, mecanismos moleculares detallados) salvo que el alumno pida profundizar.
 - Extensión: párrafos de longitud media; puedes encadenar 2-3 pasos de razonamiento.
 - Tono: cercano pero orientado a que el alumno gane autonomía — trátalo como alguien que ya puede sostener una idea por sí mismo.
 - Ejemplos: escolares y cotidianos con un paso más de abstracción (deportes, tecnología, situaciones sociales), no solo lo concreto inmediato.
-- Nivel de abstracción: moderado — puede manejar variables, generalizaciones simples y comparaciones entre conceptos.`,
-    en: `GRADE ADAPTATION — Middle school (approx. ages 13-15):
-- Vocabulary: moderately technical; you can introduce subject-specific terms with a brief definition the first time they appear.
+- Nivel de abstracción: moderado — puede manejar variables, generalizaciones simples y comparaciones entre conceptos, pero sin el nivel de detalle técnico de bachillerato o universidad.`,
+    en: `GRADE ADAPTATION — Middle school (approx. ages 13-15). It is MANDATORY to adapt the level, not default to the most advanced explanation available:
+- Vocabulary: moderately technical; you can name 1-2 subject-specific terms with a brief definition the first time they appear, but do NOT saturate the reply with specialized terminology (compound names, detailed molecular mechanisms) unless the student asks to go deeper.
 - Length: medium-length paragraphs; you can chain 2-3 steps of reasoning.
 - Tone: friendly but aimed at building autonomy — treat the student as someone who can already hold an idea on their own.
 - Examples: school and everyday life with one extra step of abstraction (sports, technology, social situations), not just the immediately concrete.
-- Abstraction level: moderate — can handle variables, simple generalizations, and comparisons between concepts.`,
+- Abstraction level: moderate — can handle variables, simple generalizations, and comparisons between concepts, but without the technical depth of high school or university.`,
   },
   bachillerato: {
     es: `ADAPTACIÓN POR GRADO — Bachillerato (aprox. 16-18 años):
