@@ -5,6 +5,7 @@ import { guardHumanisticResponse } from '@/lib/humanisticSafety'
 import { describeFinalAnswerPolicyForPrompt, guardNoFinalAnswer } from '@/lib/pedagogicalGuard'
 import { buildGradeAdaptationInstruction } from '@/lib/gradeAdaptation'
 import { buscarStaffColegio, buscarSuperadmins, elegirFuenteDestinatariosAlerta, type DestinatarioAlerta } from '@/lib/alertaEmergencia'
+import { verificarLimiteFrecuencia } from '@/lib/rateLimit'
 import { sanitizeChatFormatting } from '@/lib/chatFormatting'
 import { detectarMateriaDesdeTexto, materiaActualEnSistemaCNB, normalizarMateria } from '@/lib/materiaDetection'
 import { isExplicitCourseSwitchRequest } from '@/lib/courseSwitchDetection'
@@ -991,6 +992,14 @@ export async function POST(req: NextRequest) {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
     usuarioIdParaAlerta = user.id
+
+    const limiteFrecuencia = verificarLimiteFrecuencia(`preguntar:${user.id}`, 20, 60_000)
+    if (!limiteFrecuencia.permitido) {
+      return NextResponse.json(
+        { error: 'Estás enviando mensajes muy rápido. Espera unos segundos e intenta de nuevo.' },
+        { status: 429 }
+      )
+    }
 
     const body = await req.json()
     const { pregunta, historial, alerta_comprension = false, alerta_materia = '', alerta_tema = '' } = body

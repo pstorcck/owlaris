@@ -1,8 +1,18 @@
 import { NextRequest } from 'next/server'
 import { withOpenAIRetry } from '@/lib/openaiRetry'
+import { createClient } from '@/lib/supabase/server'
+import { verificarLimiteFrecuencia } from '@/lib/rateLimit'
 
 export async function POST(req: NextRequest) {
   try {
+    const { data: { user } } = await createClient().auth.getUser()
+    if (!user) return new Response(JSON.stringify({ error: 'No autorizado' }), { status: 401 })
+
+    const limite = verificarLimiteFrecuencia(`tts:${user.id}`, 30, 60_000)
+    if (!limite.permitido) {
+      return new Response(JSON.stringify({ error: 'Demasiadas solicitudes de audio seguidas. Espera unos segundos.' }), { status: 429 })
+    }
+
     const { texto, modo } = await req.json()
     if (!texto?.trim()) return new Response(JSON.stringify({ error: 'Texto vacío' }), { status: 400 })
 
