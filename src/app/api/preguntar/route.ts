@@ -275,12 +275,31 @@ const DOCS_CONFIG = [
 ]
 
 const PALABRAS_CRISIS = ['me quiero matar','suicidar','quitarme la vida','hacerme daño','autolesion','no quiero vivir','me voy a matar','quiero morir','abuso sexual','me violaron','me toca inapropiadamente']
-const PALABRAS_FORMATIVAS = ['mi papá','mi mamá','mis padres','mi familia','pelea','problema en casa','me siento mal','triste','solo','amigos','bullying','me molestan','valores','convivencia','disciplina','hábitos','motivación','me pega','me golpea','me grita','me insulta','violencia en casa','mis padres pelean','me siento solo','no tengo amigos','me hacen menos','me discriminan','me ignoran','no me entienden','estoy deprimido','me preocupa','tengo miedo','no sé qué hacer','necesito ayuda','me siento triste','estoy triste','muy triste','problema familiar','no me quieren','me castigan','me regañan','mis papás']
+// Se quitaron de esta lista palabras/frases sueltas demasiado genéricas que
+// disparaban falsos positivos en preguntas académicas normales (verificado
+// con casos reales): "solo" ("quiero resolverlo solo"), "amigos" ("mis
+// amigos y yo..."), "valores" ("valores de x" en álgebra, o la materia
+// curricular "Valores"), "hábitos" ("hábitos alimenticios de las plantas",
+// "hábitos de estudio"), "no sé qué hacer" y "necesito ayuda" (justo lo que
+// dice cualquier alumno atorado en un ejercicio). Cuando esto pasaba, el
+// sistema descartaba el contenido curricular ya encontrado y respondía con
+// orientación genérica en vez de ayudar con el ejercicio real. Las señales
+// específicas de riesgo real (bullying, violencia en casa, "me siento
+// solo", "no tengo amigos", etc.) siguen intactas abajo.
+const PALABRAS_FORMATIVAS = ['mi papá','mi mamá','mis padres','mi familia','pelea','problema en casa','me siento mal','triste','bullying','me molestan','convivencia','disciplina','motivación','me pega','me golpea','me grita','me insulta','violencia en casa','mis padres pelean','me siento solo','no tengo amigos','me hacen menos','me discriminan','me ignoran','no me entienden','estoy deprimido','me siento triste','estoy triste','muy triste','problema familiar','no me quieren','me castigan','me regañan','mis papás']
+// "Tengo miedo" y "me preocupa" por sí solos son ansiedad académica normal
+// ("tengo miedo de reprobar el examen", "me preocupa no entender el tema")
+// — solo cuentan como señal formativa si además aparece contexto de
+// hogar/familia, para no perder el caso real ("tengo miedo, mi papá me
+// pega") sin disparar con cualquier examen.
+const PALABRAS_CONTEXTO_FAMILIAR = ['mi papá','mi mamá','mis padres','mis papás','mi familia','en casa','me pega','me golpea','me grita','me insulta','pelean','pelea','violencia']
 
 function detectarTipoPregunta(pregunta: string): 'crisis' | 'formativa' | 'academica' {
   const p = pregunta.toLowerCase()
   if (PALABRAS_CRISIS.some(w => p.includes(w))) return 'crisis'
   if (PALABRAS_FORMATIVAS.some(w => p.includes(w))) return 'formativa'
+  const tieneMiedoOPreocupacion = p.includes('tengo miedo') || p.includes('me preocupa')
+  if (tieneMiedoOPreocupacion && PALABRAS_CONTEXTO_FAMILIAR.some(w => p.includes(w))) return 'formativa'
   return 'academica'
 }
 
