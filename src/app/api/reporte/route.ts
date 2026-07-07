@@ -5,12 +5,12 @@ import { registrarAlertaTecnica } from '@/lib/technicalAlerts'
 import { contarAlertasSensibles, contarSospechasCopia, resumenSeguridadIntegridad } from '@/lib/reporteSeguridad'
 import {
   agruparPorMateria,
-  describirActividad,
+  construirEvidenciaActividad,
   esCalificable,
   esDeSeguridad,
   estadoEvidencia,
-  etiquetaResultadoActividad,
   fraseEstadoEvidencia,
+  resolverNombreMateria,
   type FilaInteraccion,
 } from '@/lib/reporteActividad'
 import { filtrarRecomendaciones, stripUngroundedEmotionalClaims } from '@/lib/reporteLenguaje'
@@ -164,32 +164,7 @@ function calcularMetricasHoy(filas: FilaInteraccion[], materiaFallback: string) 
 }
 
 function construirEvidenciaHoy(filas: FilaInteraccion[], idiomaIngles = false) {
-  return filas
-    // Las alertas sensibles se cuentan y se señalan aparte (ver
-    // resumenSeguridadIntegridad), pero el texto crudo del alumno no se
-    // reproduce en el anexo de evidencia de un reporte familiar.
-    .filter(i => !esDeSeguridad(i))
-    .map((i, idx) => ({
-      secuencia: idx + 1,
-      // timeZone explícito: sin esto, el runtime del servidor (normalmente
-      // UTC en Vercel) determina la hora mostrada, no la hora de Guatemala
-      // — un evento de las 7pm en Guatemala se vería como "01:00" (del día
-      // siguiente en UTC), aunque la ventana del día (ventanaHoyGuatemala)
-      // ya filtre las filas correctamente por el día real en Guatemala.
-      hora: i.creado_en
-        ? new Date(i.creado_en).toLocaleTimeString(idiomaIngles ? 'en-US' : 'es-GT', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Guatemala' })
-        : '',
-      materia: (i.materia_nombre || '').trim(),
-      calificable: esCalificable(i),
-      tema: (i.tema_detectado || (idiomaIngles ? 'Guided practice' : 'Práctica guiada')).replace(/\s+/g, ' ').trim().substring(0, 120),
-      ejercicio: describirActividad(i, idiomaIngles),
-      respuesta_estudiante: (i.op_respuesta_alumno || i.pregunta || '').replace(/\s+/g, ' ').trim().substring(0, 240),
-      resultado: etiquetaResultadoActividad(i, idiomaIngles),
-      fuente: i.documento_fuente || '',
-    }))
-    // Punto 12: TODA la actividad del alumno, no solo ejercicios evaluados.
-    // El límite es solo una salvaguarda técnica para PDFs extremadamente largos.
-    .slice(0, 150)
+  return construirEvidenciaActividad(filas, idiomaIngles)
 }
 
 export async function POST(req: NextRequest) {
@@ -224,14 +199,14 @@ export async function POST(req: NextRequest) {
     const { start: inicioDia, end: finDia } = ventanaHoyGuatemala()
     const { data: interaccionesCrudas } = await supabase
       .from('interacciones')
-      .select('pregunta,respuesta,tema_detectado,estado_evaluacion,documento_fuente,operacion_canonica,op_respuesta_alumno,op_estado,modelo_usado,materia_id,creado_en,sospecha_copia,materia:materias(nombre)')
+      .select('pregunta,respuesta,tema_detectado,estado_evaluacion,documento_fuente,operacion_canonica,op_respuesta_alumno,op_estado,modelo_usado,materia_id,materia_nombre_snapshot,creado_en,sospecha_copia,materia:materias(nombre)')
       .eq('usuario_id', user.id)
       .gte('creado_en', inicioDia.toISOString())
       .lte('creado_en', finDia.toISOString())
       .order('creado_en', { ascending: true })
     const interaccionesHoy: FilaInteraccion[] = ((interaccionesCrudas || []) as FilaInteraccionCruda[]).map(row => ({
       ...row,
-      materia_nombre: extraerNombreMateria(row) || (row.materia_id ? null : materia || null),
+      materia_nombre: resolverNombreMateria(extraerNombreMateria(row), row, materia || null),
     }))
     const metricasHoy = calcularMetricasHoy(interaccionesHoy, materia)
     const evidenciaHoy = construirEvidenciaHoy(interaccionesHoy, idiomaIngles)

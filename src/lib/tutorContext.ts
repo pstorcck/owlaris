@@ -44,10 +44,27 @@ export function isPendingContextQuestion(value: string) {
     'como lo hago',
     'como empiezo',
     'no entiendo',
+    'no entender',
+    'no se que hacer',
+    'necesito ayuda',
     'ayudame con este',
     'este mismo',
     'misma pregunta',
     'misma fraccion',
+    // Peticiones de autonomía ("quiero resolver esto yo solo") piden lo
+    // opuesto a un ejercicio nuevo: que se le deje intentar el mismo. Un
+    // reporte real de QA (2026-07-07) mostró que el tutor las trataba como
+    // "cambiar de ejercicio", justo lo contrario de lo pedido.
+    'yo solo',
+    'yo sola',
+    'intentarlo solo',
+    'intentarlo sola',
+    'resolverlo yo mismo',
+    'resolverlo yo misma',
+    'hacerlo yo mismo',
+    'hacerlo yo misma',
+    'dejame intentarlo',
+    'dejenme intentarlo',
     'without calculator',
     'without a calculator',
     'can i do it',
@@ -55,6 +72,13 @@ export function isPendingContextQuestion(value: string) {
     'how do i start',
     'i do not understand',
     "i don't understand",
+    'do not know what to do',
+    "don't know what to do",
+    'need help with this',
+    'on my own',
+    'by myself',
+    'let me try it myself',
+    'i want to solve it myself',
     // Pedir aclarar/repetir el mismo paso NO debe cambiar de ejercicio —
     // bug real: "explícame ese paso otra vez" generaba un ejercicio nuevo.
     'ese paso otra vez',
@@ -162,12 +186,24 @@ export function buildPendingContextResponse(input: PendingContextResponseInput) 
     : ''
   const fraction = extractActiveFraction(input.activeOperation, input.activePrompt)
   const operation = formatOperation(input.activeOperation)
+  const asksAutonomy = [
+    'yo solo', 'yo sola', 'intentarlo solo', 'intentarlo sola',
+    'resolverlo yo mismo', 'resolverlo yo misma', 'hacerlo yo mismo', 'hacerlo yo misma',
+    'dejame intentarlo', 'dejenme intentarlo',
+    'on my own', 'by myself', 'let me try it myself', 'i want to solve it myself',
+  ].some((needle) => question.includes(needle))
   const asksCalculator = question.includes('calculadora') || question.includes('calculator') || question.includes('puedo lograr') || question.includes('puedo hacerlo')
   const asksToUseCalculator = (
     /puedo usar(?: la| una)? calculadora/.test(question) ||
     /usar(?: la| una)? calculadora para/.test(question) ||
     /can i use (?:a )?calculator/.test(question)
   ) && !question.includes('sin usar calculadora') && !question.includes('without')
+
+  if (operation && asksAutonomy) {
+    return input.idiomaIngles
+      ? `${complaintPrefix}Great, go for it. Stay with the active exercise: ${operation}. Take your time and try the next step yourself — I'm here if you get stuck.`
+      : `${complaintPrefix}Perfecto, inténtalo. Sigamos con el ejercicio activo: ${operation}. Tómate tu tiempo e intenta el siguiente paso tú mismo — aquí estoy si te trabas.`
+  }
 
   if (operation && asksToUseCalculator) {
     return input.idiomaIngles

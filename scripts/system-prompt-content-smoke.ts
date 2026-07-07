@@ -29,6 +29,17 @@ function main() {
   // No debe reaparecer la jerga algebraica que el instructivo pidió evitar.
   assert.doesNotMatch(promptBase, /término separado|estructura algebraica|componente operacional|elemento aislado/i)
 
+  // Hallazgo #5 (auditoría QA 2026-07-07): no cambiar de subtema en silencio
+  // dentro de la misma materia (ej. sistema digestivo -> leyes de Newton).
+  assert.match(promptBase, /subtema claramente distinto/i)
+  assert.match(promptBase, /No cambies de subtema en silencio/i)
+
+  // Hallazgo #2 (auditoría QA 2026-07-07): la señal de "ejercicio activo
+  // pendiente" debe inyectarse fuera del PROMPT_BASE estático (depende del
+  // turno), verificado en su propio bloque de construcción más abajo.
+  assert.match(contenido, /EJERCICIO ACTIVO PENDIENTE: \$\{pendingMathOperation\}/)
+  assert.match(contenido, /NO le preguntes de nuevo qué tema quiere trabajar/)
+
   console.log('system-prompt-content smoke passed')
 }
 

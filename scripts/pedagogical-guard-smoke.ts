@@ -142,9 +142,28 @@ Mapa del curso
     'Sigo sin entender',
     '¿Me lo puedes decir de otra forma?',
     'Explícamelo como si no supiera nada',
+    // Hallazgo #1/#3 (auditoría QA 2026-07-07): estas frases exactas se
+    // interpretaban como "quiero otro ejercicio" en vez de pedir ayuda con
+    // el que ya estaba activo.
+    'No sé qué hacer con este ejercicio',
+    'Necesito ayuda con esto',
+    'Me preocupa no entender este tema',
   ]) {
     assert.equal(isPendingContextQuestion(frase), true, `"${frase}" debería mantener el ejercicio activo`)
   }
+
+  // Hallazgo #1/#3 (auditoría QA 2026-07-07): "quiero resolver esto yo
+  // solo" pide lo opuesto a un ejercicio nuevo — debe dejarlo intentar el
+  // mismo ejercicio, sin darle la respuesta ni una pista que se la regale.
+  assert.equal(isPendingContextQuestion('Quiero resolver esto yo solo'), true)
+  const autonomyResponse = buildPendingContextResponse({
+    studentQuestion: 'Quiero resolver esto yo solo',
+    activeOperation: 'x+30=61',
+    activePrompt: 'Resuelve: x + 30 = 61',
+  })
+  assert.match(autonomyResponse, /inténtalo/i)
+  assert.match(autonomyResponse, /x\s*\+\s*30\s*=\s*61/)
+  assert.doesNotMatch(autonomyResponse, /\b31\b/)
 
   // ── "¿Cuál era el ejercicio?" debe recuperar el ejercicio activo ──
   for (const frase of [

@@ -4,7 +4,8 @@ import {
   primeraOperacionValida,
   temaMasFrecuente,
 } from '../src/lib/mistakeReview'
-import { inferMathPracticeFocusFromOperation } from '../src/lib/mathPractice'
+import { buildNextMathExercise, inferMathPracticeFocusFromOperation } from '../src/lib/mathPractice'
+import { buildGuidedMathHint } from '../src/lib/mathSafety'
 
 function main() {
   assert.equal(isReviewMistakesRequest('Revisemos mis errores'), true)
@@ -34,6 +35,45 @@ function main() {
   assert.equal(inferMathPracticeFocusFromOperation('x+5=12'), 'equation')
   assert.equal(inferMathPracticeFocusFromOperation('0.25*80'), 'decimal')
   assert.equal(inferMathPracticeFocusFromOperation('8+3*2'), 'general')
+
+  // ── Hallazgo #6 (auditoría QA 2026-07-07): la pista de "Revisemos mis
+  // errores" era idéntica para una ecuación con paréntesis/distribución y
+  // para una ecuación con la incógnita en ambos lados — dos errores de
+  // naturaleza distinta necesitan una pista distinta.
+  const hintParentesis = buildGuidedMathHint('7*(x+5)=119', false)
+  const hintAmbosLados = buildGuidedMathHint('8*x+26=2*x+68', false)
+  const hintUnPaso = buildGuidedMathHint('x+3=55', false)
+  assert.match(hintParentesis, /paréntesis|distribuye/i)
+  assert.match(hintAmbosLados, /ambos lados|un mismo lado/i)
+  assert.match(hintUnPaso, /operación inversa/i)
+  assert.notEqual(hintParentesis, hintAmbosLados)
+  assert.notEqual(hintParentesis, hintUnPaso)
+  assert.notEqual(hintAmbosLados, hintUnPaso)
+
+  // ── Hallazgo #7 (auditoría QA 2026-07-07): la consulta de errores
+  // recientes para "Revisemos mis errores" dependía de materia_uuid (el FK
+  // resuelto contra la tabla materias). Cuando no resolvía, la consulta
+  // quedaba SIN filtro de materia y mezclaba errores de otras materias o
+  // sesiones muy anteriores en el patrón detectado — replica la misma
+  // decisión que preguntar/route.ts toma para construir el filtro.
+  function decidirFiltroMateriaErrores(materiaUuid: string | null, materiaConsultaSharePoint: string) {
+    if (materiaUuid) return { campo: 'materia_id', valor: materiaUuid }
+    if (materiaConsultaSharePoint) return { campo: 'materia_nombre_snapshot', valor: materiaConsultaSharePoint }
+    return null
+  }
+  assert.deepEqual(decidirFiltroMateriaErrores('uuid-123', 'Math Grade 8'), { campo: 'materia_id', valor: 'uuid-123' })
+  assert.deepEqual(decidirFiltroMateriaErrores(null, 'Math Grade 8'), { campo: 'materia_nombre_snapshot', valor: 'Math Grade 8' })
+  assert.equal(decidirFiltroMateriaErrores(null, ''), null)
+
+  // ── Hallazgo #12 (auditoría QA 2026-07-07): tildes faltantes recurrentes
+  // en el texto de "ejercicio distinto" ("ecuacion", "Cuanto", "Cual").
+  const ejercicioEcuacion = buildNextMathExercise([], 5, false, 'equation')
+  assert.match(ejercicioEcuacion.text, /ecuación distinta/)
+  assert.match(ejercicioEcuacion.text, /¿Cuánto vale x\?/)
+  assert.doesNotMatch(ejercicioEcuacion.text, /ecuacion|Cuanto/)
+  const ejercicioAritmetico = buildNextMathExercise([], 3, false, 'suma')
+  assert.match(ejercicioAritmetico.text, /¿Cuál es el resultado\?/)
+  assert.doesNotMatch(ejercicioAritmetico.text, /\bCual\b/)
 
   console.log('mistake-review smoke passed')
 }

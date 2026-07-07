@@ -480,6 +480,21 @@ function generatePedagogicalFeedback(
 export function buildGuidedMathHint(op: string | null | undefined, idiomaIngles: boolean): string {
   const clean = normalizeOperation(op || '')
   if (clean.includes('=') && /x/i.test(clean)) {
+    // Hallazgo real (auditoría QA 2026-07-07): el mismo mensaje genérico se
+    // daba para una ecuación con paréntesis/distribución y para una con la
+    // incógnita en ambos lados — dos errores de naturaleza distinta que
+    // necesitan una pista distinta.
+    const [ladoIzquierdo = '', ladoDerecho = ''] = clean.split('=')
+    if (clean.includes('(')) {
+      return idiomaIngles
+        ? 'First distribute the multiplication into the parentheses, then continue isolating x.'
+        : 'Primero distribuye la multiplicación dentro del paréntesis y luego sigue despejando x.'
+    }
+    if (/x/i.test(ladoIzquierdo) && /x/i.test(ladoDerecho)) {
+      return idiomaIngles
+        ? 'First move all the x terms to one side of the equation and the plain numbers to the other, then isolate x.'
+        : 'Primero junta los términos con x en un mismo lado de la ecuación y los números en el otro, y luego despeja x.'
+    }
     return idiomaIngles
       ? 'First identify what operation is affecting x, then use the inverse operation to isolate it.'
       : 'Primero identifica qué operación afecta a x y luego usa la operación inversa para dejarla sola.'

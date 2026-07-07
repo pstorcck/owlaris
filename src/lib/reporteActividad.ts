@@ -6,6 +6,7 @@
 export type FilaInteraccion = {
   materia_id?: string | null
   materia_nombre?: string | null
+  materia_nombre_snapshot?: string | null
   tema_detectado?: string | null
   estado_evaluacion?: string | null
   operacion_canonica?: string | null
@@ -16,6 +17,22 @@ export type FilaInteraccion = {
   modelo_usado?: string | null
   creado_en?: string | null
   sospecha_copia?: boolean | null
+}
+
+// Hallazgo real (auditoría QA 2026-07-07): el FK materia_id no siempre
+// resuelve contra la tabla materias (el selector de materia usa nombres de
+// carpetas de SharePoint, no esa tabla), así que muchas filas quedan con
+// materia_id null. Antes, esas filas caían al fallback de "materia" = la
+// materia ACTIVA al momento de generar el reporte, etiquetando TODA una
+// sesión anterior con la última materia usada. materia_nombre_snapshot
+// guarda, en cada turno, el nombre real usado en ESE momento (independiente
+// del FK) — se prefiere sobre ese fallback engañoso.
+export function resolverNombreMateria(
+  nombreDesdeFK: string | null,
+  fila: FilaInteraccion,
+  materiaActualFallback: string | null
+): string | null {
+  return nombreDesdeFK || fila.materia_nombre_snapshot || (fila.materia_id ? null : materiaActualFallback || null)
 }
 
 const ESTADOS_CALIFICABLES = new Set(['correcto', 'incorrecto', 'equivalente', 'paso_correcto'])
@@ -59,6 +76,61 @@ export function etiquetaResultadoActividad(fila: FilaInteraccion, idiomaIngles: 
   if (fila.estado_evaluacion === 'incorrecto') return idiomaIngles ? 'To reinforce' : 'Por reforzar'
   if (fila.estado_evaluacion === 'paso_correcto') return idiomaIngles ? 'Correct step' : 'Paso correcto'
   return idiomaIngles ? 'Not graded' : 'No calificable'
+}
+
+export type EvidenciaActividad = {
+  secuencia: number
+  hora: string
+  materia: string
+  calificable: boolean
+  tema: string
+  ejercicio: string
+  respuesta_estudiante: string
+  resultado: string
+  fuente: string
+}
+
+// Hallazgo real (auditoría QA 2026-07-07): cuando el alumno responde bien y
+// se le presenta un ejercicio siguiente, esa fila guarda en
+// operacion_canonica el ejercicio NUEVO (op_estado 'pendiente', aún sin
+// responder) — no el que la propia fila.pregunta acaba de responder. Ese
+// emparejamiento correcto se completa más tarde con un UPDATE sobre la fila
+// ANTERIOR (la que sí tenía pendiente el ejercicio recién resuelto). Si ese
+// UPDATE no llega a reflejarse (p. ej. el ejercicio se abandonó por el bug
+// de continuidad de tema), el anexo mostraba el operacion_canonica de ESTA
+// fila junto a la respuesta que en realidad contestó el ejercicio de la
+// fila anterior — un desfase de una posición. La fuente de verdad
+// confiable no depende de ese UPDATE: en el momento en que se inserta cada
+// fila, operacion_canonica siempre describe "el ejercicio que esta fila le
+// presenta al alumno para el próximo turno", así que el ejercicio que
+// fila.pregunta realmente responde es el operacion_canonica de la fila
+// anterior — se reconstruye desplazando esa referencia una posición.
+export function construirEvidenciaActividad(filasCrudas: FilaInteraccion[], idiomaIngles = false, horaFn?: (creadoEn: string) => string): EvidenciaActividad[] {
+  const filasAcademicas = filasCrudas.filter(i => !esDeSeguridad(i))
+  let operacionPendienteAnterior: string | null = null
+  const filasConEjercicioCorrecto = filasAcademicas.map((i) => {
+    const ejercicioRespondido = operacionPendienteAnterior
+    if (i.operacion_canonica) operacionPendienteAnterior = i.operacion_canonica
+    return { ...i, operacion_canonica: ejercicioRespondido ?? i.operacion_canonica }
+  })
+
+  return filasConEjercicioCorrecto
+    .map((i, idx) => ({
+      secuencia: idx + 1,
+      hora: i.creado_en
+        ? (horaFn ? horaFn(i.creado_en) : new Date(i.creado_en).toLocaleTimeString(idiomaIngles ? 'en-US' : 'es-GT', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Guatemala' }))
+        : '',
+      materia: (i.materia_nombre || '').trim(),
+      calificable: esCalificable(i),
+      tema: (i.tema_detectado || (idiomaIngles ? 'Guided practice' : 'Práctica guiada')).replace(/\s+/g, ' ').trim().substring(0, 120),
+      ejercicio: describirActividad(i, idiomaIngles),
+      respuesta_estudiante: (i.op_respuesta_alumno || i.pregunta || '').replace(/\s+/g, ' ').trim().substring(0, 240),
+      resultado: etiquetaResultadoActividad(i, idiomaIngles),
+      fuente: i.documento_fuente || '',
+    }))
+    // Punto 12: TODA la actividad del alumno, no solo ejercicios evaluados.
+    // El límite es solo una salvaguarda técnica para PDFs extremadamente largos.
+    .slice(0, 150)
 }
 
 export type ResumenMateria = {

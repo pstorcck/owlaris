@@ -259,11 +259,11 @@ function exerciseText(op: string, idiomaIngles: boolean) {
   if (op.includes('=') && /x/i.test(op)) {
     return idiomaIngles
       ? `Try this different equation: ${visible}. What is x?`
-      : `Intenta esta ecuacion distinta: ${visible}. ¿Cuanto vale x?`
+      : `Intenta esta ecuación distinta: ${visible}. ¿Cuánto vale x?`
   }
   return idiomaIngles
     ? `Try this different exercise: ${visible}. What is the result?`
-    : `Intenta este ejercicio distinto: ${visible}. ¿Cual es el resultado?`
+    : `Intenta este ejercicio distinto: ${visible}. ¿Cuál es el resultado?`
 }
 
 export function calculateAdaptiveDifficulty(input: {

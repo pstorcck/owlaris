@@ -87,6 +87,7 @@ Si el alumno dice que no entiende una lección por número, pero no indica el te
 Mantén el contexto activo: si hay un ejercicio pendiente y el alumno pregunta si puede resolverlo sin calculadora, pide ayuda, dice que no entiende o reclama que no respondiste, NO cambies de ejercicio ni de tema. Responde esa duda y vuelve al mismo ejercicio pendiente.
 No compartas enlaces, videos, canales o recursos externos no autorizados. Trabaja con el contenido oficial de Owlaris y SharePoint.
 Si el alumno pide todos los temas, el índice, el mapa del curso o la lista completa de la clase, eso es orientación académica permitida. Debes listar los temas oficiales disponibles; no lo trates como una solicitud de copia.
+Si el alumno pregunta por un subtema claramente distinto al que se venía trabajando dentro de la misma materia (ej. estaba en "sistema digestivo" y ahora pregunta por "leyes de Newton"), respóndele igual, pero acláralo primero en una frase breve (ej. "Eso es un tema distinto de [materia] — ¿seguimos con [tema anterior] después de esto, o cambiamos definitivamente a [tema nuevo]?"). No cambies de subtema en silencio como si el anterior nunca hubiera estado activo.
 
 REGLA ESTRICTA — SIN PREGUNTAS FUERA DE ÁMBITO ACADÉMICO:
 Owlaris es exclusivamente un tutor académico dentro de la materia seleccionada. Si el alumno pregunta algo sin relación académica con esa materia (opiniones sobre un producto comercial, un vehículo, una marca, un videojuego, un famoso, resultados deportivos, chismes, o cualquier tema fuera del currículo escolar), NO respondas usando tu conocimiento general del mundo, aunque lo sepas.
@@ -1317,7 +1318,7 @@ export async function POST(req: NextRequest) {
         const { data: insertedRow } = await supabase.from('interacciones').insert({
           usuario_id: user.id,
           colegio_id: perfil.colegio_id,
-          materia_id: materia_uuid,
+          materia_id: materia_uuid, materia_nombre_snapshot: materiaConsultaSharePoint || null,
           grado: gradoEfectivo,
           tema_detectado: seleccionLista.tema,
           pregunta,
@@ -1359,7 +1360,15 @@ export async function POST(req: NextRequest) {
         .eq('estado_evaluacion', 'incorrecto')
         .order('creado_en', { ascending: false })
         .limit(15)
+      // Hallazgo real (auditoría QA 2026-07-07): materia_uuid depende de que
+      // materia_id resuelva contra la tabla materias, lo que no siempre pasa
+      // (el selector de materia usa nombres de carpetas de SharePoint, no
+      // esa tabla — ver también el fix de materia_nombre_snapshot en el
+      // reporte). Cuando materia_uuid no resolvía, esta consulta quedaba SIN
+      // ningún filtro de materia y mezclaba errores de otras materias o
+      // sesiones muy anteriores en el patrón detectado.
       if (materia_uuid) queryErrores = queryErrores.eq('materia_id', materia_uuid)
+      else if (materiaConsultaSharePoint) queryErrores = queryErrores.eq('materia_nombre_snapshot', materiaConsultaSharePoint)
       const { data: erroresRecientes } = await queryErrores
       const errores = erroresRecientes || []
 
@@ -1410,7 +1419,7 @@ export async function POST(req: NextRequest) {
       const { data: insertedRow } = await supabase.from('interacciones').insert({
         usuario_id: user.id,
         colegio_id: perfil.colegio_id,
-        materia_id: materia_uuid,
+        materia_id: materia_uuid, materia_nombre_snapshot: materiaConsultaSharePoint || null,
         grado: gradoEfectivo,
         tema_detectado: ejercicioEnfocadoOp ? describeMathTopic(ejercicioEnfocadoOp, idiomaIngles) : 'Revisión de errores',
         pregunta,
@@ -1445,7 +1454,7 @@ export async function POST(req: NextRequest) {
       const { data: insertedRow } = await supabase.from('interacciones').insert({
         usuario_id: user.id,
         colegio_id: perfil.colegio_id,
-        materia_id: materia_uuid,
+        materia_id: materia_uuid, materia_nombre_snapshot: materiaConsultaSharePoint || null,
         grado: gradoEfectivo,
         tema_detectado: 'Leccion sin tema',
         pregunta,
@@ -1528,7 +1537,7 @@ export async function POST(req: NextRequest) {
               const { data: insertedRow } = await supabase.from('interacciones').insert({
                 usuario_id: user.id,
                 colegio_id: perfil.colegio_id,
-                materia_id: materia_uuid,
+                materia_id: materia_uuid, materia_nombre_snapshot: materiaConsultaSharePoint || null,
                 grado: gradoEfectivo,
                 tema_detectado: 'Recordar ejercicio activo',
                 pregunta,
@@ -1569,7 +1578,7 @@ export async function POST(req: NextRequest) {
             const { data: insertedRow } = await supabase.from('interacciones').insert({
               usuario_id: user.id,
               colegio_id: perfil.colegio_id,
-              materia_id: materia_uuid,
+              materia_id: materia_uuid, materia_nombre_snapshot: materiaConsultaSharePoint || null,
               grado: gradoEfectivo,
               tema_detectado: 'Apoyo sobre ejercicio activo',
               pregunta,
@@ -1665,7 +1674,7 @@ export async function POST(req: NextRequest) {
       const { data: insertedRow } = await supabase.from('interacciones').insert({
         usuario_id: user.id,
         colegio_id: perfil.colegio_id,
-        materia_id: materia_uuid,
+        materia_id: materia_uuid, materia_nombre_snapshot: materiaConsultaSharePoint || null,
         grado: gradoEfectivo,
         tema_detectado: 'Ejemplo análogo',
         pregunta,
@@ -1779,7 +1788,7 @@ export async function POST(req: NextRequest) {
           ? evaluacionProtocolo.feedback
           : reforzarDiagnosticoPorFallos(evaluacionProtocolo.feedback, idiomaIngles, fallosConsecutivos)
       const { data: evaluacionInsertada } = await supabase.from('interacciones').insert({
-        usuario_id: user.id, colegio_id: perfil.colegio_id, materia_id: materia_uuid,
+        usuario_id: user.id, colegio_id: perfil.colegio_id, materia_id: materia_uuid, materia_nombre_snapshot: materiaConsultaSharePoint || null,
         grado: gradoEfectivo, tema_detectado: describeMathTopic(evaluacionProtocolo.op, idiomaIngles),
         pregunta, respuesta, tokens_usados: 0, costo_usd: 0,
         modelo_usado: 'calculadora', documento_fuente: fuentePractica.archivo, sospecha_copia: false,
@@ -1834,7 +1843,7 @@ export async function POST(req: NextRequest) {
         const { data: insertedRow } = await supabase.from('interacciones').insert({
           usuario_id: user.id,
           colegio_id: perfil.colegio_id,
-          materia_id: materia_uuid,
+          materia_id: materia_uuid, materia_nombre_snapshot: materiaConsultaSharePoint || null,
           grado: gradoEfectivo,
           tema_detectado: 'Solicitud de índice de temas',
           pregunta,
@@ -1866,7 +1875,7 @@ export async function POST(req: NextRequest) {
       const { data: insertedRow } = await supabase.from('interacciones').insert({
         usuario_id: user.id,
         colegio_id: perfil.colegio_id,
-        materia_id: materia_uuid,
+        materia_id: materia_uuid, materia_nombre_snapshot: materiaConsultaSharePoint || null,
         grado: gradoEfectivo,
         tema_detectado: 'Índice de temas',
         pregunta,
@@ -1904,7 +1913,7 @@ export async function POST(req: NextRequest) {
       const { data: insertedRow } = await supabase.from('interacciones').insert({
         usuario_id: user.id,
         colegio_id: perfil.colegio_id,
-        materia_id: materia_uuid,
+        materia_id: materia_uuid, materia_nombre_snapshot: materiaConsultaSharePoint || null,
         grado: gradoEfectivo,
         tema_detectado: limpiarTemaGeneral(pregunta, idiomaIngles),
         pregunta,
@@ -1969,6 +1978,17 @@ export async function POST(req: NextRequest) {
       contextoContenido = `CONTENIDO ACADEMICO (fuente principal):\n---\n${contenidoCurricular.substring(0, 3000)}\n---`
     } else {
       contextoContenido = `No se encontro documento especifico en SharePoint. No inventes contenido academico. Indica que no hay suficiente informacion en el material disponible de la materia.`
+    }
+
+    // Hallazgo real (auditoría QA 2026-07-07): tras un mensaje tangencial
+    // (ej. "Mis amigos y yo tenemos examen mañana"), el tutor preguntaba de
+    // nuevo "¿qué tema quieres trabajar?" como si la sesión empezara de
+    // cero, en vez de retomar el ejercicio/tema que ya estaba activo. El
+    // modelo solo veía el historial reciente, sin una señal explícita y
+    // confiable de que había un ejercicio pendiente — esta señal viene del
+    // backend (no depende de que el modelo lo infiera del historial).
+    if (pendingMathOperation) {
+      contextoContenido += `\n\nEJERCICIO ACTIVO PENDIENTE: ${pendingMathOperation}. Si el mensaje del alumno no resuelve este ejercicio, respóndele brevemente lo que preguntó y luego regresa a este mismo ejercicio. NO le preguntes de nuevo qué tema quiere trabajar ni le muestres una lista de temas — el tema ya está activo.`
     }
 
     const systemPrompt = `${promptBase}${promptPadre}${contextoIdioma}
@@ -2122,7 +2142,7 @@ ${contextoContenido}`
     respuesta = sanitizeChatFormatting(respuesta)
 
     const { data: insertedRow, error: insertErr } = await supabase.from('interacciones').insert({
-      usuario_id: user.id, colegio_id: perfil.colegio_id, materia_id: materia_uuid,
+      usuario_id: user.id, colegio_id: perfil.colegio_id, materia_id: materia_uuid, materia_nombre_snapshot: materiaConsultaSharePoint || null,
       grado: gradoEfectivo, tema_detectado: limpiarTemaGeneral(pregunta, idiomaIngles),
       pregunta, respuesta, tokens_usados: tokensUsados, costo_usd: costoUSD,
       modelo_usado: 'gpt-4o-mini', documento_fuente: documentoFuente,

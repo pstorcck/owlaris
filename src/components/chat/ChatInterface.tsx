@@ -111,11 +111,13 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
   const [sugerencias, setSugerencias]   = useState<{icon:string;text:string}[]>([])
   const [expandido, setExpandido]       = useState<string | null>(null)
   const [generandoPDF, setGenerandoPDF]       = useState(false)
+  const [reportePdfListo, setReportePdfListo] = useState(false)
   const [nivelDificultad, setNivelDificultad] = useState(1)
   const [practicaEnfoque, setPracticaEnfoque] = useState('general')
   const [aciertosConsec, setAciertosConsec]   = useState(0)
   const [adaptacionesDificultad, setAdaptacionesDificultad] = useState<AdaptacionDificultad[]>([])
   const sessionStartedAtRef = useRef<string>(new Date().toISOString())
+  const reportePdfListoTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const [materiaSugerida, setMateriaSugerida] = useState('')
   const TRAD_MATERIAS: Record<string,string> = {
@@ -218,6 +220,7 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
       if (vadAudioCtxRef.current) { try { vadAudioCtxRef.current.close() } catch { /* */ } }
       try { recognitionRef.current?.stop() } catch { /* */ }
       try { mediaRecorderRef.current?.stop() } catch { /* */ }
+      if (reportePdfListoTimeoutRef.current) clearTimeout(reportePdfListoTimeoutRef.current)
     }
   }, [])
 
@@ -300,6 +303,28 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
     if (base.length > 0) {
       setChipsMateria(traducirChips(base, idiomaIngles))
     }
+  }, [idiomaIngles])
+
+  // Hallazgo real (auditoría QA 2026-07-07): las acciones rápidas ("Explícame
+  // con un ejemplo", "Quiero practicar", etc.) solo se traducían cuando
+  // llegaba la SIGUIENTE respuesta del tutor, así que al cambiar el toggle
+  // EN/ES quedaban mezclando idiomas hasta ese momento. Se retraducen aquí
+  // de inmediato, igual que ya se hacía con chipsMateria arriba.
+  useEffect(() => {
+    setSugerencias(prev => {
+      if (prev.length === 0) return prev
+      return idiomaIngles ? [
+        { icon: '✦', text: 'Explain with an example' },
+        { icon: '◈', text: 'I want to practice' },
+        { icon: '◇', text: 'Summarize the topic' },
+        { icon: '↺', text: "Let's review my mistakes" },
+      ] : [
+        { icon: '✦', text: 'Explícame con un ejemplo' },
+        { icon: '◈', text: 'Quiero practicar' },
+        { icon: '◇', text: 'Resume el tema' },
+        { icon: '↺', text: 'Revisemos mis errores' },
+      ]
+    })
   }, [idiomaIngles])
 
   function limpiarTextoParaVoz(texto: string) {
@@ -1217,6 +1242,13 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
       }
       const fecha = new Date().toISOString().split('T')[0]
       doc.save(`Owlaris-Reporte-${(nombreAlumno || usuario.nombre_completo).replace(/ /g,'-')}-${fecha}.pdf`)
+      // Hallazgo real (auditoría QA 2026-07-07): el botón solo mostraba
+      // "Generando..." y volvía a su estado normal sin ninguna confirmación
+      // visible, así que un alumno/familia no sabía si ya se había
+      // descargado el PDF y volvía a hacer clic, generando duplicados.
+      setReportePdfListo(true)
+      if (reportePdfListoTimeoutRef.current) clearTimeout(reportePdfListoTimeoutRef.current)
+      reportePdfListoTimeoutRef.current = setTimeout(() => setReportePdfListo(false), 5000)
     } catch(e) { console.error(e) }
     finally { setGenerandoPDF(false) }
   }
@@ -1613,7 +1645,7 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
               </button>
             </div>
             <p style={{fontSize:'10px',color:'#D4D0EE',textAlign:'center',marginTop:'8px',letterSpacing:'.4px',fontWeight:500}}>
-              Owlaris te guía para que aprendas — no hace tu tarea por ti
+              {idiomaIngles ? 'Owlaris guides you to learn — it does not do your homework for you' : 'Owlaris te guía para que aprendas — no hace tu tarea por ti'}
             </p>
           </div>
         </div>
@@ -1777,6 +1809,19 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
             )}
             <span style={{fontSize:'13px',fontWeight:600,color:'white',letterSpacing:'.2px'}}>{generandoPDF?'Generando...':'Reporte de hoy'}</span>
           </button>
+        )}
+
+        {/* Confirmación visible tras descargar el PDF (hallazgo real de
+            auditoría QA: sin esto, un alumno/familia no sabía si ya se
+            había generado el reporte y volvía a hacer clic, duplicando
+            la descarga). */}
+        {reportePdfListo && (
+          <div style={{position:'fixed',bottom:'84px',right:'28px',zIndex:50,background:'#0F172A',color:'white',borderRadius:'12px',padding:'10px 16px',display:'flex',alignItems:'center',gap:'8px',boxShadow:'0 8px 28px rgba(15,23,42,.35)',fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:'13px',fontWeight:600}}>
+            <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="#4ADE80" strokeWidth="2.5" style={{flexShrink:0}}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7"/>
+            </svg>
+            {idiomaIngles ? 'Report downloaded' : 'Reporte descargado'}
+          </div>
         )}
       </div>
     </>
