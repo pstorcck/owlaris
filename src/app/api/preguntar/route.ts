@@ -1286,6 +1286,12 @@ export async function POST(req: NextRequest) {
     if (tipoPregunta === 'academica' && !esBienvenida) {
       const seleccionLista = matchNumberedListSelection(pregunta, ultimoMensajeAsistente(historial))
       if (seleccionLista) {
+        // Mismo hallazgo que el de "multiplicaciones": si el alumno elige el
+        // tema de una lista numerada (en vez de escribirlo libremente), el
+        // enfoque de práctica también debe fijarse desde ESE nombre de tema,
+        // no quedarse con el valor ya persistido (que en la primera pregunta
+        // de la sesión es "general").
+        const enfoqueDesdeLista = resolveMathPracticeFocus([seleccionLista.tema], practicaEnfoqueEstable)
         const respuesta = idiomaIngles
           ? `Great, let's work on topic ${seleccionLista.indice}: ${seleccionLista.tema}. We can start with a simple explanation, an example, or guided practice.`
           : `Perfecto, trabajemos el tema ${seleccionLista.indice}: ${seleccionLista.tema}. Podemos empezar con una explicación sencilla, un ejemplo o práctica guiada.`
@@ -1316,7 +1322,7 @@ export async function POST(req: NextRequest) {
           nivel_dificultad: nivelDificultadActual,
           aciertos_consecutivos: rachaAprendizaje.correctas,
           fallos_consecutivos: rachaAprendizaje.incorrectas,
-          practica_enfoque: practicaEnfoqueEstable,
+          practica_enfoque: enfoqueDesdeLista,
         })
       }
     }
