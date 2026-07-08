@@ -113,6 +113,19 @@ function main() {
     assert.equal(enfoque, 'division')
   })
 
+  // ── Hallazgo real (2026-07-08, reporte de un alumno): cambiar de tema a
+  // "Medición de perímetros y áreas" desde la lista debía fijar el enfoque
+  // 'geometria', no quedarse en el enfoque anterior (multiplicación). ──
+  test('rama-lista-numerada-elige-perimetros-y-areas', () => {
+    const listaConGeometria = [
+      'Podemos trabajar cualquiera de estos temas:',
+      '1. Multiplicación',
+      '2. Medición de perímetros y áreas',
+    ].join('\n')
+    const enfoque = enfoqueRamaListaNumerada('2', listaConGeometria, 'multiplicacion')
+    assert.equal(enfoque, 'geometria')
+  })
+
   // ── Rama 3: siguiente ejercicio tras respuesta correcta ─────────────
   // Reproduce la sesión real reportada: el enfoque debe mantenerse en
   // "multiplicacion" turno tras turno aunque el texto de contexto reciente
@@ -136,6 +149,42 @@ function main() {
     }
   })
 
+  // ── Hallazgo real (2026-07-08, reporte de un alumno): tras cambiar a
+  // "Medición de perímetros y áreas", el primer ejercicio (un rectángulo,
+  // escrito por el modelo de IA) se resolvió bien, pero el SIGUIENTE
+  // "ejercicio distinto" saltó a sumas sueltas (46+113) porque la propia
+  // explicación del perímetro ("debes sumar todos los lados") secuestraba
+  // el enfoque. Reproduce la sesión completa: selección de tema por lista,
+  // explicación con la palabra "sumar", y varios ejercicios de geometría
+  // seguidos — el enfoque y el tipo de operación deben mantenerse en
+  // geometría en todos los turnos.
+  test('rama-siguiente-ejercicio-mantiene-geometria-tras-explicacion-con-sumar', () => {
+    const listaConGeometria = [
+      'Podemos trabajar cualquiera de estos temas:',
+      '1. Multiplicación',
+      '2. Medición de perímetros y áreas',
+    ].join('\n')
+    let enfoque = enfoqueRamaListaNumerada('2', listaConGeometria, 'multiplicacion') as MathPracticeFocus
+    assert.equal(enfoque, 'geometria')
+
+    // La explicación del tutor, igual que en el reporte real, usa la
+    // palabra "sumar" para describir el perímetro — esto es exactamente lo
+    // que antes secuestraba el enfoque.
+    const explicacionPerimetro = 'Imagina que tienes un rectángulo que tiene un largo de 5 cm y un ancho de 3 cm. Recuerda, para calcular el perímetro debes sumar todos los lados. Intenta resolverlo y dime cuál es tu respuesta.'
+    const historial: { rol: string; contenido: string }[] = [{ rol: 'asistente', contenido: explicacionPerimetro }]
+    const opsRecientes: string[] = ['2*(5+3)']
+
+    for (let turno = 0; turno < 6; turno += 1) {
+      enfoque = enfoqueRamaSiguienteEjercicio('16 cm', '2*(5+3)', explicacionPerimetro, historial, enfoque)
+      assert.equal(enfoque, 'geometria', `el tema se perdió (secuestrado) en el turno ${turno}`)
+      const siguiente = buildNextMathExercise(opsRecientes, 1, false, enfoque)
+      assert.match(siguiente.text, /rect[aá]ngulo|cuadrado/i, `el ejercicio ${turno} no siguió siendo de geometría: ${siguiente.text}`)
+      assert.match(siguiente.text, /per[ií]metro|[aá]rea/i, `el ejercicio ${turno} no mencionó perímetro/área: ${siguiente.text}`)
+      opsRecientes.push(siguiente.op)
+      historial.push({ rol: 'asistente', contenido: siguiente.text })
+    }
+  })
+
   // ── Ramas que deben CONSERVAR el enfoque sin recalcularlo ───────────
   // Documentan a propósito el comportamiento correcto de las otras 3 ramas
   // auditadas (recordar ejercicio activo, apoyo sobre ejercicio activo,
@@ -148,7 +197,7 @@ function main() {
     assert.equal(enfoquePersistido, 'multiplicacion')
   })
 
-  const total_esperado = 3 + 3 + 1 + 1
+  const total_esperado = 3 + 4 + 2 + 1
   assert.equal(total, total_esperado)
 
   if (failures.length > 0) {

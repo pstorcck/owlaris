@@ -776,7 +776,7 @@ function reforzarDiagnosticoPorFallos(respuesta: string, idiomaIngles: boolean, 
   return `${respuesta}\n\n${refuerzo}`
 }
 
-const ENFOQUES_PRACTICA_VALIDOS: MathPracticeFocus[] = ['equation', 'decimal', 'suma_resta', 'multiplicacion_division', 'suma', 'resta', 'multiplicacion', 'division']
+const ENFOQUES_PRACTICA_VALIDOS: MathPracticeFocus[] = ['equation', 'decimal', 'suma_resta', 'multiplicacion_division', 'suma', 'resta', 'multiplicacion', 'division', 'geometria']
 
 async function cargarOperacionesEvaluadas(
   supabase: ReturnType<typeof createClient>,
@@ -1457,7 +1457,7 @@ export async function POST(req: NextRequest) {
         colegio_id: perfil.colegio_id,
         materia_id: materia_uuid, materia_nombre_snapshot: materiaConsultaSharePoint || null,
         grado: gradoEfectivo,
-        tema_detectado: ejercicioEnfocadoOp ? describeMathTopic(ejercicioEnfocadoOp, idiomaIngles) : 'Revisión de errores',
+        tema_detectado: ejercicioEnfocadoOp ? describeMathTopic(ejercicioEnfocadoOp, idiomaIngles, enfoqueDetectado) : 'Revisión de errores',
         pregunta,
         respuesta,
         tokens_usados: 0,
@@ -1825,7 +1825,7 @@ export async function POST(req: NextRequest) {
           : reforzarDiagnosticoPorFallos(evaluacionProtocolo.feedback, idiomaIngles, fallosConsecutivos)
       const { data: evaluacionInsertada } = await supabase.from('interacciones').insert({
         usuario_id: user.id, colegio_id: perfil.colegio_id, materia_id: materia_uuid, materia_nombre_snapshot: materiaConsultaSharePoint || null,
-        grado: gradoEfectivo, tema_detectado: describeMathTopic(evaluacionProtocolo.op, idiomaIngles),
+        grado: gradoEfectivo, tema_detectado: describeMathTopic(evaluacionProtocolo.op, idiomaIngles, practicaEnfoqueEstable),
         pregunta, respuesta, tokens_usados: 0, costo_usd: 0,
         modelo_usado: 'calculadora', documento_fuente: fuentePractica.archivo, sospecha_copia: false,
         operacion_canonica: siguienteEjercicio?.op || evaluacionProtocolo?.op || null,

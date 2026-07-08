@@ -9,7 +9,7 @@ export type MathPracticeExercise = {
   op: string
 }
 
-export type MathPracticeFocus = 'general' | 'equation' | 'decimal' | 'suma_resta' | 'multiplicacion_division' | 'suma' | 'resta' | 'multiplicacion' | 'division'
+export type MathPracticeFocus = 'general' | 'equation' | 'decimal' | 'suma_resta' | 'multiplicacion_division' | 'suma' | 'resta' | 'multiplicacion' | 'division' | 'geometria'
 
 export type DifficultyAdaptationType = 'sube' | 'baja' | 'refuerza' | 'mantiene'
 
@@ -54,7 +54,14 @@ export function isRepeatedMathOperation(op: string | null | undefined, recentOps
 // Nombre de tema legible para reportes/registros, a partir de la operación
 // canónica evaluada — NUNCA a partir de la respuesta libre del alumno (un
 // número o "perdon 46" no es un tema).
-export function describeMathTopic(op: string | null | undefined, idiomaIngles = false): string {
+//
+// Hallazgo real (2026-07-08): un ejercicio de perímetro ("2*(30+15)") es
+// simbólicamente indistinguible de un ejercicio genérico de orden de
+// operaciones — ambos mezclan +/- con */. Cuando se conoce el enfoque de
+// práctica que generó el ejercicio (focus === 'geometria'), se usa ese dato
+// en vez de adivinar por los símbolos de la operación.
+export function describeMathTopic(op: string | null | undefined, idiomaIngles = false, focus?: MathPracticeFocus | null): string {
+  if (focus === 'geometria') return idiomaIngles ? 'Perimeter and area' : 'Perímetro y área'
   const clean = String(op || '')
   if (/x/i.test(clean) && clean.includes('=')) return idiomaIngles ? 'Equations' : 'Ecuaciones'
   if (/\d+\.\d+|%/.test(clean)) return idiomaIngles ? 'Decimals and percentages' : 'Decimales y porcentajes'
@@ -254,6 +261,46 @@ function formatOperation(op: string) {
     .trim()
 }
 
+// Hallazgo real (2026-07-08): un alumno que cambiaba de tema a "Medición de
+// perímetros y áreas" recibía UN ejercicio de perímetro (escrito por el
+// modelo de IA), pero el siguiente "ejercicio distinto" venía del generador
+// determinístico de abajo, que solo sabía producir aritmética pura — sin
+// ninguna rama de geometría, el enfoque quedaba secuestrado por palabras
+// como "sumar" en la propia explicación del perímetro ("sumar los lados") y
+// terminaba generando sumas sueltas, un tema completamente ajeno. Estos
+// generadores dan a "perímetro y área" la misma garantía determinística que
+// ya tienen suma/resta/multiplicación/división: cada llamada produce un
+// ejercicio nuevo de esa misma familia, nunca genérico.
+function generateGeometriaExercise(idiomaIngles: boolean): { op: string; text: string } {
+  const figura: 'rectangulo' | 'cuadrado' = randInt(0, 1) === 0 ? 'rectangulo' : 'cuadrado'
+  const medida: 'perimetro' | 'area' = randInt(0, 1) === 0 ? 'perimetro' : 'area'
+
+  if (figura === 'rectangulo') {
+    const largo = randInt(4, 30)
+    const ancho = randInt(2, Math.max(2, largo - 1))
+    const op = medida === 'perimetro' ? `2*(${largo}+${ancho})` : `${largo}*${ancho}`
+    const text = idiomaIngles
+      ? medida === 'perimetro'
+        ? `Try this different exercise: imagine a rectangle with a length of ${largo} cm and a width of ${ancho} cm. What is its perimeter?`
+        : `Try this different exercise: imagine a rectangle with a length of ${largo} cm and a width of ${ancho} cm. What is its area?`
+      : medida === 'perimetro'
+        ? `Intenta este ejercicio distinto: imagina un rectángulo con un largo de ${largo} cm y un ancho de ${ancho} cm. ¿Cuál es su perímetro?`
+        : `Intenta este ejercicio distinto: imagina un rectángulo con un largo de ${largo} cm y un ancho de ${ancho} cm. ¿Cuál es su área?`
+    return { op, text }
+  }
+
+  const lado = randInt(3, 30)
+  const op = medida === 'perimetro' ? `4*${lado}` : `${lado}*${lado}`
+  const text = idiomaIngles
+    ? medida === 'perimetro'
+      ? `Try this different exercise: imagine a square with a side of ${lado} cm. What is its perimeter?`
+      : `Try this different exercise: imagine a square with a side of ${lado} cm. What is its area?`
+    : medida === 'perimetro'
+      ? `Intenta este ejercicio distinto: imagina un cuadrado con un lado de ${lado} cm. ¿Cuál es su perímetro?`
+      : `Intenta este ejercicio distinto: imagina un cuadrado con un lado de ${lado} cm. ¿Cuál es su área?`
+  return { op, text }
+}
+
 function exerciseText(op: string, idiomaIngles: boolean) {
   const visible = formatOperation(op)
   if (op.includes('=') && /x/i.test(op)) {
@@ -338,6 +385,27 @@ export function buildNextMathExercise(
   const recentSet = new Set(
     recentOps.map((op) => normalizePracticeOperation(op)).filter(Boolean)
   )
+
+  // Geometría (perímetro y área) tiene su propio texto narrativo por
+  // ejercicio (rectángulo/cuadrado con dimensiones), no el formato genérico
+  // "X op Y" de exerciseText — cada generador ya devuelve {op, text} listo.
+  if (focus === 'geometria') {
+    for (let attempt = 0; attempt < MAX_GENERATION_ATTEMPTS; attempt += 1) {
+      const exercise = generateGeometriaExercise(idiomaIngles)
+      const key = normalizePracticeOperation(exercise.op)
+      if (key && !recentSet.has(key) && isSafeCanonicalOperation(exercise.op) && solveOperation(exercise.op) !== null) {
+        return exercise
+      }
+    }
+    let exercise = generateGeometriaExercise(idiomaIngles)
+    let guard = 0
+    while (recentSet.has(normalizePracticeOperation(exercise.op)) && guard < 200) {
+      exercise = generateGeometriaExercise(idiomaIngles)
+      guard += 1
+    }
+    return exercise
+  }
+
   const generate = exerciseGeneratorFor(level, focus)
 
   for (let attempt = 0; attempt < MAX_GENERATION_ATTEMPTS; attempt += 1) {
@@ -382,6 +450,17 @@ export function inferMathPracticeFocus(texts: Array<string | null | undefined>):
     return 'decimal'
   }
 
+  // Hallazgo real (2026-07-08): sin esta rama, la explicación de perímetro
+  // ("para calcular el perímetro debes sumar todos los lados") activaba
+  // "pideSuma" más abajo y secuestraba el enfoque hacia sumas sueltas, un
+  // tema ajeno al que el alumno seguía trabajando. Se revisa ANTES que
+  // suma/resta/mult/div para que una palabra de geometría siempre gane
+  // sobre una palabra de operación aritmética que aparezca de paso en la
+  // misma explicación.
+  if (/\b(perimetro(s)?|area(s)?|geometria|rectangulo(s)?|cuadrado(s)?|triangulo(s)?|circulo(s)?)\b/.test(normalized)) {
+    return 'geometria'
+  }
+
   // Se distingue "solo sumas" de "solo restas" de "sumas y restas" (y lo
   // mismo para multiplicación/división): pedir únicamente una operación no
   // debe mezclarse con la otra de la misma familia en los ejercicios.
@@ -403,7 +482,7 @@ export function inferMathPracticeFocus(texts: Array<string | null | undefined>):
   return 'general'
 }
 
-const ENFOQUES_PRACTICA_VALIDOS: MathPracticeFocus[] = ['equation', 'decimal', 'suma_resta', 'multiplicacion_division', 'suma', 'resta', 'multiplicacion', 'division']
+const ENFOQUES_PRACTICA_VALIDOS: MathPracticeFocus[] = ['equation', 'decimal', 'suma_resta', 'multiplicacion_division', 'suma', 'resta', 'multiplicacion', 'division', 'geometria']
 
 // El historial que llega al backend es una ventana corta (ultimos 6 mensajes),
 // asi que a partir del 3er-4to ejercicio la frase original ("sumas y restas")
