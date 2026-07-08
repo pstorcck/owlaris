@@ -72,6 +72,17 @@ function main() {
     assert.equal(detectarMateriaDesdeTexto(`quiero entender ${termino}`), 'Biología', `"${termino}" debería detectarse como Biología`)
   }
 
+  // Hallazgo real (reporte de un maestro, 2026-07-08): un problema de
+  // aplicación de Matemática que menciona "velocidad" y "tiempo" no debe
+  // detectarse como un cambio de tema hacia Física — es un ejercicio de
+  // álgebra legítimo (despejar una variable en distancia = velocidad * tiempo).
+  assert.equal(
+    detectarMateriaDesdeTexto('tendriamos que encontrar la distancia que recorio multiplicando la velocidad y el timepo sabemos que la velocidad es de 20 como podrias sacar el timepo'),
+    null,
+    '"velocidad" por sí sola no debería activar un cambio de materia a Física'
+  )
+  assert.equal(detectarMateriaDesdeTexto('necesito ayuda con mi trabajo de matemática'), null, '"trabajo" no debería detectarse como Física')
+
   console.log('materia-detection smoke passed')
 }
 

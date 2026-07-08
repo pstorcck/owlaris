@@ -30,7 +30,18 @@ export function normalizarMateria(texto: string, esOlimpiadas = false): string {
 
 export const TEMAS_POR_MATERIA: Record<string, string[]> = {
   'Matemática': ['aritmética','aritmetica','algebra','álgebra','geometría','geometria','fracciones','ecuaciones','trigonometría','trigonometria','estadística','estadistica','probabilidad','porcentajes','decimales','números','numeros','matrices','funciones','polinomios','logaritmos'],
-  'Física': ['cinemática','cinematica','dinámica','dinamica','fuerza','movimiento','velocidad','aceleración','aceleracion','energía','energia','trabajo','calor','temperatura','ondas','luz','electricidad','magnetismo','gravedad','óptica','optica'],
+  // Hallazgo real (reporte de un maestro, 2026-07-08): un problema de
+  // aplicación de Matemática ("la velocidad es 20, encuentra el tiempo:
+  // distancia = velocidad * tiempo") se detectó como "Física" solo por
+  // mencionar "velocidad", y el tutor sugirió cambiar de materia en medio
+  // de un ejercicio de álgebra legítimo (el alumno mismo aclaró "es
+  // matemáticas porque estamos despejando X"). "velocidad" y "trabajo"
+  // se quitan de esta lista: son vocabulario que también aparece en
+  // problemas de aplicación de Matemática (velocidad) o son palabras del
+  // español cotidiano sin relación con Física en absoluto ("trabajo" —
+  // "mi trabajo de matemática", "tengo mucho trabajo"). El resto de la
+  // lista sigue siendo suficientemente específico de Física.
+  'Física': ['cinemática','cinematica','dinámica','dinamica','fuerza','movimiento','aceleración','aceleracion','energía','energia','calor','temperatura','ondas','luz','electricidad','magnetismo','gravedad','óptica','optica'],
   'Química': ['átomo','atomo','molécula','molecula','enlace','reacción','reaccion','tabla periódica','tabla periodica','ácido','acido','base','solución','solucion','oxidación','oxidacion','elemento','compuesto','estequiometría'],
   'Biología': ['célula','celula','fotosíntesis','fotosintesis','adn','genética','genetica','gen','genes','herencia','alelo','alelos','rasgo','rasgos','evolución','evolucion','ecosistema','ecosistemas','ecología','ecologia','biodiversidad','organismo','organismos','proteína','proteina','mitosis','meiosis','respiración celular','anatomía','anatomia','fisiología','fisiologia','reproducción','reproduccion','adaptación','adaptacion'],
   'Historia': ['guerra','revolución','revolucion','independencia','civilización','civilizacion','colonia','conquista','maya','azteca','inca','república','republica','democracia','feudalismo'],
