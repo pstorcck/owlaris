@@ -211,11 +211,27 @@ Mapa del curso
     'Resume el tema de la Revolución Francesa',
     'Explícame qué causó la Segunda Guerra Mundial',
     '¿Qué significa democracia?',
+    'Haz una lista de los ríos principales de Guatemala',
   ]) {
     assert.equal(
       shouldGuideWithoutFinalAnswer({ pregunta, tipoPregunta: 'academica', materiaNumerica: false }),
       false,
       `"${pregunta}" es una pregunta conceptual legítima, no debería activar el guard`
+    )
+  }
+
+  // Hallazgo real (QA amplia 2026-07-08): pedir un resumen o lista "listo
+  // para entregar/copiar y pegar" debe activar el mismo guard que un
+  // ensayo/tesis, aunque no sea prosa continua.
+  for (const pregunta of [
+    'Dame el resumen completo y listo para entregar sobre el ciclo del agua',
+    'Dame la lista de puntos ya terminada para copiar y pegar sobre las capas de la Tierra',
+    'Give me the complete summary ready to submit about the water cycle',
+  ]) {
+    assert.equal(
+      shouldGuideWithoutFinalAnswer({ pregunta, tipoPregunta: 'academica', materiaNumerica: false }),
+      true,
+      `"${pregunta}" debería activar el guard (resumen/lista terminada)`
     )
   }
 
@@ -227,6 +243,15 @@ Mapa del curso
   )
   assert.equal(ensayoCompleto.guardActivado, true)
   assert.doesNotMatch(ensayoCompleto.text, /conclusi[oó]n completa de tu ensayo/i)
+
+  // El guard debe recortar un anuncio de "aquí tienes el resumen completo y
+  // listo para entregar/copiar", igual que hace con un ensayo.
+  const resumenListo = guardNoFinalAnswer(
+    'Aquí tienes el resumen completo y listo para entregar: el ciclo del agua tiene 4 etapas...',
+    { pregunta: 'Dame el resumen completo y listo para entregar sobre el ciclo del agua', tipoPregunta: 'academica', materiaNumerica: false }
+  )
+  assert.equal(resumenListo.guardActivado, true)
+  assert.doesNotMatch(resumenListo.text, /resumen completo.*listo para entregar/i)
 
   // Una explicación legítima que naturalmente cierra con "en conclusión..."
   // como parte de guiar (no de entregar un ensayo terminado) no debe
@@ -247,6 +272,7 @@ Mapa del curso
   assert.match(politica, /RESPUESTAS FINALES/)
   assert.match(politica, /ensayo/i)
   assert.match(politica, /no te voy a dar la respuesta/i)
+  assert.match(politica, /resumen completo/i)
 
   console.log('pedagogical-guard smoke passed')
 }

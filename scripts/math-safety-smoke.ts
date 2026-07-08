@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import {
+  buildGuidedMathHint,
   handleMathEvaluation,
   inferCanonicalOperationFromText,
   isLikelyNumericSubject,
@@ -250,6 +251,23 @@ D) 10
   assert.equal(evalAmbosLados?.estado, 'incorrecto')
   assert.equal(evalAmbosLados?.correctAnswer, 7)
   assert.match(evalAmbosLados?.feedback || '', /ambos lados|un mismo lado/i)
+
+  // Hallazgo real (QA amplia 2026-07-08): la pista para cada tipo de error
+  // caía en ramas genéricas o directamente equivocadas. Cada caso debe
+  // devolver ahora una pista específica a su propio tipo de error, no la
+  // genérica de "orden de operaciones" ni el mensaje viejo de "identifica
+  // qué operación afecta a x".
+  assert.match(buildGuidedMathHint('1/4+2/3', false), /denominador com[uú]n/i)
+  assert.doesNotMatch(buildGuidedMathHint('1/4+2/3', false), /orden de operaciones/i)
+  assert.match(buildGuidedMathHint('-3x+5=8', false), /coeficiente de x es negativo/i)
+  assert.doesNotMatch(buildGuidedMathHint('-3x+5=8', false), /identifica qu[eé] operaci[oó]n afecta/i)
+  assert.match(buildGuidedMathHint('0.5x-2.3=1.7', false), /decimales/i)
+  assert.match(buildGuidedMathHint('2*(3+5)-4', false), /par[eé]ntesis/i)
+  assert.doesNotMatch(buildGuidedMathHint('2*(3+5)-4', false), /orden de operaciones/i)
+  // Casos ya cubiertos que no deben regresionar.
+  assert.match(buildGuidedMathHint('2*(x+3)=18', false), /distribuye/i)
+  assert.match(buildGuidedMathHint('5x+3=2x+15', false), /junta los t[eé]rminos con x/i)
+  assert.match(buildGuidedMathHint('3x-7=2', false), /identifica qu[eé] operaci[oó]n afecta/i)
 
   console.log('math-safety smoke passed')
 }

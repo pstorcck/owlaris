@@ -57,6 +57,15 @@ const SOLICITUD_TRABAJO_CONCEPTUAL = [
   /(?:final|complete)\s+argument/i,
   /\bthesis\b/i,
   /conclusion\s+(?:of|for)\s+(?:my|your|this)\s+(?:essay|paper|report)/i,
+  // Hallazgo real (QA amplia 2026-07-08): el guard cubría ensayo/conclusión/
+  // argumento (prosa), pero no un resumen o lista pedidos como entregable
+  // terminado — el tutor rechazaba verbalmente pero igual entregaba casi
+  // todo el contenido factual en formato de lista.
+  /resumen\s+(?:completo\s+)?(?:y\s+)?listo\s+para\s+entregar/i,
+  /lista\s+(?:de\s+puntos\s+)?(?:ya\s+)?terminada.*copiar\s+y\s+pegar/i,
+  /(?:resumen|lista)\s+.*(?:copiar\s+y\s+pegar|listo\s+para\s+entregar)/i,
+  /complete\s+(?:summary|list)\s+ready\s+to\s+(?:submit|turn\s+in|copy)/i,
+  /(?:summary|list)\s+.*ready\s+to\s+copy\s+and\s+paste/i,
 ]
 
 const FRASES_RESPUESTA_FINAL = [
@@ -95,6 +104,10 @@ const FRASES_RESPUESTA_FINAL_CONCEPTUAL = [
   /\bhere('|’)s\s+the\s+complete\s+(?:essay|argument|analysis|conclusion)\b[^\n]*[.\n]?/gi,
   /\bmy\s+final\s+conclusion\s+(?:for\s+your\s+essay\s+)?is\s*:?\s*[^\n.]+[.\n]?/gi,
   /\bthis\s+is\s+the\s+complete\s+(?:essay|argument|analysis)\b[^\n]*[.\n]?/gi,
+  // Hallazgo real (QA amplia 2026-07-08): anuncio de resumen/lista terminada
+  // lista para entregar/copiar, equivalente al anuncio de ensayo completo.
+  /\baqu[ií]\s+(?:tienes|est[aá])\s+(?:el\s+|la\s+)?(?:resumen|lista)\s+completo?a?\s+(?:y\s+)?listo?a?\s+para\s+(?:entregar|copiar)\b[^\n]*[.\n]?/gi,
+  /\bhere('|’)s\s+the\s+complete\s+(?:summary|list)\s+ready\s+to\s+(?:submit|copy)\b[^\n]*[.\n]?/gi,
 ]
 
 export function shouldGuideWithoutFinalAnswer(options: GuardOptions): boolean {
@@ -175,6 +188,7 @@ En la vista alumno, no entregues directamente la respuesta final de un problema,
 Tu función es guiar para que el estudiante llegue a la respuesta por sí mismo, pero esta regla es interna: NUNCA le digas al alumno frases como "no te voy a dar la respuesta", "mi objetivo es que aprendas y no darte una respuesta para copiar" o similares. Simplemente guía sin anunciar la regla — se ve rígido y defensivo repetirla.
 Si el estudiante responde incorrectamente, puedes decir que todavía no llegó a la respuesta correcta, pero NO reveles de inmediato el resultado correcto. Ayúdalo a detectar el error y avanzar paso a paso.
 En materias conceptuales, si te piden escribir un ensayo, la conclusión de un trabajo o un argumento completo, no lo entregues terminado — ayuda a construirlo por partes (idea principal, evidencia, estructura) y pide que el alumno proponga cada parte antes de confirmarla.
+Esta misma regla aplica si piden un resumen completo o una lista de puntos "lista para entregar" o "para copiar y pegar": rechazar la petición de palabra pero igual entregar casi todo el contenido factual en formato de lista no cumple la regla — entrégalo por partes también (ej. explica un punto a la vez y pide que el alumno intente resumir el siguiente antes de dártelo tú), no como una lista completa de una sola vez.
 Usa pistas, preguntas guiadas, ejemplos parciales, recordatorios de conceptos y verificación paso a paso. Varía cómo guías para no sonar repetitivo.
 Solo confirma la respuesta final cuando el estudiante ya la propuso correctamente o completó correctamente el razonamiento.
 Si insiste en que quiere solo la respuesta, redirígelo con naturalidad hacia resolverlo juntos paso a paso, sin repetir siempre la misma frase ni anunciar la regla.`

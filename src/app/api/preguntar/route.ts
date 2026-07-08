@@ -4,6 +4,7 @@ import { checkContentSafety, type ContentSafetyResult } from '@/lib/contentSafet
 import { guardHumanisticResponse } from '@/lib/humanisticSafety'
 import { describeFinalAnswerPolicyForPrompt, guardNoFinalAnswer } from '@/lib/pedagogicalGuard'
 import { buildGradeAdaptationInstruction } from '@/lib/gradeAdaptation'
+import { pareceIdiomaDistinto } from '@/lib/languageDetection'
 import { buscarStaffColegio, buscarSuperadmins, elegirFuenteDestinatariosAlerta, type DestinatarioAlerta } from '@/lib/alertaEmergencia'
 import { verificarLimiteFrecuencia } from '@/lib/rateLimit'
 import { sanitizeChatFormatting } from '@/lib/chatFormatting'
@@ -92,6 +93,7 @@ ${describeSameExercisePolicyForPrompt()}
 No compartas enlaces, videos, canales o recursos externos no autorizados. Trabaja con el contenido oficial de Owlaris y SharePoint.
 Si el alumno pide todos los temas, el índice, el mapa del curso o la lista completa de la clase, eso es orientación académica permitida. Debes listar los temas oficiales disponibles; no lo trates como una solicitud de copia.
 Si el alumno pregunta por un subtema claramente distinto al que se venía trabajando dentro de la misma materia (ej. estaba en "sistema digestivo" y ahora pregunta por "leyes de Newton"), respóndele igual, pero acláralo primero en una frase breve (ej. "Eso es un tema distinto de [materia] — ¿seguimos con [tema anterior] después de esto, o cambiamos definitivamente a [tema nuevo]?"). No cambies de subtema en silencio como si el anterior nunca hubiera estado activo.
+Un mensaje escrito en un idioma distinto al configurado en la sesión NO cuenta como un subtema o tema distinto — es solo un cambio de idioma. No apliques la aclaración de "eso es un tema distinto" únicamente porque el alumno cambió de idioma al escribir la misma pregunta.
 
 REGLA ESTRICTA — SIN PREGUNTAS FUERA DE ÁMBITO ACADÉMICO:
 Owlaris es exclusivamente un tutor académico dentro de la materia seleccionada. Si el alumno pregunta algo sin relación académica con esa materia (opiniones sobre un producto comercial, un vehículo, una marca, un videojuego, un famoso, resultados deportivos, chismes, o cualquier tema fuera del currículo escolar), NO respondas usando tu conocimiento general del mundo, aunque lo sepas.
@@ -2001,6 +2003,15 @@ export async function POST(req: NextRequest) {
 
     const contextoIdioma = idiomaIngles ? '\n\nLANGUAGE INSTRUCTION: Respond entirely in English. All explanations, questions and feedback must be in English only.' : ''
 
+    // Hallazgo real (QA amplia 2026-07-08): un mensaje en un idioma distinto
+    // al configurado se estaba tratando como cambio de tema/subtema ("Eso es
+    // un tema distinto de Biology") en vez de solo un cambio de idioma. Esta
+    // nota le da al modelo una señal explícita cuando la heurística detecta
+    // el caso, para que no dependa únicamente de su propio criterio.
+    const contextoIdiomaDistinto = pareceIdiomaDistinto(pregunta, idiomaIngles)
+      ? '\n\nNOTA: el alumno escribió este mensaje en un idioma distinto al configurado en la sesión. Esto NO es un cambio de tema ni de subtema — sigue ayudando con el mismo tema activo de la materia. Puedes responder en el idioma del mensaje o invitar a cambiar el interruptor de idioma si prefiere seguir así, pero no lo trates como si hubiera cambiado de materia o subtema.'
+      : ''
+
     // Sprint de estabilización (auditoría 2026-07-07): antes el grado se
     // pasaba como dato inerte ("Grado: 4to Primaria") sin ninguna
     // instrucción de cómo adaptar vocabulario/extensión/tono/ejemplos/nivel
@@ -2033,7 +2044,7 @@ export async function POST(req: NextRequest) {
       contextoContenido += `\n\nEJERCICIO ACTIVO PENDIENTE: ${pendingMathOperation}. Si el mensaje del alumno no resuelve este ejercicio, respóndele brevemente lo que preguntó y luego regresa a este mismo ejercicio. NO le preguntes de nuevo qué tema quiere trabajar ni le muestres una lista de temas — el tema ya está activo.`
     }
 
-    const systemPrompt = `${promptBase}${promptPadre}${contextoIdioma}${contextoGrado}
+    const systemPrompt = `${promptBase}${promptPadre}${contextoIdioma}${contextoIdiomaDistinto}${contextoGrado}
 
 CONTEXTO DEL ALUMNO:
 - Nombre: ${perfil.nombre_completo.split(' ')[0]}

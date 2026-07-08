@@ -495,9 +495,34 @@ export function buildGuidedMathHint(op: string | null | undefined, idiomaIngles:
         ? 'First move all the x terms to one side of the equation and the plain numbers to the other, then isolate x.'
         : 'Primero junta los términos con x en un mismo lado de la ecuación y los números en el otro, y luego despeja x.'
     }
+    // Hallazgo real (QA amplia 2026-07-08): coeficiente negativo de x caía en
+    // el mensaje genérico — el signo negativo es justo el paso donde más se
+    // equivocan, necesita su propia pista.
+    if (/-\d*x/i.test(clean)) {
+      return idiomaIngles
+        ? 'The coefficient of x is negative — after isolating it, remember that dividing by a negative number can flip the meaning of the sign. Check the sign carefully on both sides.'
+        : 'El coeficiente de x es negativo — al despejarla, recuerda que dividir entre un número negativo afecta el signo. Revisa con cuidado el signo en ambos lados.'
+    }
+    // Hallazgo real (QA amplia 2026-07-08): una ecuación con decimales caía
+    // en el mismo mensaje genérico que coeficiente negativo, sin ninguna
+    // pista sobre el manejo de decimales.
+    if (/\d\.\d/.test(clean)) {
+      return idiomaIngles
+        ? 'This equation has decimals — solve it with the same steps as usual, just keep the decimal point aligned in each operation.'
+        : 'Esta ecuación tiene decimales — resuélvela con los mismos pasos de siempre, solo cuida mantener el punto decimal alineado en cada operación.'
+    }
     return idiomaIngles
       ? 'First identify what operation is affecting x, then use the inverse operation to isolate it.'
       : 'Primero identifica qué operación afecta a x y luego usa la operación inversa para dejarla sola.'
+  }
+  // Hallazgo real (QA amplia 2026-07-08): sumar/restar fracciones con
+  // distinto denominador caía en el chequeo genérico de "orden de
+  // operaciones" (por tener '/' junto con '+' o '-'), una pista ajena al
+  // error real de fracciones.
+  if (/\d+\/\d+\s*[+\-]\s*\d+\/\d+/.test(clean)) {
+    return idiomaIngles
+      ? 'For adding or subtracting fractions, first find a common denominator, then add or subtract only the numerators.'
+      : 'Para sumar o restar fracciones, primero busca un denominador común, y luego suma o resta solo los numeradores.'
   }
   if (/\d+\.\d+/.test(clean) && clean.includes('*')) {
     return idiomaIngles
@@ -508,6 +533,15 @@ export function buildGuidedMathHint(op: string | null | undefined, idiomaIngles:
     return idiomaIngles
       ? 'For a percentage, first change it to a decimal or fraction, then multiply by the quantity.'
       : 'Para un porcentaje, primero conviértelo a decimal o fracción y luego multiplícalo por la cantidad.'
+  }
+  // Hallazgo real (QA amplia 2026-07-08): una expresión con paréntesis pero
+  // sin ecuación (ej. 2*(3+5)-4) caía en el chequeo genérico de "orden de
+  // operaciones" en vez de una pista específica sobre resolver el paréntesis
+  // primero.
+  if (clean.includes('(')) {
+    return idiomaIngles
+      ? 'First solve what is inside the parentheses, then continue with the rest of the operation.'
+      : 'Primero resuelve lo que está dentro del paréntesis, y luego continúa con el resto de la operación.'
   }
   if ((clean.includes('*') || clean.includes('/')) && (clean.includes('+') || clean.includes('-'))) {
     return idiomaIngles
