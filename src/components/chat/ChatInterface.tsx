@@ -202,6 +202,24 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
   const materiasDisponiblesRef = useRef<string[]>(materiasIniciales)
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const bienvenidaInicializadaRef = useRef(false)
+
+  // Hallazgo real (reporte de un maestro, 2026-07-08): el búho flotante y el
+  // botón "Reporte de hoy" usaban un bottom fijo en px, calculado para
+  // cuando el footer (input + chips de acción rápida) es corto. En móvil,
+  // cuando aparecen chips de materia o de acciones rápidas, el footer crece
+  // y esos botones fijos terminan superpuestos sobre el área de escribir.
+  // Se mide la altura real del footer para que el offset se adapte siempre.
+  const footerRef = useRef<HTMLDivElement>(null)
+  const [alturaFooter, setAlturaFooter] = useState(96)
+  useEffect(() => {
+    const el = footerRef.current
+    if (!el) return
+    const actualizar = () => setAlturaFooter(el.offsetHeight)
+    actualizar()
+    const observer = new ResizeObserver(actualizar)
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [])
   const router   = useRouter()
   const supabase = createClient()
 
@@ -1521,7 +1539,7 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
         </main>
 
         {/* Footer */}
-        <div style={{background:'rgba(248,247,255,.95)',backdropFilter:'blur(20px)',borderTop:'1px solid rgba(109,40,217,.08)',padding:'12px 16px 20px',boxShadow:'0 -4px 24px rgba(109,40,217,.06)'}}>
+        <div ref={footerRef} style={{background:'rgba(248,247,255,.95)',backdropFilter:'blur(20px)',borderTop:'1px solid rgba(109,40,217,.08)',padding:'12px 16px 20px',boxShadow:'0 -4px 24px rgba(109,40,217,.06)'}}>
           <div style={{maxWidth:'800px',margin:'0 auto'}}>
             {/* CHIPS DE MATERIAS */}
             {(estadoChat === 'esperando_materia' || estadoChat === 'esperando_materia_olimpiadas') && chipsMateria.length > 0 && (
@@ -1788,7 +1806,7 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
             `}</style>
           </div>
         ) : (
-          <div className="o-float" style={{position:'fixed',bottom:'24px',left:'24px',zIndex:40,pointerEvents:'none'}}>
+          <div className="o-float" style={{position:'fixed',bottom:`${alturaFooter+12}px`,left:'24px',zIndex:40,pointerEvents:'none'}}>
             <img src="/buho.png" alt="" style={{width:'60px',height:'60px',objectFit:'contain',filter:'drop-shadow(0 8px 24px rgba(109,40,217,.35))'}}/>
           </div>
         )}
@@ -1796,7 +1814,7 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
         {/* Botón reporte flotante */}
         {mensajes.length >= 3 && estadoChat === 'activo' && (
           <button onClick={generarReporte} disabled={generandoPDF}
-            style={{position:'fixed',bottom:'28px',right:'28px',zIndex:50,background:generandoPDF?'rgba(109,40,217,.6)':'linear-gradient(135deg,#7C3AED,#6D28D9)',border:'none',borderRadius:'16px',padding:'12px 20px',cursor:generandoPDF?'not-allowed':'pointer',display:'flex',alignItems:'center',gap:'8px',boxShadow:'0 8px 28px rgba(109,40,217,.35)',transition:'all .25s',fontFamily:"'Plus Jakarta Sans',sans-serif"}}>
+            style={{position:'fixed',bottom:`${alturaFooter+16}px`,right:'28px',zIndex:50,background:generandoPDF?'rgba(109,40,217,.6)':'linear-gradient(135deg,#7C3AED,#6D28D9)',border:'none',borderRadius:'16px',padding:'12px 20px',cursor:generandoPDF?'not-allowed':'pointer',display:'flex',alignItems:'center',gap:'8px',boxShadow:'0 8px 28px rgba(109,40,217,.35)',transition:'all .25s',fontFamily:"'Plus Jakarta Sans',sans-serif"}}>
             {generandoPDF?(
               <svg style={{animation:'spin 1s linear infinite',width:'16px',height:'16px',flexShrink:0}} fill="none" viewBox="0 0 24 24">
                 <circle style={{opacity:.25}} cx="12" cy="12" r="10" stroke="white" strokeWidth="3"/>
@@ -1816,7 +1834,7 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
             había generado el reporte y volvía a hacer clic, duplicando
             la descarga). */}
         {reportePdfListo && (
-          <div style={{position:'fixed',bottom:'84px',right:'28px',zIndex:50,background:'#0F172A',color:'white',borderRadius:'12px',padding:'10px 16px',display:'flex',alignItems:'center',gap:'8px',boxShadow:'0 8px 28px rgba(15,23,42,.35)',fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:'13px',fontWeight:600}}>
+          <div style={{position:'fixed',bottom:`${alturaFooter+72}px`,right:'28px',zIndex:50,background:'#0F172A',color:'white',borderRadius:'12px',padding:'10px 16px',display:'flex',alignItems:'center',gap:'8px',boxShadow:'0 8px 28px rgba(15,23,42,.35)',fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:'13px',fontWeight:600}}>
             <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="#4ADE80" strokeWidth="2.5" style={{flexShrink:0}}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7"/>
             </svg>
