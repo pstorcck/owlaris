@@ -9,7 +9,7 @@ export type MathPracticeExercise = {
   op: string
 }
 
-export type MathPracticeFocus = 'general' | 'equation' | 'decimal' | 'suma_resta' | 'multiplicacion_division' | 'suma' | 'resta' | 'multiplicacion' | 'division' | 'geometria'
+export type MathPracticeFocus = 'general' | 'equation' | 'decimal' | 'suma_resta' | 'multiplicacion_division' | 'suma' | 'resta' | 'multiplicacion' | 'division' | 'geometria' | 'exponente'
 
 export type DifficultyAdaptationType = 'sube' | 'baja' | 'refuerza' | 'mantiene'
 
@@ -64,6 +64,7 @@ export function describeMathTopic(op: string | null | undefined, idiomaIngles = 
   if (focus === 'geometria') return idiomaIngles ? 'Perimeter and area' : 'Perímetro y área'
   const clean = String(op || '')
   if (/x/i.test(clean) && clean.includes('=')) return idiomaIngles ? 'Equations' : 'Ecuaciones'
+  if (clean.includes('^')) return idiomaIngles ? 'Exponents' : 'Exponentes'
   if (/\d+\.\d+|%/.test(clean)) return idiomaIngles ? 'Decimals and percentages' : 'Decimales y porcentajes'
   if (/[+\-]/.test(clean) && /[*/]/.test(clean)) return idiomaIngles ? 'Order of operations' : 'Orden de operaciones'
   if (/[+-]/.test(clean)) return idiomaIngles ? 'Addition and subtraction' : 'Suma y resta'
@@ -301,6 +302,43 @@ function generateGeometriaExercise(idiomaIngles: boolean): { op: string; text: s
   return { op, text }
 }
 
+// Hallazgo real (QA ~80 pruebas, 2026-07-08): al fallar un ejercicio de
+// exponentes, el "siguiente ejercicio" caía en el generador genérico de
+// aritmética (sin categoría de exponentes), produciendo una suma sin
+// ninguna relación con el error — el mismo patrón que geometría. Este
+// generador da a "exponentes" la misma garantía determinística.
+function generateExponenteExercise(idiomaIngles: boolean): { op: string; text: string } {
+  const base = randInt(2, 6)
+  const tipo = randInt(0, 2)
+
+  if (tipo === 0) {
+    const exp = randInt(2, 4)
+    const op = `${base}^${exp}`
+    const text = idiomaIngles
+      ? `Try this different exercise: ${base}^${exp}. What is the result?`
+      : `Intenta este ejercicio distinto: ${base}^${exp}. ¿Cuál es el resultado?`
+    return { op, text }
+  }
+
+  if (tipo === 1) {
+    const e1 = randInt(2, 4)
+    const e2 = randInt(2, 4)
+    const op = `${base}^${e1}*${base}^${e2}`
+    const text = idiomaIngles
+      ? `Try this different exercise: ${base}^${e1} * ${base}^${e2}. What is the result?`
+      : `Intenta este ejercicio distinto: ${base}^${e1} * ${base}^${e2}. ¿Cuál es el resultado?`
+    return { op, text }
+  }
+
+  const e2 = randInt(1, 3)
+  const e1 = randInt(e2 + 1, e2 + 3)
+  const op = `${base}^${e1}/${base}^${e2}`
+  const text = idiomaIngles
+    ? `Try this different exercise: ${base}^${e1} / ${base}^${e2}. What is the result?`
+    : `Intenta este ejercicio distinto: ${base}^${e1} / ${base}^${e2}. ¿Cuál es el resultado?`
+  return { op, text }
+}
+
 function exerciseText(op: string, idiomaIngles: boolean) {
   const visible = formatOperation(op)
   if (op.includes('=') && /x/i.test(op)) {
@@ -376,6 +414,29 @@ export function calculateAdaptiveDifficulty(input: {
 
 const MAX_GENERATION_ATTEMPTS = 60
 
+// Reintenta un generador de {op, text} hasta obtener uno que no se repita y
+// sea evaluable — misma lógica que ya usaban los generadores de aritmética
+// pura, extraída para reutilizarla también en geometría y exponentes.
+function generarConReintentos(
+  generate: () => MathPracticeExercise,
+  recentSet: Set<string>
+): MathPracticeExercise {
+  for (let attempt = 0; attempt < MAX_GENERATION_ATTEMPTS; attempt += 1) {
+    const exercise = generate()
+    const key = normalizePracticeOperation(exercise.op)
+    if (key && !recentSet.has(key) && isSafeCanonicalOperation(exercise.op) && solveOperation(exercise.op) !== null) {
+      return exercise
+    }
+  }
+  let exercise = generate()
+  let guard = 0
+  while (recentSet.has(normalizePracticeOperation(exercise.op)) && guard < 200) {
+    exercise = generate()
+    guard += 1
+  }
+  return exercise
+}
+
 export function buildNextMathExercise(
   recentOps: Array<string | null | undefined>,
   level = 1,
@@ -386,25 +447,11 @@ export function buildNextMathExercise(
     recentOps.map((op) => normalizePracticeOperation(op)).filter(Boolean)
   )
 
-  // Geometría (perímetro y área) tiene su propio texto narrativo por
-  // ejercicio (rectángulo/cuadrado con dimensiones), no el formato genérico
-  // "X op Y" de exerciseText — cada generador ya devuelve {op, text} listo.
-  if (focus === 'geometria') {
-    for (let attempt = 0; attempt < MAX_GENERATION_ATTEMPTS; attempt += 1) {
-      const exercise = generateGeometriaExercise(idiomaIngles)
-      const key = normalizePracticeOperation(exercise.op)
-      if (key && !recentSet.has(key) && isSafeCanonicalOperation(exercise.op) && solveOperation(exercise.op) !== null) {
-        return exercise
-      }
-    }
-    let exercise = generateGeometriaExercise(idiomaIngles)
-    let guard = 0
-    while (recentSet.has(normalizePracticeOperation(exercise.op)) && guard < 200) {
-      exercise = generateGeometriaExercise(idiomaIngles)
-      guard += 1
-    }
-    return exercise
-  }
+  // Geometría (perímetro/área) y exponentes tienen su propio texto narrativo
+  // o formato por ejercicio, no el formato genérico "X op Y" de exerciseText
+  // — cada generador ya devuelve {op, text} listo.
+  if (focus === 'geometria') return generarConReintentos(() => generateGeometriaExercise(idiomaIngles), recentSet)
+  if (focus === 'exponente') return generarConReintentos(() => generateExponenteExercise(idiomaIngles), recentSet)
 
   const generate = exerciseGeneratorFor(level, focus)
 
@@ -461,6 +508,15 @@ export function inferMathPracticeFocus(texts: Array<string | null | undefined>):
     return 'geometria'
   }
 
+  // Hallazgo real (QA ~80 pruebas, 2026-07-08): la explicación de la
+  // propiedad de exponentes ("al multiplicar potencias de la misma base, se
+  // suman los exponentes") menciona "multiplicar" y "sumar" de paso — sin
+  // esta rama antes de esas palabras, el enfoque se secuestraba igual que
+  // pasaba con geometría.
+  if (/\b(exponente(s)?|potencia(s)?|elevado(s)?|al\s+cuadrado|al\s+cubo|exponent(s)?|power(s)?)\b/.test(normalized)) {
+    return 'exponente'
+  }
+
   // Se distingue "solo sumas" de "solo restas" de "sumas y restas" (y lo
   // mismo para multiplicación/división): pedir únicamente una operación no
   // debe mezclarse con la otra de la misma familia en los ejercicios.
@@ -482,7 +538,7 @@ export function inferMathPracticeFocus(texts: Array<string | null | undefined>):
   return 'general'
 }
 
-const ENFOQUES_PRACTICA_VALIDOS: MathPracticeFocus[] = ['equation', 'decimal', 'suma_resta', 'multiplicacion_division', 'suma', 'resta', 'multiplicacion', 'division', 'geometria']
+const ENFOQUES_PRACTICA_VALIDOS: MathPracticeFocus[] = ['equation', 'decimal', 'suma_resta', 'multiplicacion_division', 'suma', 'resta', 'multiplicacion', 'division', 'geometria', 'exponente']
 
 // El historial que llega al backend es una ventana corta (ultimos 6 mensajes),
 // asi que a partir del 3er-4to ejercicio la frase original ("sumas y restas")

@@ -185,6 +185,35 @@ function main() {
     }
   })
 
+  // ── Hallazgo real (QA ~80 pruebas, 2026-07-08): un ejercicio de exponentes
+  // fallado saltaba a un ejercicio de suma sin relación (mismo patrón que
+  // geometría). La explicación de la propiedad de exponentes menciona
+  // "multiplicar" y "sumar" de paso ("al multiplicar potencias de la misma
+  // base, se suman los exponentes") — eso es justo lo que secuestraba el
+  // enfoque antes de este fix.
+  test('rama-siguiente-ejercicio-mantiene-exponentes-tras-explicacion-con-multiplicar-y-sumar', () => {
+    const listaConExponentes = [
+      'Podemos trabajar cualquiera de estos temas:',
+      '1. Multiplicación',
+      '2. Exponentes',
+    ].join('\n')
+    let enfoque = enfoqueRamaListaNumerada('2', listaConExponentes, 'multiplicacion') as MathPracticeFocus
+    assert.equal(enfoque, 'exponente')
+
+    const explicacionExponentes = 'Intenta este ejercicio distinto: 3^4 * 3^2. Recuerda, al multiplicar potencias de la misma base, se suman los exponentes. ¿Cuál es el resultado?'
+    const historial: { rol: string; contenido: string }[] = [{ rol: 'asistente', contenido: explicacionExponentes }]
+    const opsRecientes: string[] = ['3^4*3^2']
+
+    for (let turno = 0; turno < 6; turno += 1) {
+      enfoque = enfoqueRamaSiguienteEjercicio('729', '3^4*3^2', explicacionExponentes, historial, enfoque)
+      assert.equal(enfoque, 'exponente', `el tema se perdió (secuestrado) en el turno ${turno}`)
+      const siguiente = buildNextMathExercise(opsRecientes, 1, false, enfoque)
+      assert.match(siguiente.op, /\^/, `el ejercicio ${turno} no siguió siendo de exponentes: ${siguiente.op}`)
+      opsRecientes.push(siguiente.op)
+      historial.push({ rol: 'asistente', contenido: siguiente.text })
+    }
+  })
+
   // ── Ramas que deben CONSERVAR el enfoque sin recalcularlo ───────────
   // Documentan a propósito el comportamiento correcto de las otras 3 ramas
   // auditadas (recordar ejercicio activo, apoyo sobre ejercicio activo,
@@ -197,7 +226,7 @@ function main() {
     assert.equal(enfoquePersistido, 'multiplicacion')
   })
 
-  const total_esperado = 3 + 4 + 2 + 1
+  const total_esperado = 3 + 4 + 3 + 1
   assert.equal(total, total_esperado)
 
   if (failures.length > 0) {

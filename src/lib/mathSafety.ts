@@ -534,6 +534,15 @@ export function buildGuidedMathHint(op: string | null | undefined, idiomaIngles:
       ? 'For a percentage, first change it to a decimal or fraction, then multiply by the quantity.'
       : 'Para un porcentaje, primero conviértelo a decimal o fracción y luego multiplícalo por la cantidad.'
   }
+  // Hallazgo real (QA ~80 pruebas, 2026-07-08): un ejercicio de exponentes
+  // (ej. 3^4*3^2) caía en "multiplicación" o "orden de operaciones" según
+  // qué otros símbolos tuviera al lado — ninguna pista mencionaba la
+  // propiedad de exponentes que realmente hace falta.
+  if (clean.includes('^')) {
+    return idiomaIngles
+      ? 'Remember that when you multiply powers with the same base, you add the exponents; when you divide them, you subtract the exponents. Work through the base and exponent separately.'
+      : 'Recuerda que al multiplicar potencias de la misma base, se suman los exponentes; al dividirlas, se restan. Trabaja la base y el exponente por separado.'
+  }
   // Hallazgo real (QA amplia 2026-07-08): una expresión con paréntesis pero
   // sin ecuación (ej. 2*(3+5)-4) caía en el chequeo genérico de "orden de
   // operaciones" en vez de una pista específica sobre resolver el paréntesis

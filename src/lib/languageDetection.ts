@@ -18,17 +18,38 @@ const PALABRAS_EN = [
   /\bunderstand\b/i, /\bcould\s+you\b/i,
 ]
 
-// Requiere al menos 2 coincidencias y que superen claramente al otro idioma,
-// para no disparar con un solo término técnico compartido entre idiomas
-// (ej. "membrane", "cell") — solo cuenta cuando el patrón gramatical del
-// mensaje completo apunta a un idioma distinto al configurado.
+// Hallazgo real (QA ~80 pruebas, 2026-07-08): el mismo problema se repitió
+// con un mensaje en francés ("Peux-tu expliquer les fractions s'il te
+// plaît?"), confirmando que el problema no es exclusivo de inglés — CUALQUIER
+// idioma distinto al configurado dispara la confusión con cambio de tema.
+// Owlaris solo tiene un interruptor binario español/inglés, así que no hay
+// un "modo francés" propio de la sesión — pero la heurística igual debe
+// reconocer un mensaje en otro idioma (francés incluido) como tal, no como
+// un tema distinto.
+const PALABRAS_FR = [
+  /\bpeux-tu\b/i, /\bpourrais-tu\b/i, /\bqu['’]est-ce\b/i, /\bpourquoi\b/i,
+  /\bcomment\b/i, /\bexpliquer\b/i, /\bo[uù]\b/i, /\bcombien\b/i,
+  /\baide-moi\b/i, /\bcomprends\b/i, /\bs['’]il\s+te\s+pla[iî]t\b/i,
+  /\bs['’]il\s+vous\s+pla[iî]t\b/i,
+]
+
+// Requiere al menos 2 coincidencias y que superen claramente al idioma
+// configurado, para no disparar con un solo término técnico compartido
+// entre idiomas (ej. "membrane", "cell") — solo cuenta cuando el patrón
+// gramatical del mensaje completo apunta a un idioma distinto al
+// configurado. El idioma "distinto" se evalúa contra cualquiera de los
+// idiomas conocidos que NO es el configurado (inglés y francés cuando la
+// sesión está en español; español y francés cuando está en inglés).
 export function pareceIdiomaDistinto(texto: string, idiomaIngles: boolean): boolean {
   const t = (texto || '').toLowerCase()
   const coincidenciasEs = PALABRAS_ES.filter((patron) => patron.test(t)).length
   const coincidenciasEn = PALABRAS_EN.filter((patron) => patron.test(t)).length
+  const coincidenciasFr = PALABRAS_FR.filter((patron) => patron.test(t)).length
 
-  if (idiomaIngles) {
-    return coincidenciasEs >= 2 && coincidenciasEs > coincidenciasEn
-  }
-  return coincidenciasEn >= 2 && coincidenciasEn > coincidenciasEs
+  const coincidenciasConfigurado = idiomaIngles ? coincidenciasEn : coincidenciasEs
+  const mejorOtroIdioma = idiomaIngles
+    ? Math.max(coincidenciasEs, coincidenciasFr)
+    : Math.max(coincidenciasEn, coincidenciasFr)
+
+  return mejorOtroIdioma >= 2 && mejorOtroIdioma > coincidenciasConfigurado
 }

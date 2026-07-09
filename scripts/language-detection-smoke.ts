@@ -25,6 +25,15 @@ function main() {
   // Sesión en inglés, mensaje en inglés -> no debe dispararse.
   assert.equal(pareceIdiomaDistinto('Can you explain how this works?', true), false)
 
+  // Hallazgo real (QA ~80 pruebas, 2026-07-08): el mismo problema se repitió
+  // con francés, no solo inglés — la heurística debe reconocer cualquier
+  // idioma distinto al configurado, no solo el par ES/EN.
+  assert.equal(
+    pareceIdiomaDistinto('Peux-tu expliquer les fractions s\'il te plaît?', false),
+    true
+  )
+  assert.equal(pareceIdiomaDistinto('¿Puedes explicarme las fracciones?', false), false)
+
   // Un solo término técnico compartido entre idiomas no debe disparar un
   // falso positivo (menos de 2 coincidencias de idioma).
   assert.equal(pareceIdiomaDistinto('Membrane', false), false)

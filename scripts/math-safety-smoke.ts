@@ -269,6 +269,12 @@ D) 10
   assert.match(buildGuidedMathHint('5x+3=2x+15', false), /junta los t[eé]rminos con x/i)
   assert.match(buildGuidedMathHint('3x-7=2', false), /identifica qu[eé] operaci[oó]n afecta/i)
 
+  // Hallazgo real (QA ~80 pruebas, 2026-07-08): un ejercicio de exponentes
+  // (ej. 3^4*3^2) caía en la pista genérica de multiplicación u orden de
+  // operaciones, sin mencionar la propiedad de exponentes.
+  assert.match(buildGuidedMathHint('3^4*3^2', false), /exponentes/i)
+  assert.doesNotMatch(buildGuidedMathHint('3^4*3^2', false), /grupos iguales|orden de operaciones/i)
+
   console.log('math-safety smoke passed')
 }
 

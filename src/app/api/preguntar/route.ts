@@ -776,7 +776,7 @@ function reforzarDiagnosticoPorFallos(respuesta: string, idiomaIngles: boolean, 
   return `${respuesta}\n\n${refuerzo}`
 }
 
-const ENFOQUES_PRACTICA_VALIDOS: MathPracticeFocus[] = ['equation', 'decimal', 'suma_resta', 'multiplicacion_division', 'suma', 'resta', 'multiplicacion', 'division', 'geometria']
+const ENFOQUES_PRACTICA_VALIDOS: MathPracticeFocus[] = ['equation', 'decimal', 'suma_resta', 'multiplicacion_division', 'suma', 'resta', 'multiplicacion', 'division', 'geometria', 'exponente']
 
 async function cargarOperacionesEvaluadas(
   supabase: ReturnType<typeof createClient>,
