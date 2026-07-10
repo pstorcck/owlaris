@@ -61,9 +61,11 @@ import {
   type MathPracticeFocus,
 } from '@/lib/mathPractice'
 import {
+  buildConversationHistoryLimitResponse,
   buildExerciseRecallResponse,
   buildPendingContextResponse,
   describeSameExercisePolicyForPrompt,
+  isConversationHistoryMetaQuestion,
   isExerciseRecallRequest,
   isLikelyMathAnswerText,
   isPendingContextQuestion,
@@ -1066,6 +1068,40 @@ export async function POST(req: NextRequest) {
         tokens: 0,
         safety_tipo: safety.tipo,
         safety_severidad: safety.severidad,
+      })
+    }
+
+    // Hallazgo real (QA Ronda 3, 2026-07-10): el frontend solo envía los
+    // últimos 6 mensajes al backend, así que el modelo no tiene acceso real
+    // al historial completo de la sesión. Preguntas sobre "cuál fue el
+    // primer tema/pregunta de hoy" u otras que requieren todo el historial
+    // se interceptan aquí de forma determinística en vez de dejar que el
+    // modelo confabule una respuesta segura pero potencialmente incorrecta.
+    if (isConversationHistoryMetaQuestion(pregunta)) {
+      const respuestaHistorial = buildConversationHistoryLimitResponse(idiomaIngles)
+      await supabase.from('interacciones').insert({
+        usuario_id: user.id,
+        colegio_id: perfil.colegio_id,
+        materia_id: null,
+        grado: grado_override || perfil.grado || '',
+        tema_detectado: idiomaIngles ? 'Question about conversation history' : 'Pregunta sobre historial de conversación',
+        pregunta,
+        respuesta: respuestaHistorial,
+        tokens_usados: 0,
+        costo_usd: 0,
+        modelo_usado: 'conversation_history_guard',
+        documento_fuente: null,
+        sospecha_copia: false,
+        operacion_canonica: null,
+        op_estado: null,
+        estado_evaluacion: 'contexto_pendiente',
+        guard_activado: true,
+      })
+      return NextResponse.json({
+        respuesta: respuestaHistorial,
+        source: 'conversation_history_guard',
+        nuevo_estado: 'activo',
+        tokens: 0,
       })
     }
 
@@ -2108,6 +2144,24 @@ ${contextoContenido}`
       return null
     })()
 
+    // Hallazgo real (QA Ronda 3, 2026-07-10): el refuerzo determinístico de
+    // "bajar la dificultad" (reforzarDiagnosticoPorFallos) solo se aplicaba
+    // en la rama de evaluación matemática estricta (evaluacionProtocolo).
+    // Esta rama de respaldo (problemas de palabras, materias humanísticas)
+    // nunca lo aplicaba, aunque estadoEvaluacionHumanistico sí detecta
+    // "incorrecto" en el propio texto del modelo — dependía únicamente de
+    // que el modelo decidiera por su cuenta bajar la dificultad vía la
+    // instrucción de prompt (contextoAdaptativo), lo cual es inconsistente.
+    // Esto explica el patrón reportado: ejercicios evaluados por el
+    // protocolo estricto escalaban de forma confiable, pero problemas de
+    // palabras (que caen en esta rama) a veces no.
+    const aciertosConsecutivosFallback = estadoEvaluacionHumanistico === 'correcto'
+      ? rachaAprendizaje.correctas + 1
+      : estadoEvaluacionHumanistico === null ? rachaAprendizaje.correctas : 0
+    const fallosConsecutivosFallback = estadoEvaluacionHumanistico === 'incorrecto'
+      ? rachaAprendizaje.incorrectas + 1
+      : estadoEvaluacionHumanistico === null ? rachaAprendizaje.incorrectas : 0
+
     const pedagogicalGuard = guardNoFinalAnswer(respuesta, {
       pregunta,
       tipoPregunta,
@@ -2201,6 +2255,11 @@ ${contextoContenido}`
     respuesta = guardiaHumanistica.text
     const externalResourceGuardFinal = stripUnapprovedExternalResources(respuesta, idiomaIngles)
     respuesta = externalResourceGuardFinal.text
+    // Ver nota junto a fallosConsecutivosFallback: aplica el mismo refuerzo
+    // determinístico que ya se aplicaba en la rama de evaluación estricta,
+    // para que problemas de palabras y materias humanísticas escalen con la
+    // misma confiabilidad que ejercicios de ecuación directa.
+    respuesta = reforzarDiagnosticoPorFallos(respuesta, idiomaIngles, fallosConsecutivosFallback)
     respuesta = sanitizeChatFormatting(respuesta)
 
     const { data: insertedRow, error: insertErr } = await supabase.from('interacciones').insert({
@@ -2227,18 +2286,18 @@ ${contextoContenido}`
 
     supabase.from('usuarios').update({ ultimo_acceso: new Date().toISOString() }).eq('id', user.id).then(() => {})
 
-    return NextResponse.json({ 
+    return NextResponse.json({
       respuesta, tokens: tokensUsados, documento_fuente: documentoFuente,
       interaction_id: insertedId,
       pending_math_interaction_id: opValidaEnRespuesta ? insertedId : null,
       nivel_dificultad: nivelDificultadActual,
-      aciertos_consecutivos: rachaAprendizaje.correctas,
-      fallos_consecutivos: rachaAprendizaje.incorrectas,
+      aciertos_consecutivos: aciertosConsecutivosFallback,
+      fallos_consecutivos: fallosConsecutivosFallback,
       practica_enfoque: practicaEnfoqueFinal,
       adaptacion_dificultad: calculateAdaptiveDifficulty({
         currentLevel: nivelDificultadActual,
-        correctStreak: rachaAprendizaje.correctas,
-        wrongStreak: rachaAprendizaje.incorrectas,
+        correctStreak: aciertosConsecutivosFallback,
+        wrongStreak: fallosConsecutivosFallback,
         idiomaIngles,
       }),
     })

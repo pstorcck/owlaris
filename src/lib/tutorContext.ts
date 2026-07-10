@@ -243,6 +243,43 @@ export function describeSameExercisePolicyForPrompt(): string {
   return 'Mantén el contexto activo: si hay un ejercicio pendiente y el alumno pregunta si puede resolverlo sin calculadora, pide ayuda, dice que no entiende, reclama que no respondiste, o pide intentarlo él mismo, NO cambies de ejercicio ni de tema. Responde esa duda y vuelve al mismo ejercicio pendiente.'
 }
 
+// Hallazgo real (QA Ronda 3, 2026-07-10): el frontend solo envía al backend
+// los últimos 6 mensajes del chat (ver ChatInterface.tsx, mensajes.slice(-6)),
+// así que el modelo nunca tiene acceso real al historial completo de la
+// sesión. Cuando se le preguntó "cuál fue el primer tema que discutimos hoy",
+// el modelo respondió con seguridad pero incorrectamente (citó el ejercicio
+// activo más reciente como si fuera el primero), presentándolo como un hecho
+// verificado. Una repetición posterior mostró que a veces sí reconoce el
+// límite ("no puedo proporcionar información sobre mensajes anteriores") y
+// a veces no — es decir, es un comportamiento no determinístico del modelo.
+// Se detecta este tipo de pregunta sobre el historial completo de la
+// conversación de forma determinística, para no depender de que el modelo
+// reconozca por su cuenta los límites de su propia memoria.
+export function isConversationHistoryMetaQuestion(value: string): boolean {
+  const text = normalizeText(value)
+  if (!text) return false
+  return [
+    'primer tema', 'primer ejercicio', 'primera pregunta', 'primera cosa',
+    'lo primero que', 'que fue lo primero', 'cual fue lo primero',
+    'desde el principio de', 'desde que empezamos', 'desde que iniciamos',
+    'todo lo que hemos hablado', 'todo lo que hablamos', 'resumen de toda la conversacion',
+    'resumen de todo lo que', 'cuantos mensajes hemos', 'cuantas preguntas hemos',
+    'cuantos ejercicios hemos hecho hoy', 'recuerdas todo lo que',
+    'first topic', 'first exercise', 'first question', 'first thing',
+    'since we started', 'since the beginning',
+    "everything we've talked about", 'everything we have talked about',
+    'summarize our whole conversation', 'summarize the whole conversation',
+    'how many messages have we', 'how many questions have we',
+    'do you remember everything',
+  ].some((needle) => text.includes(needle))
+}
+
+export function buildConversationHistoryLimitResponse(idiomaIngles = false): string {
+  return idiomaIngles
+    ? 'I do not have a reliable record of our entire conversation today — I can only see the most recent part of it. For a complete, accurate record of everything we have covered, check the "Today\'s report" button. Want to keep going with what we are working on right now?'
+    : 'No tengo un registro confiable de toda nuestra conversación de hoy — solo puedo ver la parte más reciente. Para un registro completo y preciso de todo lo que hemos visto, revisa el botón "Reporte de hoy". ¿Seguimos con lo que estamos trabajando ahora mismo?'
+}
+
 export function stripUnapprovedExternalResources(value: string, idiomaIngles = false) {
   const original = value || ''
   const lines = original

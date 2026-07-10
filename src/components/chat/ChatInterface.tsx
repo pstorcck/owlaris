@@ -5,6 +5,7 @@ import OwlarisOwl3D from '@/components/chat/OwlarisOwl3D'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import type { Usuario, Materia, MensajeChat } from '@/types'
+import { sanitizarTextoPdf } from '@/lib/pdfText'
 
 interface Props {
   usuario: Usuario
@@ -1010,6 +1011,19 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
 
       const { jsPDF } = await import('jspdf')
       const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
+      // Hallazgo real (QA Ronda 3, 2026-07-10, confirmado reproducible en
+      // Anexo B): las fuentes estándar de jsPDF (helvetica) solo soportan
+      // el rango Latin-1. Cuando el anexo de evidencia incluye texto crudo
+      // del alumno con emojis (fuera de ese rango), jsPDF los codifica mal
+      // y el PDF muestra texto corrupto (mojibake), aunque el chat en vivo
+      // los muestre bien. Se sanea (sanitizarTextoPdf) cualquier texto antes
+      // de dibujarlo en el PDF.
+      const _docTextOriginal = doc.text.bind(doc)
+      doc.text = ((texto: unknown, ...rest: unknown[]) =>
+        (_docTextOriginal as (...args: unknown[]) => typeof doc)(sanitizarTextoPdf(texto), ...rest)) as typeof doc.text
+      const _docSplitOriginal = doc.splitTextToSize.bind(doc)
+      doc.splitTextToSize = ((texto: unknown, ...rest: unknown[]) =>
+        (_docSplitOriginal as (...args: unknown[]) => string[])(sanitizarTextoPdf(texto), ...rest)) as typeof doc.splitTextToSize
       const W = 210
       const H = 297
       const margin = 16
