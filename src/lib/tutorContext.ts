@@ -280,6 +280,86 @@ export function buildConversationHistoryLimitResponse(idiomaIngles = false): str
     : 'No tengo un registro confiable de toda nuestra conversación de hoy — solo puedo ver la parte más reciente. Para un registro completo y preciso de todo lo que hemos visto, revisa el botón "Reporte de hoy". ¿Seguimos con lo que estamos trabajando ahora mismo?'
 }
 
+// Hallazgo real (QA Ronda 3, 2026-07-10): un mensaje con tres solicitudes
+// distintas en una sola entrada ("¿Cuánto es 5+5 y además explícame las
+// fracciones y también quiero practicar geometría?") no se descomponía —
+// el sistema no atendió ninguna de las tres partes por separado y el
+// anexo del reporte registró la entrada bajo el ejercicio de álgebra que
+// ya estaba activo, en vez de reflejar alguna de las solicitudes reales.
+// isCompoundMultiIntentMessage detecta este patrón de forma determinística
+// (no depende de que el modelo lo note por su cuenta) para inyectar una
+// instrucción explícita de que reconozca y atienda cada parte por orden.
+export function isCompoundMultiIntentMessage(value: string): boolean {
+  const text = normalizeText(value)
+  if (!text) return false
+  const marcadoresConjuncion = [
+    'y tambien', 'y ademas', 'ademas quiero', 'ademas quisiera',
+    'y quiero', 'y quisiera', 'y de paso', 'y aparte',
+    'and also', 'and additionally', 'as well as', 'and i also want',
+    'and i also need', 'and furthermore',
+  ].some((needle) => text.includes(needle))
+  if (marcadoresConjuncion) return true
+  const signosPregunta = (text.match(/\?/g) || []).length
+  return signosPregunta >= 2
+}
+
+export function describeCompoundMessagePolicyForPrompt(): string {
+  return 'Este mensaje del alumno contiene varias solicitudes distintas en una sola entrada. NO respondas solo a una (ni asumas que se refiere al ejercicio pendiente si en realidad está pidiendo algo nuevo y distinto). Reconoce explícitamente cada solicitud por separado y atiéndelas en el orden en que aparecen, aunque tengas que ser breve en cada una.'
+}
+
+// Hallazgo real (QA Ronda 3, 2026-07-10): cuando se le pregunta al tutor en
+// el chat "¿cuál es mi progreso?", las respuestas conversacionales tienden
+// a ser vagas — aunque el "Reporte de hoy" real sí contiene datos de
+// progreso precisos (racha de aciertos/fallos, nivel de dificultad). La
+// brecha no es de datos faltantes sino de que el chat no los usaba. Se
+// intercepta esta pregunta de forma determinística y se responde con los
+// datos reales ya calculados en el backend para este turno, en vez de
+// dejar que el modelo improvise una respuesta vaga.
+export function isProgressQuestion(value: string): boolean {
+  const text = normalizeText(value)
+  if (!text) return false
+  // "como voy"/"como vamos" a secas son demasiado genéricos: colisionan con
+  // frases comunes como "no se como voy a resolver esto" (que no preguntan
+  // por métricas de progreso). Se exige la frase completa con "en/con
+  // esto/esta materia" o similar para evitar falsos positivos.
+  return [
+    'mi progreso', 'que tanto he avanzado', 'que tan bien voy',
+    'cual es mi progreso', 'cuanto he mejorado', 'como voy en esto',
+    'como voy con esto', 'como voy en la materia', 'como vamos en esto',
+    'como vamos con esto', 'que tal voy', 'que tal vamos',
+    'how am i doing', 'my progress', 'how is my progress', 'am i improving',
+    'how am i improving', 'how are we doing',
+  ].some((needle) => text.includes(needle))
+}
+
+export function buildProgressResponse(input: {
+  correctStreak: number
+  wrongStreak: number
+  currentLevel: number
+  materia?: string | null
+  idiomaIngles?: boolean
+}): string {
+  const materiaTexto = input.materia
+    ? (input.idiomaIngles ? ` in ${input.materia}` : ` en ${input.materia}`)
+    : ''
+  const cierre = input.idiomaIngles
+    ? 'For the full picture of today\'s session (accuracy, topics covered, and more), check "Today\'s report".'
+    : 'Para ver el panorama completo de la sesión de hoy (precisión, temas cubiertos y más), revisa "Reporte de hoy".'
+  if (input.correctStreak > 0) {
+    return input.idiomaIngles
+      ? `Right now you have a streak of ${input.correctStreak} correct answer${input.correctStreak === 1 ? '' : 's'} in a row${materiaTexto}, working at difficulty level ${input.currentLevel} out of 8. ${cierre}`
+      : `Ahora mismo llevas una racha de ${input.correctStreak} respuesta${input.correctStreak === 1 ? '' : 's'} correcta${input.correctStreak === 1 ? '' : 's'} seguida${input.correctStreak === 1 ? '' : 's'}${materiaTexto}, trabajando en el nivel de dificultad ${input.currentLevel} de 8. ${cierre}`
+  }
+  if (input.wrongStreak > 0) {
+    return input.idiomaIngles
+      ? `You are working through some challenges right now${materiaTexto} — ${input.wrongStreak} incorrect attempt${input.wrongStreak === 1 ? '' : 's'} in a row at difficulty level ${input.currentLevel} out of 8, and we are adjusting together. ${cierre}`
+      : `Ahora mismo estás resolviendo algunos retos${materiaTexto} — ${input.wrongStreak} intento${input.wrongStreak === 1 ? '' : 's'} incorrecto${input.wrongStreak === 1 ? '' : 's'} seguido${input.wrongStreak === 1 ? '' : 's'} en el nivel de dificultad ${input.currentLevel} de 8, y estamos ajustando juntos. ${cierre}`
+  }
+  return input.idiomaIngles
+    ? `You are currently at difficulty level ${input.currentLevel} out of 8${materiaTexto}, with no streak going yet this session. ${cierre}`
+    : `Ahora mismo estás en el nivel de dificultad ${input.currentLevel} de 8${materiaTexto}, sin una racha activa todavía en esta sesión. ${cierre}`
+}
+
 export function stripUnapprovedExternalResources(value: string, idiomaIngles = false) {
   const original = value || ''
   const lines = original

@@ -298,10 +298,17 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
     if (bienvenidaInicializadaRef.current) return
     bienvenidaInicializadaRef.current = true
     const nombre = usuario.nombre_completo.split(' ')[0]
+    // Hallazgo real (QA Ronda 3, 2026-07-10): tras cerrar sesión y volver a
+    // entrar el mismo día, el chat se reinicia visualmente sin ningún
+    // rastro de la actividad anterior, aunque el backend sí la conserva
+    // (el "Reporte de hoy" incluye todas las interacciones previas y un
+    // ejercicio pendiente se recupera igual si el alumno menciona la
+    // materia). Se le avisa explícitamente de esto en vez de simular una
+    // continuidad que la interfaz de chat no tiene.
     const msg = gradoGuardado
       ? (idiomaIngles
-          ? `Hi, ${nombre}! What subject are we studying today?`
-          : `¡Hola, ${nombre}! ¿Qué materia vamos a estudiar hoy?`)
+          ? `Hi, ${nombre}! What subject are we studying today? If you already worked with me earlier today, this chat won't show that history, but I can pick up right where you left off if you tell me the subject and topic — or check "Today's report" for the full record.`
+          : `¡Hola, ${nombre}! ¿Qué materia vamos a estudiar hoy? Si ya trabajaste conmigo antes hoy, este chat no muestra ese historial, pero puedo retomarlo si me dices la materia y el tema — o revisa "Reporte de hoy" para ver el registro completo.`)
       : (idiomaIngles
           ? `Hi, ${nombre}! I'm Owlaris, your academic tutor. First, select your grade.`
           : `¡Hola, ${nombre}! Soy Owlaris, tu tutor académico. Primero, selecciona tu grado.`)

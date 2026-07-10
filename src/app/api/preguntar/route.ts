@@ -64,11 +64,15 @@ import {
   buildConversationHistoryLimitResponse,
   buildExerciseRecallResponse,
   buildPendingContextResponse,
+  buildProgressResponse,
+  describeCompoundMessagePolicyForPrompt,
   describeSameExercisePolicyForPrompt,
+  isCompoundMultiIntentMessage,
   isConversationHistoryMetaQuestion,
   isExerciseRecallRequest,
   isLikelyMathAnswerText,
   isPendingContextQuestion,
+  isProgressQuestion,
   stripUnapprovedExternalResources,
 } from '@/lib/tutorContext'
 import { withOpenAIRetry } from '@/lib/openaiRetry'
@@ -1359,6 +1363,50 @@ export async function POST(req: NextRequest) {
     const nivelDificultadActual = Math.min(8, Math.max(1, parseInt(String(body.nivel_dificultad || '1'), 10) || 1))
     const rachaAprendizaje = await obtenerRachaAprendizaje(admin, user.id, materia_uuid)
 
+    // Hallazgo real (QA Ronda 3, 2026-07-10): "¿cuál es mi progreso?" en el
+    // chat recibía respuestas vagas, aunque el "Reporte de hoy" ya tiene
+    // datos precisos (racha de aciertos/fallos, nivel de dificultad). Se
+    // responde con esos mismos datos, ya calculados arriba, en vez de
+    // dejar que el modelo improvise.
+    if (isProgressQuestion(pregunta)) {
+      const respuestaProgreso = buildProgressResponse({
+        correctStreak: rachaAprendizaje.correctas,
+        wrongStreak: rachaAprendizaje.incorrectas,
+        currentLevel: nivelDificultadActual,
+        materia: materiaConsultaSharePoint || null,
+        idiomaIngles,
+      })
+      await supabase.from('interacciones').insert({
+        usuario_id: user.id,
+        colegio_id: perfil.colegio_id,
+        materia_id: materia_uuid,
+        materia_nombre_snapshot: materiaConsultaSharePoint || null,
+        grado: gradoEfectivo,
+        tema_detectado: idiomaIngles ? 'Progress question' : 'Pregunta sobre progreso',
+        pregunta,
+        respuesta: respuestaProgreso,
+        tokens_usados: 0,
+        costo_usd: 0,
+        modelo_usado: 'progress_guard',
+        documento_fuente: null,
+        sospecha_copia: false,
+        operacion_canonica: null,
+        op_estado: null,
+        estado_evaluacion: 'contexto_pendiente',
+        guard_activado: true,
+      })
+      return NextResponse.json({
+        respuesta: respuestaProgreso,
+        source: 'progress_guard',
+        nuevo_estado: 'activo',
+        tokens: 0,
+        nivel_dificultad: nivelDificultadActual,
+        aciertos_consecutivos: rachaAprendizaje.correctas,
+        fallos_consecutivos: rachaAprendizaje.incorrectas,
+        practica_enfoque: practicaEnfoqueEstable,
+      })
+    }
+
     // Clasificador de intención (src/lib/intentClassifier.ts) — instructivo
     // de mejoras, puntos 2-3, 25 y 28. La cascada de checks que sigue
     // (cambio de materia/grado ya resuelto arriba, selección de lista,
@@ -2049,6 +2097,15 @@ export async function POST(req: NextRequest) {
       ? '\n\nNOTA: el alumno escribió este mensaje en un idioma distinto al configurado en la sesión. Esto NO es un cambio de tema ni de subtema — sigue ayudando con el mismo tema activo de la materia. Puedes responder en el idioma del mensaje o invitar a cambiar el interruptor de idioma si prefiere seguir así, pero no lo trates como si hubiera cambiado de materia o subtema.'
       : ''
 
+    // Hallazgo real (QA Ronda 3, 2026-07-10): un mensaje con varias
+    // solicitudes distintas en una sola entrada no se descomponía — el
+    // sistema no atendía ninguna de las partes y el reporte registraba la
+    // entrada bajo el ejercicio pendiente que ya estaba activo, en vez de
+    // reflejar alguna de las solicitudes reales del alumno.
+    const contextoMensajeCompuesto = isCompoundMultiIntentMessage(pregunta)
+      ? `\n\nNOTA: ${describeCompoundMessagePolicyForPrompt()}`
+      : ''
+
     // Sprint de estabilización (auditoría 2026-07-07): antes el grado se
     // pasaba como dato inerte ("Grado: 4to Primaria") sin ninguna
     // instrucción de cómo adaptar vocabulario/extensión/tono/ejemplos/nivel
@@ -2081,7 +2138,7 @@ export async function POST(req: NextRequest) {
       contextoContenido += `\n\nEJERCICIO ACTIVO PENDIENTE: ${pendingMathOperation}. Si el mensaje del alumno no resuelve este ejercicio, respóndele brevemente lo que preguntó y luego regresa a este mismo ejercicio. NO le preguntes de nuevo qué tema quiere trabajar ni le muestres una lista de temas — el tema ya está activo. Si en cambio decides presentar un ejercicio o problema NUEVO y distinto a este, la etiqueta [OP: ...] debe reflejar exactamente los números de ESE ejercicio nuevo — nunca reutilices el operando pendiente de arriba en la etiqueta de un problema distinto.`
     }
 
-    const systemPrompt = `${promptBase}${promptPadre}${contextoIdioma}${contextoIdiomaDistinto}${contextoGrado}
+    const systemPrompt = `${promptBase}${promptPadre}${contextoIdioma}${contextoIdiomaDistinto}${contextoMensajeCompuesto}${contextoGrado}
 
 CONTEXTO DEL ALUMNO:
 - Nombre: ${perfil.nombre_completo.split(' ')[0]}
