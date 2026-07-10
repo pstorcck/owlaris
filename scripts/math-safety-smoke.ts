@@ -6,6 +6,7 @@ import {
   isLikelyNumericSubject,
   looksLikeMathPracticePrompt,
   normalizeStudentAnswer,
+  opCoincideConTexto,
   solveOperation,
 } from '../src/lib/mathSafety'
 import {
@@ -274,6 +275,25 @@ D) 10
   // operaciones, sin mencionar la propiedad de exponentes.
   assert.match(buildGuidedMathHint('3^4*3^2', false), /exponentes/i)
   assert.doesNotMatch(buildGuidedMathHint('3^4*3^2', false), /grupos iguales|orden de operaciones/i)
+
+  // Hallazgo real (QA Ronda 3, 2026-07-10): el modelo etiquetó un problema
+  // de palabras recién redactado con un [OP: ...] que en realidad
+  // pertenecía a un ejercicio anterior (una ecuación con x), causando que
+  // una respuesta correcta se calificara como incorrecta. opCoincideConTexto
+  // debe rechazar una etiqueta cuyos números no aparecen en el texto visible.
+  assert.equal(
+    opCoincideConTexto(
+      '2*x+3=11',
+      'María tiene 12 manzanas, compra 8 más y regala 5. ¿Cuántas manzanas tiene al final?'
+    ),
+    false
+  )
+  assert.equal(
+    opCoincideConTexto('2*x+5=15', 'Intenta esta ecuación distinta: 2x + 5 = 15. ¿Cuánto vale x?'),
+    true
+  )
+  assert.equal(opCoincideConTexto('x', 'No hay números aquí, solo x.'), true)
+  assert.equal(opCoincideConTexto(null, 'cualquier texto'), false)
 
   console.log('math-safety smoke passed')
 }

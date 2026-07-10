@@ -210,6 +210,30 @@ export function extractCanonicalOperation(texto: string): string | null {
   return extractAndCleanOperation(texto).operation
 }
 
+// Hallazgo real (QA Ronda 3, 2026-07-10, confirmado con 2 PDFs reales
+// descargados): el modelo a veces etiqueta un problema de palabras recién
+// escrito con un [OP: ...] que en realidad pertenece a un ejercicio
+// anterior — probablemente porque el ejercicio pendiente se le muestra
+// como contexto justo antes de escribir uno nuevo, y lo reutiliza por
+// error en vez de calcular uno fresco para el problema que acaba de
+// redactar. Esto hace que una respuesta correcta se califique como
+// incorrecta contra un ejercicio que el alumno nunca vio. Se verifica que
+// al menos uno de los números de la operación etiquetada aparezca en el
+// texto visible del problema — si ninguno coincide, la etiqueta es
+// sospechosa y no debe usarse como verdad para calificar.
+function extraerNumeros(texto: string): number[] {
+  const matches = String(texto || '').match(/-?\d+(?:\.\d+)?/g) || []
+  return matches.map(Number)
+}
+
+export function opCoincideConTexto(op: string | null, textoVisible: string): boolean {
+  if (!op) return false
+  const numerosOp = extraerNumeros(op)
+  if (numerosOp.length === 0) return true
+  const numerosTexto = new Set(extraerNumeros(textoVisible))
+  return numerosOp.some((n) => numerosTexto.has(n))
+}
+
 function normalizeOperation(op: string): string {
   return op
     .replace(/,/g, '.')

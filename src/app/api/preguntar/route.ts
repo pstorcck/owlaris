@@ -44,6 +44,7 @@ import {
   isSafeCanonicalOperation,
   looksLikeMathPracticePrompt,
   normalizeStudentAnswer,
+  opCoincideConTexto,
   solveOperation,
   type MathEvaluation,
 } from '@/lib/mathSafety'
@@ -2041,7 +2042,7 @@ export async function POST(req: NextRequest) {
     // confiable de que había un ejercicio pendiente — esta señal viene del
     // backend (no depende de que el modelo lo infiera del historial).
     if (pendingMathOperation) {
-      contextoContenido += `\n\nEJERCICIO ACTIVO PENDIENTE: ${pendingMathOperation}. Si el mensaje del alumno no resuelve este ejercicio, respóndele brevemente lo que preguntó y luego regresa a este mismo ejercicio. NO le preguntes de nuevo qué tema quiere trabajar ni le muestres una lista de temas — el tema ya está activo.`
+      contextoContenido += `\n\nEJERCICIO ACTIVO PENDIENTE: ${pendingMathOperation}. Si el mensaje del alumno no resuelve este ejercicio, respóndele brevemente lo que preguntó y luego regresa a este mismo ejercicio. NO le preguntes de nuevo qué tema quiere trabajar ni le muestres una lista de temas — el tema ya está activo. Si en cambio decides presentar un ejercicio o problema NUEVO y distinto a este, la etiqueta [OP: ...] debe reflejar exactamente los números de ESE ejercicio nuevo — nunca reutilices el operando pendiente de arriba en la etiqueta de un problema distinto.`
     }
 
     const systemPrompt = `${promptBase}${promptPadre}${contextoIdioma}${contextoIdiomaDistinto}${contextoGrado}
@@ -2125,7 +2126,15 @@ ${contextoContenido}`
     // Extraer OP de la respuesta del tutor y limpiar texto visible
     const { visibleText: _respLimpia, operation: _opExtraida } = extractAndCleanOperation(respuesta)
     respuesta = _respLimpia
-    const opInferida = !_opExtraida && looksLikeMathPracticePrompt(respuesta)
+    // Hallazgo real (QA Ronda 3, 2026-07-10): antes se confiaba en
+    // cualquier [OP: ...] etiquetado por el modelo sin verificar que
+    // coincidiera con el problema que realmente redactó — ver
+    // opCoincideConTexto en mathSafety.ts. Si la etiqueta no coincide con
+    // ningún número del texto visible, se descarta (como si no existiera)
+    // en vez de usarla para calificar contra un ejercicio distinto al que
+    // el alumno vio.
+    const _opExtraidaValida = _opExtraida && opCoincideConTexto(_opExtraida, respuesta) ? _opExtraida : null
+    const opInferida = !_opExtraidaValida && looksLikeMathPracticePrompt(respuesta)
       ? inferCanonicalOperationFromText(respuesta)
       : null
     const opAlumno = inferCanonicalOperationFromText(pregunta)
@@ -2138,7 +2147,7 @@ ${contextoContenido}`
       respuestaGuiaEcuacion
       ? opAlumno
       : null
-    let opFinalRespuesta = _opExtraida || opInferida || opDesdeAlumno
+    let opFinalRespuesta = _opExtraidaValida || opInferida || opDesdeAlumno
     let opValidaEnRespuesta = isSafeCanonicalOperation(opFinalRespuesta) ? opFinalRespuesta : null
     // Antes esta rama (la que responde cuando el alumno recién elige un
     // tema, ej. "multiplicaciones") nunca llamaba a resolveMathPracticeFocus
