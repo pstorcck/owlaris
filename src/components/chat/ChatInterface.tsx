@@ -929,6 +929,7 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
         level: (n: number) => `Level ${n}`,
         pedagogicalInsight: 'Pedagogical insight',
         defaultSummary: 'Session recorded with academic support.',
+        wellbeingSafety: 'Wellbeing and emotional safety',
         safetyIntegrity: 'Safety and academic integrity',
         difficultyPath: 'Adaptive difficulty path',
         wentUp: (a: number, b: number) => `Went up from level ${a} to ${b}`,
@@ -974,6 +975,7 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
         level: (n: number) => `Nivel ${n}`,
         pedagogicalInsight: 'Lectura pedagógica',
         defaultSummary: 'Sesión registrada con acompañamiento académico.',
+        wellbeingSafety: 'Bienestar y seguridad emocional',
         safetyIntegrity: 'Seguridad y honestidad académica',
         difficultyPath: 'Ruta de dificultad adaptativa',
         wentUp: (a: number, b: number) => `Subió de nivel ${a} a ${b}`,
@@ -1132,6 +1134,26 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
       doc.setDrawColor(palette.line[0], palette.line[1], palette.line[2]); doc.roundedRect(margin, y - 3, maxW, 30, 4, 4, 'S')
       wrapped(data.analisis.resumen || L.defaultSummary, margin + 6, y + 6, maxW - 12, 9.5, palette.ink)
       y += 40
+
+      // Hallazgo real (QA Ronda 3, 2026-07-10): las revelaciones de
+      // bienestar (trastorno alimenticio, violencia familiar, oferta de
+      // sustancias) quedaban invisibles para la familia, mezcladas con el
+      // texto de honestidad académica. Se muestra como su propia sección,
+      // primero — un padre necesita ver esto antes que una sospecha de
+      // copia académica.
+      const bienestarSeguridad: string[] = Array.isArray(data.analisis.bienestar_seguridad) ? data.analisis.bienestar_seguridad : []
+      if (bienestarSeguridad.length > 0) {
+        section(L.wellbeingSafety, [185, 28, 28])
+        const boxH = bienestarSeguridad.reduce((acc, item) => acc + (doc.splitTextToSize(item, maxW - 12).length * (8.8 * 0.38 + 1.6)), 8)
+        checkY(boxH + 6)
+        doc.setFillColor(254, 242, 242); doc.roundedRect(margin, y - 3, maxW, boxH + 6, 4, 4, 'F')
+        doc.setDrawColor(220, 38, 38); doc.roundedRect(margin, y - 3, maxW, boxH + 6, 4, 4, 'S')
+        let yBienestar = y + 5
+        for (const item of bienestarSeguridad) {
+          yBienestar += wrapped(item, margin + 6, yBienestar, maxW - 12, 8.8, [127, 29, 29])
+        }
+        y = yBienestar + 10
+      }
 
       const seguridadIntegridad: string[] = Array.isArray(data.analisis.seguridad_integridad) ? data.analisis.seguridad_integridad : []
       if (seguridadIntegridad.length > 0) {

@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import {
   contarAlertasSensibles,
   contarSospechasCopia,
+  resumenBienestarSeguridad,
   resumenSeguridadIntegridad,
   type InteraccionSeguridad,
 } from '../src/lib/reporteSeguridad'
@@ -31,13 +32,16 @@ async function main() {
     test(`sesion-normal-sin-alertas-${i}`, () => {
       assert.equal(contarAlertasSensibles(interacciones), 0)
       assert.equal(contarSospechasCopia(interacciones), 0)
-      assert.deepEqual(resumenSeguridadIntegridad(contarAlertasSensibles(interacciones), contarSospechasCopia(interacciones)), [])
+      assert.deepEqual(resumenBienestarSeguridad(contarAlertasSensibles(interacciones)), [])
+      assert.deepEqual(resumenSeguridadIntegridad(contarSospechasCopia(interacciones)), [])
     })
   }
 
   // ── Bloqueo de content safety (estado_evaluacion: 'alerta_seguridad') ──
   // simula exactamente la fila que preguntar/route.ts inserta cuando
-  // checkContentSafety bloquea un mensaje.
+  // checkContentSafety bloquea un mensaje. Hallazgo real (QA Ronda 3,
+  // 2026-07-10): esto debe producir su PROPIA sección de bienestar, no un
+  // texto genérico mezclado con honestidad académica.
   for (let i = 1; i <= 5; i += 1) {
     const interacciones: InteraccionSeguridad[] = [
       ...sesionNormal(4),
@@ -45,10 +49,10 @@ async function main() {
     ]
     test(`cuenta-alertas-seguridad-${i}`, () => {
       assert.equal(contarAlertasSensibles(interacciones), i)
-      const resumen = resumenSeguridadIntegridad(i, 0)
+      const resumen = resumenBienestarSeguridad(i)
       assert.equal(resumen.length, 1)
-      assert.match(resumen[0], /tema sensible/)
-      assert.match(resumen[0], i === 1 ? /\b1 vez\b/ : new RegExp(`\\b${i} veces\\b`))
+      assert.match(resumen[0], /bienestar o seguridad/)
+      assert.match(resumen[0], i === 1 ? /\b1 momento\b/ : new RegExp(`\\b${i} momentos\\b`))
     })
   }
 
@@ -71,40 +75,46 @@ async function main() {
     ]
     test(`cuenta-sospechas-copia-${i}`, () => {
       assert.equal(contarSospechasCopia(interacciones), i)
-      const resumen = resumenSeguridadIntegridad(0, i)
+      const resumen = resumenSeguridadIntegridad(i)
       assert.equal(resumen.length, 1)
       assert.match(resumen[0], /copiar/)
       assert.match(resumen[0], i === 1 ? /\b1 posible intento\b/ : new RegExp(`\\b${i} posibles intentos\\b`))
     })
   }
 
-  // ── Ambas senales a la vez deben aparecer juntas, en el orden correcto. ──
-  test('ambas-alertas-juntas', () => {
+  // ── Ambas senales a la vez deben producir cada una su propio resumen,
+  // en secciones separadas (ya no un solo arreglo combinado). ──
+  test('ambas-alertas-por-separado', () => {
     const interacciones: InteraccionSeguridad[] = [
       ...sesionNormal(3),
       { estado_evaluacion: 'alerta_seguridad', sospecha_copia: false },
       { estado_evaluacion: 'correcto', sospecha_copia: true },
     ]
-    const resumen = resumenSeguridadIntegridad(contarAlertasSensibles(interacciones), contarSospechasCopia(interacciones))
-    assert.equal(resumen.length, 2)
-    assert.match(resumen[0], /tema sensible/)
-    assert.match(resumen[1], /copiar/)
+    const bienestar = resumenBienestarSeguridad(contarAlertasSensibles(interacciones))
+    const integridad = resumenSeguridadIntegridad(contarSospechasCopia(interacciones))
+    assert.equal(bienestar.length, 1)
+    assert.equal(integridad.length, 1)
+    assert.match(bienestar[0], /bienestar o seguridad/)
+    assert.match(integridad[0], /copiar/)
   })
 
   // ── En inglés (sesión practicada en inglés) debe traducirse por completo. ──
   test('bilingue-ingles', () => {
-    const resumen = resumenSeguridadIntegridad(2, 3, true)
-    assert.equal(resumen.length, 2)
-    assert.match(resumen[0], /sensitive topic 2 times/)
-    assert.match(resumen[1], /3 possible attempts/)
-    assert.doesNotMatch(resumen.join(' '), /[áéíóúñ]/i)
+    const bienestar = resumenBienestarSeguridad(2, true)
+    const integridad = resumenSeguridadIntegridad(3, true)
+    assert.equal(bienestar.length, 1)
+    assert.equal(integridad.length, 1)
+    assert.match(bienestar[0], /2 moments/)
+    assert.match(integridad[0], /3 possible attempts/)
+    assert.doesNotMatch(bienestar.join(' ') + integridad.join(' '), /[áéíóúñ]/i)
   })
 
   // ── El texto sensible NUNCA debe aparecer en el resumen — solo el conteo. ──
   test('no-expone-texto-crudo', () => {
-    const resumen = resumenSeguridadIntegridad(1, 1)
-    for (const linea of resumen) {
-      assert.doesNotMatch(linea, /me quiero matar|suicidar|abuso|violar|dame la respuesta/i)
+    const bienestar = resumenBienestarSeguridad(1)
+    const integridad = resumenSeguridadIntegridad(1)
+    for (const linea of [...bienestar, ...integridad]) {
+      assert.doesNotMatch(linea, /me quiero matar|suicidar|abuso|violar|dame la respuesta|pastillas|drogas|gordo/i)
     }
   })
 

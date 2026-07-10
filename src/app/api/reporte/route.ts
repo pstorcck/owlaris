@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient, createClient } from '@/lib/supabase/server'
 import { withOpenAIRetry } from '@/lib/openaiRetry'
 import { registrarAlertaTecnica } from '@/lib/technicalAlerts'
-import { contarAlertasSensibles, contarSospechasCopia, resumenSeguridadIntegridad } from '@/lib/reporteSeguridad'
+import { contarAlertasSensibles, contarSospechasCopia, resumenBienestarSeguridad, resumenSeguridadIntegridad } from '@/lib/reporteSeguridad'
 import {
   agruparPorMateria,
   construirEvidenciaActividad,
@@ -361,7 +361,12 @@ REGLAS ESTRICTAS:
     analisis.nivel_dificultad_final = nivelFinal
     analisis.metricas_hoy = metricasHoy
     analisis.evidencia_hoy = evidenciaHoy
-    analisis.seguridad_integridad = resumenSeguridadIntegridad(metricasHoy.alertas_sensibles, metricasHoy.sospechas_copia, idiomaIngles)
+    analisis.seguridad_integridad = resumenSeguridadIntegridad(metricasHoy.sospechas_copia, idiomaIngles)
+    // Hallazgo real (QA Ronda 3, 2026-07-10): las revelaciones de bienestar
+    // (trastorno alimenticio, violencia familiar, oferta de sustancias)
+    // quedaban invisibles para la familia dentro del texto genérico de
+    // "seguridad_integridad" — se separan en su propia sección.
+    analisis.bienestar_seguridad = resumenBienestarSeguridad(metricasHoy.alertas_sensibles, idiomaIngles)
     // Punto 15: estado de evidencia del día, para no presentar una
     // exploración breve como si fuera un diagnóstico completo.
     analisis.estado_evidencia = metricasHoy.estado_evidencia
