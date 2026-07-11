@@ -2386,7 +2386,18 @@ ${contextoContenido}`
     // determinístico que ya se aplicaba en la rama de evaluación estricta,
     // para que problemas de palabras y materias humanísticas escalen con la
     // misma confiabilidad que ejercicios de ecuación directa.
-    respuesta = reforzarDiagnosticoPorFallos(respuesta, idiomaIngles, fallosConsecutivosFallback)
+    //
+    // Hallazgo real (QA Ronda 4, 2026-07-11): este refuerzo se aplicaba
+    // según la racha PRESERVADA de fallos, incluso en turnos que no eran
+    // en absoluto una evaluación de respuesta (una explicación de un tema
+    // nuevo sin ejercicio intentado, o una negativa a cambiar de grado) —
+    // el mensaje "vamos a bajar la dificultad" quedaba "pegado" a
+    // respuestas completamente ajenas mientras la racha vieja seguía alta.
+    // Se aplica ahora solo cuando ESTE turno específico fue realmente
+    // evaluado como incorrecto.
+    if (estadoEvaluacionHumanistico === 'incorrecto') {
+      respuesta = reforzarDiagnosticoPorFallos(respuesta, idiomaIngles, fallosConsecutivosFallback)
+    }
     respuesta = sanitizeChatFormatting(respuesta)
 
     const { data: insertedRow, error: insertErr } = await supabase.from('interacciones').insert({

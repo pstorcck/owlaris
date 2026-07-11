@@ -31,6 +31,22 @@ function computeFallbackStreaks(
   return { aciertosConsecutivosFallback, fallosConsecutivosFallback }
 }
 
+// Hallazgo real (QA Ronda 4, 2026-07-11): el refuerzo se aplicaba según la
+// racha PRESERVADA de fallos, incluso en turnos que no eran en absoluto una
+// evaluación de respuesta (una explicación de un tema nuevo sin ejercicio
+// intentado, o una negativa a cambiar de grado) — el mensaje quedaba
+// "pegado" a respuestas completamente ajenas. Se aplica ahora solo cuando
+// ESTE turno específico fue evaluado como incorrecto.
+function aplicarRefuerzoSiIncorrecto(
+  respuesta: string,
+  idiomaIngles: boolean,
+  fallosConsecutivos: number,
+  estadoEvaluacionHumanistico: 'correcto' | 'incorrecto' | null
+) {
+  if (estadoEvaluacionHumanistico !== 'incorrecto') return respuesta
+  return reforzarDiagnosticoPorFallos(respuesta, idiomaIngles, fallosConsecutivos)
+}
+
 function main() {
   // Racha real reportada en QA Ronda 3: un problema de palabras (ej. "María
   // tiene 12 manzanas...") mal respondido 3 veces seguidas no debía escalar
@@ -65,6 +81,31 @@ function main() {
   const respuestaIngles = reforzarDiagnosticoPorFallos('Not correct, try again.', true, 4)
   assert.match(respuestaIngles, /lower the difficulty/i)
   assert.doesNotMatch(respuestaIngles, /[áéíóúñ]/i)
+
+  // Hallazgo real (QA Ronda 4, 2026-07-11): con una racha vieja de fallos
+  // ya en 4+, un turno completamente ajeno (una explicación de un tema
+  // nuevo, o una negativa a cambiar de grado — ninguno de los dos es una
+  // evaluación de respuesta) NO debe llevar el mensaje de refuerzo pegado.
+  const streaksTurnoAjeno = computeFallbackStreaks(null, { correctas: 0, incorrectas: 5 })
+  assert.equal(streaksTurnoAjeno.fallosConsecutivosFallback, 5)
+  const respuestaAjena = aplicarRefuerzoSiIncorrecto(
+    'El teorema de Pitágoras aplica solo a triángulos rectángulos.',
+    false,
+    streaksTurnoAjeno.fallosConsecutivosFallback,
+    null
+  )
+  assert.equal(respuestaAjena, 'El teorema de Pitágoras aplica solo a triángulos rectángulos.')
+  assert.doesNotMatch(respuestaAjena, /bajar la dificultad/i)
+
+  // Pero un turno que SÍ es una evaluación incorrecta, con esa misma racha
+  // alta, debe seguir mostrando el refuerzo con normalidad.
+  const respuestaSiIncorrecta = aplicarRefuerzoSiIncorrecto(
+    'Por reforzar, intenta de nuevo.',
+    false,
+    streaksTurnoAjeno.fallosConsecutivosFallback,
+    'incorrecto'
+  )
+  assert.match(respuestaSiIncorrecta, /bajar la dificultad/i)
 
   console.log('reforzar-diagnostico-fallback integration test passed')
 }
