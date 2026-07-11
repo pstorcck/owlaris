@@ -69,6 +69,14 @@ function main() {
   // hacer trampa académica — no deben confundirse.
   assert.match(promptBase, /PONME UNA TRAMPA.*NO ES HACER TRAMPA/i)
 
+  // Instructivo de mejoras (ronda 2026-07-11), ítems 26-28: nunca inventar
+  // alineación a estándares oficiales, derivar el "enfoque principal" de
+  // TODO el índice (no solo los primeros temas), y permitir listar temas
+  // para un "chequeo de dominio" sin resolver los ejercicios.
+  assert.match(promptBase, /alineaci[oó]n con est[aá]ndares curriculares oficiales/i)
+  assert.match(promptBase, /b[aá]salo en TODO el [ií]ndice de temas/i)
+  assert.match(promptBase, /chequeo de dominio/i)
+
   // La adaptación por grado se inyecta por turno (depende de gradoEfectivo),
   // no dentro de PROMPT_BASE estático — se verifica que route.ts la
   // construya y que el módulo produzca contenido real por banda.

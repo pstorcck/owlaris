@@ -229,3 +229,122 @@ export function buildCourseTopicListResponse(input: {
     ? `Sure. These are all the topics I can identify in the official content for ${subject || 'this class'}. ${countLine} ${sourceLine}\n\n${items}`.trim()
     : `Claro. Estos son todos los temas que puedo identificar en el contenido oficial de ${subject || 'esta clase'}. ${countLine} ${sourceLine}\n\n${items}`.trim()
 }
+
+// Hallazgo real (instructivo de mejoras, ronda 2026-07-11), ítems 22-23:
+// "qué sigue después de X" se respondía con el orden que el modelo
+// improvisaba en el momento (no siempre el orden real del documento
+// oficial) — extractCourseTopicIndex ya devuelve el índice ordenado, pero
+// no existía ninguna función que lo usara para resolver "el siguiente".
+export function isNextTopicRequest(value: string): boolean {
+  const text = normalizeText(value)
+  if (!text) return false
+  return [
+    'que sigue despues de', 'que sigue luego de', 'cual es el siguiente tema',
+    'siguiente tema despues de', 'que viene despues de', 'que tema sigue',
+    'cual tema sigue', 'cual sigue despues', 'que sigue en el curso',
+    'que sigue en la clase', 'cual es el proximo tema',
+    'what comes after', 'what is the next topic', 'next topic after',
+    'what topic comes next', 'what comes next in the course',
+  ].some((needle) => text.includes(needle))
+}
+
+// Extrae el nombre del tema de referencia mencionado en la pregunta ("qué
+// sigue después de la fotosíntesis" -> "la fotosíntesis"). Si no se
+// menciona un tema explícito, el llamador debe usar el tema activo de la
+// sesión como referencia.
+export function extractNextTopicReference(value: string): string | null {
+  const texto = (value || '').trim()
+  const match = /(?:despu[eé]s de|luego de|after)\s+(.+?)[?¿]?$/i.exec(texto)
+  if (!match) return null
+  const referencia = match[1].trim()
+  return referencia.length >= 2 ? referencia : null
+}
+
+export function findNextTopic(
+  index: CourseTopicIndex,
+  referencia: string | null
+): { actual: { indice: number; tema: string } | null; siguiente: { indice: number; tema: string } | null } {
+  const { topics } = index
+  if (topics.length === 0 || !referencia) return { actual: null, siguiente: null }
+  const norm = normalizeText(referencia)
+  let idx = topics.findIndex((t) => normalizeText(t) === norm)
+  if (idx === -1) idx = topics.findIndex((t) => norm.includes(normalizeText(t)) || normalizeText(t).includes(norm))
+  if (idx === -1) return { actual: null, siguiente: null }
+  const actual = { indice: idx + 1, tema: topics[idx] }
+  const siguiente = idx + 1 < topics.length ? { indice: idx + 2, tema: topics[idx + 1] } : null
+  return { actual, siguiente }
+}
+
+export function buildNextTopicResponse(input: {
+  index: CourseTopicIndex
+  referencia: string | null
+  idiomaIngles?: boolean
+}): string {
+  const { index, referencia, idiomaIngles } = input
+  if (index.topics.length === 0) {
+    return idiomaIngles
+      ? 'I do not have enough official content available right now to confirm the order of topics.'
+      : 'No tengo suficiente contenido oficial disponible ahora mismo para confirmar el orden de los temas.'
+  }
+  const { actual, siguiente } = findNextTopic(index, referencia)
+  if (!actual) {
+    return idiomaIngles
+      ? `I could not find "${referencia}" in the official topic index, so I cannot confirm what comes after it safely.`
+      : `No encontré "${referencia}" en el índice oficial de temas, así que no puedo confirmar con seguridad qué sigue después.`
+  }
+  if (!siguiente) {
+    return idiomaIngles
+      ? `"${actual.tema}" is the last topic in the official index I have available — there is no next topic after it right now.`
+      : `"${actual.tema}" es el último tema del índice oficial que tengo disponible — no hay un siguiente tema después de este por ahora.`
+  }
+  return idiomaIngles
+    ? `According to the official course order, after "${actual.tema}" (topic ${actual.indice}) comes "${siguiente.tema}" (topic ${siguiente.indice}).`
+    : `Según el orden oficial del curso, después de "${actual.tema}" (tema ${actual.indice}) sigue "${siguiente.tema}" (tema ${siguiente.indice}).`
+}
+
+// Hallazgo real (instructivo de mejoras, ronda 2026-07-11), ítem 25:
+// preguntas sobre si un área amplia está incluida en el curso ("¿este curso
+// incluye genética?", "¿vemos guerra fría en esta clase?") deben
+// responderse a partir del índice real, no de una suposición del modelo.
+export function isBroadAreaPresenceQuestion(value: string): boolean {
+  const text = normalizeText(value)
+  if (!text) return false
+  return [
+    'este curso incluye', 'esta clase incluye', 'esta materia incluye',
+    'vemos', 'vemos algo de', 'en este curso vemos', 'en esta clase vemos',
+    'este curso cubre', 'esta clase cubre', 'este curso tiene',
+    'does this course include', 'does this class include', 'does this course cover',
+    'do we cover', 'do we see',
+  ].some((needle) => text.includes(needle))
+}
+
+export function extractAreaQuery(value: string): string | null {
+  const texto = (value || '').trim()
+  const match = /(?:incluye|cubre|vemos(?:\s+algo\s+de)?|include|cover|see)\s+(.+?)[?¿]?$/i.exec(texto)
+  if (!match) return null
+  const area = match[1].trim()
+  return area.length >= 2 ? area : null
+}
+
+export function buildAreaPresenceResponse(input: {
+  index: CourseTopicIndex
+  area: string | null
+  idiomaIngles?: boolean
+}): string {
+  const { index, area, idiomaIngles } = input
+  if (index.topics.length === 0 || !area) {
+    return idiomaIngles
+      ? 'I do not have enough official content available right now to confirm that with certainty.'
+      : 'No tengo suficiente contenido oficial disponible ahora mismo para confirmarlo con seguridad.'
+  }
+  const norm = normalizeText(area)
+  const coincidencias = index.topics.filter((t) => normalizeText(t).includes(norm) || norm.includes(normalizeText(t)))
+  if (coincidencias.length === 0) {
+    return idiomaIngles
+      ? `Based on the official topic index I have available, I do not see "${area}" listed — it may still be covered in material I do not have access to, so I cannot say for certain it is excluded.`
+      : `Con base en el índice oficial de temas que tengo disponible, no veo "${area}" en la lista — puede que sí se cubra en material al que no tengo acceso, así que no puedo asegurar que esté excluido.`
+  }
+  return idiomaIngles
+    ? `Yes, based on the official index: ${coincidencias.join(', ')}.`
+    : `Sí, según el índice oficial: ${coincidencias.join(', ')}.`
+}

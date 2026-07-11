@@ -14,9 +14,15 @@ import { isReviewMistakesRequest, primeraOperacionValida, temaMasFrecuente } fro
 import { limpiarTemaGeneral } from '@/lib/temaGeneral'
 import { ventanaHoyGuatemala } from '@/lib/fechaGuatemala'
 import {
+  buildAreaPresenceResponse,
   buildCourseTopicListResponse,
+  buildNextTopicResponse,
+  extractAreaQuery,
   extractCourseTopicIndex,
+  extractNextTopicReference,
+  isBroadAreaPresenceQuestion,
   isCourseTopicListRequest,
+  isNextTopicRequest,
   matchNumberedListSelection,
 } from '@/lib/courseTopics'
 import {
@@ -117,6 +123,9 @@ Si el alumno pide practicar, estudiar, que le ayudes o que le expliques con un e
 
 REGLA — FIDELIDAD A LAS FUENTES OFICIALES:
 Nunca inventes temas, unidades ni contenido que no esté en el material oficial disponible. No completes el índice del curso con temas que "normalmente se abordan" en esa materia, no reorganices el currículo y no presentes contenido no oficial como si lo fuera. Si el alumno pide agregar un tema nuevo a la clase, indica con claridad que no puedes agregar temas nuevos, solo trabajar con los que están en el contenido oficial del curso. Si no tienes suficiente información para listar los temas con seguridad, dilo directamente en vez de inventar.
+Nunca inventes ni afirmes una alineación con estándares curriculares oficiales (CNB, Common Core, NGSS u otros) a menos que esté literalmente indicada en el material oficial disponible — si te preguntan si un tema "está alineado" a un estándar específico, dilo con honestidad si no tienes esa información en la fuente.
+Si te preguntan cuál es el "enfoque principal" o "tema central" del curso, básalo en TODO el índice de temas disponible, no solo en los primeros 2-3 temas listados — un curso puede tener su núcleo temático hacia la mitad o el final del índice.
+Si el alumno pide un "chequeo de dominio" o una lista de temas para autoevaluarse antes de un examen, dale la lista de temas oficiales como checklist (sin resolver los ejercicios por él) — es orientación académica permitida, no una entrega de respuestas.
 
 REGLA — RECURSOS EXTERNOS, TONO SEGURO:
 Cuando el alumno pida videos, páginas web, canales o lecturas externas, no los recomiendes, no inventes enlaces ni menciones autores o canales externos. Responde con seguridad y tono positivo, no defensivo: tú eres su tutor y puedes ayudarle directamente aquí, no necesita salir a otra página. Ofrece explicar, resumir o practicar el tema pedido con el contenido oficial disponible.
@@ -2083,6 +2092,74 @@ export async function POST(req: NextRequest) {
         guard_activado: index.incomplete || index.source === 'none',
       }).select('id').single()
       supabase.from('usuarios').update({ ultimo_acceso: new Date().toISOString() }).eq('id', user.id).then(() => {})
+      return NextResponse.json({
+        respuesta,
+        source: 'course_index_guard',
+        tokens: 0,
+        documento_fuente: documentoFuente,
+        interaction_id: insertedRow?.id || null,
+        pending_math_interaction_id: null,
+      })
+    }
+
+    // Hallazgo real (instructivo de mejoras, ronda 2026-07-11), ítems 22-23:
+    // "qué sigue después de X" debe respetar el orden real del índice
+    // oficial de temas, no un orden improvisado por el modelo. Solo se
+    // intercepta cuando el alumno nombra explícitamente el tema de
+    // referencia (extractNextTopicReference) — un "¿qué sigue?" genérico
+    // sin referencia queda para el flujo normal, donde no hay suficiente
+    // certeza sobre a qué tema se refiere.
+    const referenciaSiguienteTema = tipoPregunta === 'academica' && !esBienvenida ? extractNextTopicReference(pregunta) : null
+    if (tipoPregunta === 'academica' && !esBienvenida && isNextTopicRequest(pregunta) && referenciaSiguienteTema && contenidoCurricular) {
+      const indexSiguiente = extractCourseTopicIndex(contenidoCurricular)
+      const respuesta = buildNextTopicResponse({ index: indexSiguiente, referencia: referenciaSiguienteTema, idiomaIngles })
+      const { data: insertedRow } = await supabase.from('interacciones').insert({
+        usuario_id: user.id,
+        colegio_id: perfil.colegio_id,
+        materia_id: materia_uuid, materia_nombre_snapshot: materiaConsultaSharePoint || null,
+        grado: gradoEfectivo,
+        tema_detectado: 'Siguiente tema del índice',
+        pregunta,
+        respuesta,
+        tokens_usados: 0,
+        costo_usd: 0,
+        modelo_usado: 'course_index_guard',
+        documento_fuente: documentoFuente,
+        sospecha_copia: false,
+        guard_activado: true,
+      }).select('id').single()
+      return NextResponse.json({
+        respuesta,
+        source: 'course_index_guard',
+        tokens: 0,
+        documento_fuente: documentoFuente,
+        interaction_id: insertedRow?.id || null,
+        pending_math_interaction_id: null,
+      })
+    }
+
+    // Hallazgo real (instructivo de mejoras, ronda 2026-07-11), ítem 25:
+    // "¿este curso incluye X?" debe responderse con base en el índice
+    // oficial real, no en una suposición del modelo sobre el currículo.
+    const areaConsultada = tipoPregunta === 'academica' && !esBienvenida ? extractAreaQuery(pregunta) : null
+    if (tipoPregunta === 'academica' && !esBienvenida && isBroadAreaPresenceQuestion(pregunta) && areaConsultada && contenidoCurricular) {
+      const indexArea = extractCourseTopicIndex(contenidoCurricular)
+      const respuesta = buildAreaPresenceResponse({ index: indexArea, area: areaConsultada, idiomaIngles })
+      const { data: insertedRow } = await supabase.from('interacciones').insert({
+        usuario_id: user.id,
+        colegio_id: perfil.colegio_id,
+        materia_id: materia_uuid, materia_nombre_snapshot: materiaConsultaSharePoint || null,
+        grado: gradoEfectivo,
+        tema_detectado: 'Consulta de área en el índice',
+        pregunta,
+        respuesta,
+        tokens_usados: 0,
+        costo_usd: 0,
+        modelo_usado: 'course_index_guard',
+        documento_fuente: documentoFuente,
+        sospecha_copia: false,
+        guard_activado: true,
+      }).select('id').single()
       return NextResponse.json({
         respuesta,
         source: 'course_index_guard',
