@@ -65,6 +65,7 @@ import {
   buildExerciseRecallResponse,
   buildPendingContextResponse,
   buildProgressResponse,
+  buildReporteDeHoyRedirectResponse,
   describeCompoundMessagePolicyForPrompt,
   describeResumeTopicPolicyForPrompt,
   describeSameExercisePolicyForPrompt,
@@ -74,6 +75,7 @@ import {
   isLikelyMathAnswerText,
   isPendingContextQuestion,
   isProgressQuestion,
+  isReporteDeHoyRequest,
   isResumeTopicChipRequest,
   stripUnapprovedExternalResources,
 } from '@/lib/tutorContext'
@@ -1109,6 +1111,39 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({
         respuesta: respuestaHistorial,
         source: 'conversation_history_guard',
+        nuevo_estado: 'activo',
+        tokens: 0,
+      })
+    }
+
+    // Hallazgo real (instructivo de mejoras, ronda 2026-07-11), ítem 12: si
+    // el alumno pide "el reporte de hoy" escribiéndolo en el chat, es una
+    // función real de la plataforma (el botón que genera el PDF), no una
+    // redacción para el modelo — se dirige al botón real en vez de dejar
+    // que el modelo intente inventar un resumen de texto en su lugar.
+    if (isReporteDeHoyRequest(pregunta)) {
+      const respuestaReporte = buildReporteDeHoyRedirectResponse(idiomaIngles)
+      await supabase.from('interacciones').insert({
+        usuario_id: user.id,
+        colegio_id: perfil.colegio_id,
+        materia_id: null,
+        grado: grado_override || perfil.grado || '',
+        tema_detectado: idiomaIngles ? 'Request for today\'s report' : 'Solicitud del reporte de hoy',
+        pregunta,
+        respuesta: respuestaReporte,
+        tokens_usados: 0,
+        costo_usd: 0,
+        modelo_usado: 'reporte_de_hoy_guard',
+        documento_fuente: null,
+        sospecha_copia: false,
+        operacion_canonica: null,
+        op_estado: null,
+        estado_evaluacion: 'contexto_pendiente',
+        guard_activado: true,
+      })
+      return NextResponse.json({
+        respuesta: respuestaReporte,
+        source: 'reporte_de_hoy_guard',
         nuevo_estado: 'activo',
         tokens: 0,
       })

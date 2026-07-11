@@ -442,3 +442,41 @@ export function stripUnapprovedExternalResources(value: string, idiomaIngles = f
   cleaned = cleaned ? `${cleaned}\n\n${cierre}` : cierre
   return { text: cleaned, guardActivado: true }
 }
+
+// Hallazgo real (instructivo de mejoras, ronda 2026-07-11), ítem 12: cuando
+// el alumno escribe en el chat "dame el reporte de hoy" (en vez de tocar el
+// botón real), el modelo no tenía ninguna señal para reconocer que "Reporte
+// de hoy" es una función real de la plataforma (un PDF que ya existe) y no
+// una redacción para generar en el chat — podía inventar un resumen de texto
+// en vez de dirigir al botón real. Se excluyen explícitamente peticiones de
+// un reporte/informe ESCOLAR (tarea, laboratorio, investigación de una
+// materia específica) — ahí "reporte" es un trabajo escrito del alumno, no
+// la función de la plataforma, y debe pasar por la ayuda normal de
+// redacción (instructivo, ítem 13).
+function pareceReporteEscolar(text: string): boolean {
+  return /reporte\s+(?:de\s+)?(?:laboratorio|lectura|investigaci[oó]n|del\s+colegio|de\s+(?:biolog[ií]a|qu[ií]mica|f[ií]sica|historia|ciencias|espa[ñn]ol|literatura))/.test(text) ||
+    /informe\s+(?:de\s+)?(?:laboratorio|lectura|investigaci[oó]n)/.test(text) ||
+    /mi\s+reporte\s+(?:de|para)\s+(?:la\s+)?(?:clase|tarea|materia)/.test(text)
+}
+
+export function isReporteDeHoyRequest(value: string): boolean {
+  const text = normalizeText(value)
+  if (!text) return false
+  if (pareceReporteEscolar(text)) return false
+  return [
+    'reporte de hoy', 'dame el reporte', 'dame mi reporte',
+    'quiero el reporte', 'quiero mi reporte', 'necesito el reporte',
+    'necesito mi reporte', 'generame el reporte', 'generame mi reporte',
+    'puedes darme el reporte', 'me das el reporte', 'pasame el reporte',
+    "today's report", 'todays report', 'give me the report',
+    'give me my report', 'i want the report', 'i want my report',
+    'i need the report', 'i need my report', 'generate the report',
+    'generate my report', 'can you give me the report',
+  ].some((needle) => text.includes(needle))
+}
+
+export function buildReporteDeHoyRedirectResponse(idiomaIngles = false): string {
+  return idiomaIngles
+    ? 'The "Today\'s report" you\'re asking about is a real feature already built into Owlaris — a PDF with everything we\'ve worked on today. I can\'t write it here in the chat; tap the "Today\'s report" button on the screen to generate and download it.'
+    : 'El "Reporte de hoy" que pides es una función real que ya existe en Owlaris: un PDF con todo lo que hemos trabajado hoy. No puedo redactarlo aquí en el chat — toca el botón "Reporte de hoy" en la pantalla para generarlo y descargarlo.'
+}
