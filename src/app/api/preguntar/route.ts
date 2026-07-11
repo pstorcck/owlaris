@@ -1628,6 +1628,20 @@ export async function POST(req: NextRequest) {
 
     if (!pendingMathId && (isLikelyMathAnswerText(pregunta) || isPendingContextQuestion(pregunta) || isWorkedExampleRequest(pregunta) || isExerciseRecallRequest(pregunta))) {
       try {
+        // Hallazgo real (QA Ronda 4, 2026-07-11): "no entiendo" (parte de
+        // isPendingContextQuestion) también aparece dentro de preguntas
+        // conceptuales genuinas y nuevas ("no entiendo bien qué es la
+        // fotosíntesis", "no entiendo cómo se suman fracciones..."), no
+        // solo en reacciones cortas a un ejercicio en curso. Sin límite de
+        // tiempo, esta búsqueda podía resucitar un ejercicio pendiente sin
+        // resolver de horas o días atrás (de otra sesión, a veces incluso
+        // de otra materia si materia_uuid no se resolvió esa vez) y
+        // presentarlo como si fuera el ejercicio activo de la conversación
+        // actual — sustituyendo la pregunta real del alumno por "Sigamos
+        // con el ejercicio activo: ...". Se acota a las últimas 2 horas:
+        // un ejercicio realmente activo de la sesión en curso siempre es
+        // reciente.
+        const hace2h = new Date(Date.now() - 2 * 3600000).toISOString()
         let pendingQuery = supabase
           .from('interacciones')
           .select('id')
@@ -1635,6 +1649,7 @@ export async function POST(req: NextRequest) {
           .eq('op_estado', 'pendiente')
           .is('op_evaluada_en', null)
           .not('operacion_canonica', 'is', null)
+          .gte('creado_en', hace2h)
           .order('creado_en', { ascending: false })
           .limit(1)
         if (materia_uuid) pendingQuery = pendingQuery.eq('materia_id', materia_uuid)

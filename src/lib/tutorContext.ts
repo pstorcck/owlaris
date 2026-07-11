@@ -31,11 +31,29 @@ export function isNoAnswerComplaint(value: string) {
   ].some((needle) => text.includes(needle))
 }
 
+// Hallazgo real (QA Ronda 4, 2026-07-11): "no entiendo" también aparece en
+// preguntas conceptuales genuinas y nuevas ("no entiendo bien qué es la
+// fotosíntesis", "no entiendo cómo se suman fracciones con diferente
+// denominador"), no solo en reacciones cortas sobre el ejercicio en curso
+// ("no entiendo", "no entiendo este paso"). Tratarlas como continuidad
+// hacía que el tutor ignorara la pregunta real del alumno y devolviera un
+// ejercicio pendiente sin relación — a veces incluso de otra materia. Se
+// excluye del disparador de continuidad cuando "no entiendo" va seguido de
+// "qué es" / "cómo se..." + contenido adicional, el patrón típico de una
+// pregunta nueva sobre un concepto distinto al ejercicio activo.
+function pareceNoEntiendoPreguntaNueva(text: string): boolean {
+  return /no entiendo\s+(?:bien\s+)?(?:qu[eé]\s+es|c[oó]mo\s+(?:se\s+)?\w+)/.test(text) ||
+    /i\s+(?:do not|don't)\s+understand\s+(?:what|how|why)\b/.test(text)
+}
+
 export function isPendingContextQuestion(value: string) {
   const text = normalizeText(value)
   if (!text) return false
   if (/puedo usar\s+(?:una\s+|la\s+)?calculadora/.test(text) || /usar\s+(?:una\s+|la\s+)?calculadora para/.test(text)) return true
-  return isNoAnswerComplaint(value) || [
+  if (isNoAnswerComplaint(value)) return true
+  const esPreguntaNueva = pareceNoEntiendoPreguntaNueva(text)
+  const NO_ENTIENDO_FAMILIA = new Set(['no entiendo', 'no entender', 'i do not understand', "i don't understand"])
+  return [
     'sin calculadora',
     'sin usar calculadora',
     'puedo lograr',
@@ -107,7 +125,10 @@ export function isPendingContextQuestion(value: string) {
     "don't change the exercise",
     "still don't understand",
     'like i know nothing',
-  ].some((needle) => text.includes(needle))
+  ].some((needle) => {
+    if (esPreguntaNueva && NO_ENTIENDO_FAMILIA.has(needle)) return false
+    return text.includes(needle)
+  })
 }
 
 // "¿Cuál era el ejercicio?" debe recuperar el ejercicio activo, no generar
