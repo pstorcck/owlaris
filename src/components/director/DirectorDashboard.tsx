@@ -37,6 +37,7 @@ type DirectorStats = {
   }[]
   alertas: {
     id: string
+    alumno_id: string
     tipo: string
     descripcion: string | null
     contexto: string | null
@@ -291,9 +292,16 @@ export default function DirectorDashboard() {
                           <div className="alert-meta">{alerta.alumno.grado || 'Sin grado'} · {alerta.alumno.sede} · {tiempoRelativo(alerta.creado_en)}</div>
                           {alerta.descripcion && <div className="alert-meta" style={{ marginTop: 6 }}>{alerta.descripcion}</div>}
                         </div>
-                        <span className="pill" style={{ background: `${tipoColor[alerta.tipo] || '#64748B'}18`, color: tipoColor[alerta.tipo] || '#64748B' }}>
-                          {tipoLabel[alerta.tipo] || alerta.tipo}
-                        </span>
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8 }}>
+                          <span className="pill" style={{ background: `${tipoColor[alerta.tipo] || '#64748B'}18`, color: tipoColor[alerta.tipo] || '#64748B' }}>
+                            {tipoLabel[alerta.tipo] || alerta.tipo}
+                          </span>
+                          {alerta.alumno_id && (
+                            <a href={`/reporte-alumno?id=${alerta.alumno_id}`} className="pill pill-blue" style={{ textDecoration: 'none' }}>
+                              Ver informe →
+                            </a>
+                          )}
+                        </div>
                       </div>
                     </div>
                   )) : <div className="empty">No hay alertas activas en esta sede.</div>}
@@ -321,7 +329,12 @@ export default function DirectorDashboard() {
                             <div className="student-meta">{alumno.grado || 'Sin grado'} · {alumno.email}</div>
                             <div className="student-meta">Sesiones 30d: {alumno.sesiones30} · Temas: {alumno.temasUnicos} · Última sesión: {tiempoRelativo(alumno.ultimaSesion)}</div>
                           </div>
-                          <span className={`pill ${estado[0]}`}>{estado[1]}</span>
+                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8 }}>
+                            <span className={`pill ${estado[0]}`}>{estado[1]}</span>
+                            <a href={`/reporte-alumno?id=${alumno.id}`} className="pill pill-blue" style={{ textDecoration: 'none' }}>
+                              Ver informe →
+                            </a>
+                          </div>
                         </div>
                       </div>
                     )

@@ -5,7 +5,7 @@ import { guardHumanisticResponse } from '@/lib/humanisticSafety'
 import { describeFinalAnswerPolicyForPrompt, guardNoFinalAnswer } from '@/lib/pedagogicalGuard'
 import { buildGradeAdaptationInstruction } from '@/lib/gradeAdaptation'
 import { pareceIdiomaDistinto } from '@/lib/languageDetection'
-import { buscarStaffColegio, buscarSuperadmins, elegirFuenteDestinatariosAlerta, type DestinatarioAlerta } from '@/lib/alertaEmergencia'
+import { buscarStaffColegio, buscarSuperadmins, elegirFuenteDestinatariosAlerta, resolverDestinatariosAlerta, type DestinatarioAlerta } from '@/lib/alertaEmergencia'
 import { verificarLimiteFrecuencia } from '@/lib/rateLimit'
 import { sanitizeChatFormatting } from '@/lib/chatFormatting'
 import { detectarMateriaDesdeTexto, materiaActualEnSistemaCNB, normalizarMateria } from '@/lib/materiaDetection'
@@ -2486,33 +2486,40 @@ async function verificarAlertasBajaComprension(
       .maybeSingle()
     if (yaExiste) return
 
-    let asig = null
-    const { data: asigAlumno } = await admin.from('guia_asignaciones').select('guia_id, guia:guia_id(email, nombre_completo)').eq('colegio_id', perfil.colegio_id).eq('activo', true).eq('tipo', 'alumno').eq('alumno_id', userId).limit(1).maybeSingle()
-    if (asigAlumno) { asig = asigAlumno } else {
-      const { data: asigGrado } = await admin.from('guia_asignaciones').select('guia_id, guia:guia_id(email, nombre_completo)').eq('colegio_id', perfil.colegio_id).eq('activo', true).eq('tipo', 'grado').eq('grado', gradoEfectivo || perfil.grado || '').limit(1).maybeSingle()
-      asig = asigGrado
-    }
+    // Hallazgo real (revisión 2026-07-11): esta alerta académica solo
+    // buscaba un guía asignado — si el colegio no tenía guías configurados
+    // (ni por alumno ni por grado), la alerta quedaba SOLO en la base de
+    // datos, sin notificar a nadie. Se usa la misma cascada de respaldo
+    // (guía → staff del colegio → superadmin) que ya protege las alertas
+    // de seguridad de contenido.
+    const { destinatarios, guiaId } = await resolverDestinatariosAlerta(admin, {
+      colegioId: perfil.colegio_id,
+      alumnoId: userId,
+      grado: gradoEfectivo || perfil.grado || null,
+    })
 
     await admin.from('alertas').insert({
       alumno_id: userId,
       colegio_id: perfil.colegio_id,
-      guia_id: asig?.guia_id || null,
+      guia_id: guiaId,
       tipo: 'baja_comprension',
       descripcion: perfil.nombre_completo + ' llegó a ' + umbral + ' fallos en las últimas 24 horas' + (materia?.nombre ? ' en ' + materia.nombre : '') + '.',
       contexto,
     })
 
-    if (asig?.guia && process.env.RESEND_API_KEY) {
-      try {
-        const guia = asig.guia as unknown as {email:string; nombre_completo:string}
-        const { Resend } = await import('resend')
-        await new Resend(process.env.RESEND_API_KEY).emails.send({
-          from: 'Owlaris <noreply@owlaris.app>',
-          to: guia.email,
-          subject: 'Alerta: ' + umbral + ' fallos - ' + perfil.nombre_completo,
-          html: '<p>Hola ' + guia.nombre_completo + ',</p><p><strong>' + perfil.nombre_completo + '</strong> llegó a <strong>' + umbral + ' fallos</strong> en las últimas 24 horas en Owlaris.</p><p>' + contexto + '</p><a href="https://owlaris.app/guia">Ver en Owlaris</a>'
-        })
-      } catch(e) { console.error('Email alerta:', e) }
+    if (destinatarios.length > 0 && process.env.RESEND_API_KEY) {
+      const { Resend } = await import('resend')
+      const resend = new Resend(process.env.RESEND_API_KEY)
+      for (const destinatario of destinatarios) {
+        try {
+          await resend.emails.send({
+            from: 'Owlaris <noreply@owlaris.app>',
+            to: destinatario.email,
+            subject: 'Alerta: ' + umbral + ' fallos - ' + perfil.nombre_completo,
+            html: '<p>Hola ' + destinatario.nombre_completo + ',</p><p><strong>' + perfil.nombre_completo + '</strong> llegó a <strong>' + umbral + ' fallos</strong> en las últimas 24 horas en Owlaris.</p><p>' + contexto + '</p><a href="https://owlaris.app/guia">Ver en Owlaris</a>'
+          })
+        } catch (e) { console.error('Email alerta:', e) }
+      }
     }
   } catch { /* silencioso */ }
 }

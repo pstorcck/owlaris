@@ -4,6 +4,7 @@ import { Resend } from 'resend'
 import { canAccessColegio, requireRoles } from '@/lib/auth'
 import { canStaffAccessStudent, getAssignedStudentIds } from '@/lib/guideAccess'
 import { mismaSedePorEmail } from '@/lib/sedes'
+import { resolverDestinatariosAlerta } from '@/lib/alertaEmergencia'
 
 export async function GET(req: NextRequest) {
   const supabase = createClient()
@@ -89,47 +90,25 @@ export async function POST(req: NextRequest) {
     if (!puedeVerAlumno) return NextResponse.json({ error: 'Sin permisos para este alumno' }, { status: 403 })
   }
 
-  let guiaId = null
-  let guiaEmail = null
-  let guiaNombre = null
-
-  // Buscar por alumno específico primero, luego por grado
-  const { data: asignacionAlumno } = await admin
-    .from('guia_asignaciones')
-    .select('guia_id, guia:guia_id(email, nombre_completo)')
-    .eq('alumno_id', alumno_id)
-    .eq('tipo', 'alumno')
-    .eq('activo', true)
-    .single()
-
-  if (asignacionAlumno) {
-    guiaId = asignacionAlumno.guia_id
-    guiaEmail = (asignacionAlumno.guia as unknown as {email:string, nombre_completo:string}).email
-    guiaNombre = (asignacionAlumno.guia as unknown as {email:string, nombre_completo:string}).nombre_completo
-  } else if (alumno?.grado) {
-    const { data: asignacionGrado } = await admin
-      .from('guia_asignaciones')
-      .select('guia_id, guia:guia_id(email, nombre_completo)')
-      .eq('grado', alumno.grado)
-      .eq('colegio_id', colegioIdFinal)
-      .eq('tipo', 'grado')
-      .eq('activo', true)
-      .single()
-
-    if (asignacionGrado) {
-      guiaId = asignacionGrado.guia_id
-      guiaEmail = (asignacionGrado.guia as unknown as {email:string, nombre_completo:string}).email
-      guiaNombre = (asignacionGrado.guia as unknown as {email:string, nombre_completo:string}).nombre_completo
-    }
-  }
+  // Hallazgo real (revisión 2026-07-11): esta alerta manual solo buscaba
+  // un guía asignado — si el colegio no tenía guías configurados (ni por
+  // alumno ni por grado), la alerta quedaba SOLO en la base de datos, sin
+  // notificar a nadie. Se usa la misma cascada de respaldo (guía → staff
+  // del colegio → superadmin) que ya protege las alertas de seguridad de
+  // contenido.
+  const { destinatarios, guiaId, fuente } = await resolverDestinatariosAlerta(admin, {
+    colegioId: colegioIdFinal,
+    alumnoId: alumno_id,
+    grado: alumno?.grado || null,
+  })
 
   // Crear alerta
   await admin.from('alertas').insert({
     colegio_id: colegioIdFinal, alumno_id, guia_id: guiaId, tipo, descripcion, contexto
   })
 
-  // Enviar email si hay guía
-  if (guiaEmail && process.env.RESEND_API_KEY) {
+  // Enviar email a la cascada de destinatarios resuelta arriba
+  if (destinatarios.length > 0 && process.env.RESEND_API_KEY) {
     const resend = new Resend(process.env.RESEND_API_KEY)
     const tipoLabel: Record<string,string> = {
       baja_comprension: '⚠️ Baja comprensión',
@@ -137,32 +116,36 @@ export async function POST(req: NextRequest) {
       riesgo_copia: '🚨 Riesgo de copia',
       seguridad_contenido: '🚨 Seguridad del estudiante'
     }
-    await resend.emails.send({
-      from: 'Owlaris <noreply@owlaris.app>',
-      to: guiaEmail,
-      subject: `${tipoLabel[tipo] || 'Alerta'} — ${alumno?.nombre_completo}`,
-      html: `
-        <div style="font-family:system-ui,sans-serif;max-width:600px;margin:0 auto;background:#F8F7FF;padding:32px;border-radius:16px;">
-          <div style="background:#7C3AED;padding:20px 24px;border-radius:12px;margin-bottom:24px;">
-            <h1 style="color:white;margin:0;font-size:20px;">🦉 Owlaris — Alerta Pedagógica</h1>
-          </div>
-          <p style="color:#4B5563;margin-bottom:8px;">Hola <strong>${guiaNombre}</strong>,</p>
-          <p style="color:#4B5563;margin-bottom:24px;">Se ha detectado una alerta para uno de tus alumnos:</p>
-          <div style="background:white;border:1px solid #E5E7EB;border-radius:12px;padding:20px;margin-bottom:24px;">
-            <p style="margin:0 0 8px;"><strong>Alumno:</strong> ${alumno?.nombre_completo}</p>
-            <p style="margin:0 0 8px;"><strong>Grado:</strong> ${alumno?.grado}</p>
-            <p style="margin:0 0 8px;"><strong>Tipo:</strong> ${tipoLabel[tipo]}</p>
-            <p style="margin:0 0 8px;"><strong>Descripción:</strong> ${descripcion}</p>
-            ${contexto ? `<p style="margin:0;"><strong>Contexto:</strong> ${contexto}</p>` : ''}
-          </div>
-          <a href="https://owlaris.app/guia" style="background:#7C3AED;color:white;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600;">Ver en Owlaris →</a>
-          <p style="color:#9CA3AF;font-size:12px;margin-top:24px;">Owlaris · Tu tutor académico inteligente</p>
-        </div>
-      `
-    })
+    for (const destinatario of destinatarios) {
+      try {
+        await resend.emails.send({
+          from: 'Owlaris <noreply@owlaris.app>',
+          to: destinatario.email,
+          subject: `${tipoLabel[tipo] || 'Alerta'} — ${alumno?.nombre_completo}`,
+          html: `
+            <div style="font-family:system-ui,sans-serif;max-width:600px;margin:0 auto;background:#F8F7FF;padding:32px;border-radius:16px;">
+              <div style="background:#7C3AED;padding:20px 24px;border-radius:12px;margin-bottom:24px;">
+                <h1 style="color:white;margin:0;font-size:20px;">🦉 Owlaris — Alerta Pedagógica</h1>
+              </div>
+              <p style="color:#4B5563;margin-bottom:8px;">Hola <strong>${destinatario.nombre_completo}</strong>,</p>
+              <p style="color:#4B5563;margin-bottom:24px;">Se ha detectado una alerta para un alumno:</p>
+              <div style="background:white;border:1px solid #E5E7EB;border-radius:12px;padding:20px;margin-bottom:24px;">
+                <p style="margin:0 0 8px;"><strong>Alumno:</strong> ${alumno?.nombre_completo}</p>
+                <p style="margin:0 0 8px;"><strong>Grado:</strong> ${alumno?.grado}</p>
+                <p style="margin:0 0 8px;"><strong>Tipo:</strong> ${tipoLabel[tipo]}</p>
+                <p style="margin:0 0 8px;"><strong>Descripción:</strong> ${descripcion}</p>
+                ${contexto ? `<p style="margin:0;"><strong>Contexto:</strong> ${contexto}</p>` : ''}
+              </div>
+              <a href="https://owlaris.app/guia" style="background:#7C3AED;color:white;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600;">Ver en Owlaris →</a>
+              <p style="color:#9CA3AF;font-size:12px;margin-top:24px;">Owlaris · Tu tutor académico inteligente</p>
+            </div>
+          `
+        })
+      } catch (e) { console.error('Email alerta manual:', e) }
+    }
   }
 
-  return NextResponse.json({ ok: true, guia_notificado: !!guiaEmail })
+  return NextResponse.json({ ok: true, guia_notificado: destinatarios.length > 0, notificado_via: fuente })
 }
 
 export async function PATCH(req: NextRequest) {

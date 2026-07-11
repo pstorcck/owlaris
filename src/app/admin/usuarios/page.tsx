@@ -249,7 +249,6 @@ export default function UsuariosPage() {
           {[
             { href: '/admin', label: '🏠 Inicio' },
             { href: '/admin/usuarios', label: '👥 Usuarios y Guías', active: true },
-            { href: '/guia', label: '🎓 Panel del Guía' },
             { href: '/docente', label: '📊 Dashboard' },
           ].map(item => <a key={item.href} href={item.href} style={S.navItem(item.active)}>{item.label}</a>)}
         </nav>

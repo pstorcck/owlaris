@@ -224,6 +224,7 @@ export async function GET() {
       alumnos: alumnosConStats,
       alertas: alertas.map((alerta) => ({
         id: alerta.id,
+        alumno_id: alerta.alumno_id,
         tipo: alerta.tipo,
         descripcion: alerta.descripcion,
         contexto: alerta.contexto,
