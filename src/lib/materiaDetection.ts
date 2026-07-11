@@ -80,3 +80,23 @@ export function materiaActualEnSistemaCNB(materiaId: string): boolean {
   if (!materiaId) return false
   return Object.prototype.hasOwnProperty.call(TEMAS_POR_MATERIA, normalizarMateria(materiaId))
 }
+
+// Hallazgo real (instructivo de mejoras, ronda 2026-07-11), ítems 15-16: la
+// palabra "english" está en TEMAS_POR_MATERIA['Inglés'] para detectar cuando
+// un alumno quiere cambiar a la clase de Inglés, pero esa misma palabra
+// aparece en peticiones que solo piden el idioma de la RESPUESTA ("can you
+// answer in english", "responde en inglés"), no un cambio de materia. Sin
+// esta excepción, pedir la respuesta en otro idioma en medio de Matemática
+// (por ejemplo) activaba "cambio_materia_grado" hacia Inglés.
+const PETICION_SOLO_IDIOMA = [
+  /\b(?:responde|respondeme|contesta|contestame|habla|hablame|puedes\s+(?:hablar|responder|contestar))\s+en\s+ingl[ée]s\b/i,
+  /\ben\s+ingl[ée]s\s+por\s+favor\b/i,
+  /\btraduce(?:lo|melo)?\s+(?:esto\s+)?(?:al|a)\s+ingl[ée]s\b/i,
+  /\b(?:respond|answer|reply|talk|speak)\s+in\s+english\b/i,
+  /\bin\s+english\s+please\b/i,
+  /\bcan\s+you\s+(?:answer|respond|reply|talk|speak)\s+in\s+english\b/i,
+  /\btranslate\s+(?:this|it|that)?\s*(?:to|into)\s+english\b/i,
+]
+export function isLanguageSwitchRequest(text: string): boolean {
+  return PETICION_SOLO_IDIOMA.some((pattern) => pattern.test(text || ''))
+}

@@ -58,6 +58,17 @@ function main() {
   assert.match(politicaRespuestaFinal, /RESPUESTAS FINALES/)
   assert.match(politicaRespuestaFinal, /ensayo/i)
 
+  // Instructivo de mejoras (ronda 2026-07-11), ítem 17: la regla de "nunca
+  // tablas" ahora tiene una excepción explícita cuando el alumno la pide
+  // directamente (la interfaz no renderiza HTML, pero una tabla con pipes
+  // sigue siendo legible como texto plano si el alumno la solicitó).
+  assert.match(promptBase, /EXCEPCIÓN.*pide expl[ií]citamente una tabla/i)
+
+  // Ítem 3: "ponme una trampa" es una petición pedagógica legítima (un
+  // ejercicio con un error común/paso fácil de olvidar), no una petición de
+  // hacer trampa académica — no deben confundirse.
+  assert.match(promptBase, /PONME UNA TRAMPA.*NO ES HACER TRAMPA/i)
+
   // La adaptación por grado se inyecta por turno (depende de gradoEfectivo),
   // no dentro de PROMPT_BASE estático — se verifica que route.ts la
   // construya y que el módulo produzca contenido real por banda.

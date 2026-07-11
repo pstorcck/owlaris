@@ -1,4 +1,4 @@
-import { detectarMateriaDesdeTexto, materiaActualEnSistemaCNB, normalizarMateria } from './materiaDetection'
+import { detectarMateriaDesdeTexto, isLanguageSwitchRequest, materiaActualEnSistemaCNB, normalizarMateria } from './materiaDetection'
 import { isReviewMistakesRequest } from './mistakeReview'
 import { isCourseTopicListRequest, matchNumberedListSelection } from './courseTopics'
 import { isExerciseRecallRequest, isLikelyMathAnswerText, isPendingContextQuestion } from './tutorContext'
@@ -98,7 +98,7 @@ export function clasificarIntencion(input: ClasificacionInput): Clasificacion {
 
   if (materiaActivaId && materiaActualEnSistemaCNB(materiaActivaId)) {
     const materiaDetectada = detectarMateriaDesdeTexto(pregunta)
-    if (materiaDetectada && materiaDetectada !== normalizarMateria(materiaActivaId)) {
+    if (materiaDetectada && materiaDetectada !== normalizarMateria(materiaActivaId) && !isLanguageSwitchRequest(pregunta)) {
       return { intencion: 'cambio_materia_grado', detalle: { materiaDetectada } }
     }
   }
@@ -108,7 +108,7 @@ export function clasificarIntencion(input: ClasificacionInput): Clasificacion {
   // 8", "Biology Grade 10", "Geometry") que detectarMateriaDesdeTexto no
   // reconoce por nombre de materia. Instructivo de mejoras, punto 12/24.
   const cursoExplicito = isExplicitCourseSwitchRequest(pregunta, materiasDisponibles || [])
-  if (cursoExplicito.detectado) {
+  if (cursoExplicito.detectado && !isLanguageSwitchRequest(pregunta)) {
     return {
       intencion: 'cambio_materia_grado',
       detalle: {

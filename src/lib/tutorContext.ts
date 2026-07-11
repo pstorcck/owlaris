@@ -83,6 +83,24 @@ export function isPendingContextQuestion(value: string) {
     'hacerlo yo misma',
     'dejame intentarlo',
     'dejenme intentarlo',
+    // Hallazgo real (instructivo de mejoras, ronda 2026-07-11): variantes de
+    // autonomía sin "solo/mismo" ("ahora quiero explicar yo", "quiero
+    // hacerlo yo", "yo te digo los pasos", "te explico cómo lo haría") no
+    // estaban cubiertas — el tutor las trataba como una pregunta nueva o
+    // cambiaba de ejercicio en vez de ceder el turno al alumno.
+    'quiero explicar yo',
+    'quiero hacerlo yo',
+    'quiero intentarlo yo',
+    'yo te digo los pasos',
+    'yo te explico los pasos',
+    'te explico como lo haria',
+    'te explico yo',
+    'dejame explicarte',
+    'i want to explain it',
+    'i want to do it',
+    'i will tell you the steps',
+    "i'll tell you the steps",
+    'let me explain',
     'without calculator',
     'without a calculator',
     'can i do it',

@@ -52,6 +52,26 @@ function main() {
     assert.equal(resultado.intencion, 'cambio_materia_grado', `"${pregunta}" debería reconocerse como cambio de materia/grado`)
   }
 
+  // Hallazgo real (instructivo de mejoras, ronda 2026-07-11), ítems 15-16:
+  // la palabra "english" dispara la detección de materia "Inglés" — pero
+  // pedir que la RESPUESTA sea en inglés en medio de otra materia no es un
+  // cambio de materia. Antes de este fix, esto se clasificaba como
+  // cambio_materia_grado hacia Inglés en vez de mantenerse en Matemática.
+  for (const pregunta of [
+    'Can you answer in english?',
+    'Respondeme en inglés por favor',
+    '¿Puedes responder en inglés?',
+    'Translate this to english',
+  ]) {
+    const resultado = clasificarIntencion({
+      pregunta,
+      ultimoMensajeAsistente: 'Resuelve: 2x + 5 = 17',
+      hayEjercicioActivo: true,
+      materiaActivaId: 'Matemática',
+    })
+    assert.notEqual(resultado.intencion, 'cambio_materia_grado', `"${pregunta}" NO debería tratarse como cambio de materia`)
+  }
+
   // "Quiero practicar" sin tema explícito no debe interpretarse como cambio
   // de materia (no hay curso mencionado) — la respuesta pedagógica de no
   // adivinar el tema se resuelve en el prompt (instructivo, sección B).
