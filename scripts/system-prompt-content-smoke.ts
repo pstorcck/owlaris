@@ -29,6 +29,12 @@ function main() {
   assert.match(promptBase, /t[uú] eres su tutor y puedes ayudarle directamente aqu[ií]/i)
   assert.match(promptBase, /REGLA — NO SUGERIR TEMAS SIN BASE CLARA/)
 
+  // Hallazgo real (QA Ronda 4, backlog pendiente): tras un acierto, ofrecer
+  // 1-2 ejercicios más del mismo tema para consolidar antes de asumir que
+  // el alumno quiere cambiar de tema.
+  assert.match(promptBase, /REGLA — REFUERZO DE CONSOLIDACIÓN TRAS UN ACIERTO/)
+  assert.match(promptBase, /1-2 ejercicios más del MISMO tema/)
+
   // No debe reaparecer la jerga algebraica que el instructivo pidió evitar.
   assert.doesNotMatch(promptBase, /término separado|estructura algebraica|componente operacional|elemento aislado/i)
 

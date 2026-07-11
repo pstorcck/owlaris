@@ -203,6 +203,9 @@ Si el estudiante tiene 5 respuestas correctas seguidas, puedes subir gradualment
 Antes de subir demasiado, confirma que entiende el proceso y no solo acertó por memoria o azar.
 No repitas exactamente un ejercicio que el estudiante ya resolvió bien. Puedes reutilizar el mismo tipo de ejercicio del documento oficial, pero cambia números, variables o contexto para que sea una práctica nueva.
 
+REGLA — REFUERZO DE CONSOLIDACIÓN TRAS UN ACIERTO:
+Después de que el estudiante responda correctamente, no asumas de inmediato que quiere cambiar de tema. Antes de proponer un tema distinto, ofrece 1-2 ejercicios más del MISMO tema (variando números o contexto) para consolidar el dominio, y pregunta si quiere seguir practicando eso o pasar a otra cosa. Solo cambia de tema si el estudiante lo confirma o lo pide explícitamente.
+
 OPCIÓN MÚLTIPLE — REGLA CRÍTICA:
 Cuando plantees opción múltiple, SIEMPRE incluye [OP:] con la operación correcta.
 Cuando el alumno responda con una letra (A, B, C o D):
@@ -238,18 +241,27 @@ const CACHE_TTL      = 1000 * 60 * 1
 
 const CARPETA_COMPARTIDA = CARPETA_COMPARTIDA_OWLARIS
 
+// Hallazgo real (QA, bug del selector de grado): las expresiones usaban
+// ".*" (cualquier carácter) entre el número y la palabra de nivel, así que
+// un número sin relación en la misma oración (ej. la edad del alumno,
+// "tengo 14 años y estoy en primero básico") se colaba y activaba el
+// grado equivocado (aquí, "4to Primaria" en vez de "1ero Básico", solo
+// porque "14" contiene un "4" seguido en algún punto posterior de "prim"
+// dentro de "primero"). Se exige que el número esté INMEDIATAMENTE junto
+// a la palabra de nivel (solo espacios/sufijo ordinal de por medio), no en
+// cualquier parte de la oración.
 function normalizarGrado(texto: string): string {
   const t = texto.toLowerCase()
     .replace(/á/g,'a').replace(/é/g,'e').replace(/í/g,'i').replace(/ó/g,'o').replace(/ú/g,'u')
     .replace(/°/g,'').replace(/\.$/g,'').trim()
-  if (/4.*prim|cuarto.*prim/i.test(t)) return '4to Primaria'
-  if (/5.*prim|quinto.*prim/i.test(t)) return '5to Primaria'
-  if (/6.*prim|sexto.*prim/i.test(t)) return '6to Primaria'
-  if (/1.*bas|primer.*bas|primero.*bas/i.test(t)) return '1ero Básico'
-  if (/2.*bas|segundo.*bas/i.test(t)) return '2do Básico'
-  if (/3.*bas|tercer.*bas/i.test(t)) return '3ero Básico'
-  if (/4.*bach|cuarto.*bach/i.test(t)) return '4to Bachillerato'
-  if (/5.*bach|quinto.*bach/i.test(t)) return '5to Bachillerato'
+  if (/\b4(?:to)?\.?\s*prim|cuarto\s*prim/i.test(t)) return '4to Primaria'
+  if (/\b5(?:to)?\.?\s*prim|quinto\s*prim/i.test(t)) return '5to Primaria'
+  if (/\b6(?:to)?\.?\s*prim|sexto\s*prim/i.test(t)) return '6to Primaria'
+  if (/\b1(?:ero|er)?\.?\s*bas|primer\s*bas|primero\s*bas/i.test(t)) return '1ero Básico'
+  if (/\b2(?:do)?\.?\s*bas|segundo\s*bas/i.test(t)) return '2do Básico'
+  if (/\b3(?:ero|er)?\.?\s*bas|tercer(?:o)?\s*bas/i.test(t)) return '3ero Básico'
+  if (/\b4(?:to)?\.?\s*bach|cuarto\s*bach/i.test(t)) return '4to Bachillerato'
+  if (/\b5(?:to)?\.?\s*bach|quinto\s*bach/i.test(t)) return '5to Bachillerato'
   return ''
 }
 

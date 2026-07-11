@@ -279,6 +279,17 @@ export function validateOperation(op: string): { ok: boolean; reason?: string } 
   return { ok: true }
 }
 
+function esPreguntaConceptualConNumero(original: string): boolean {
+  const texto = String(original || '').trim()
+  if (!texto) return false
+  if (!/[¿?]/.test(texto)) return false
+  const normalizado = texto
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+  return /\b(por que|porque|como|cual|cuales|cuando|donde|para que|why|how|what|which|when|where)\b/.test(normalizado)
+}
+
 export function normalizeStudentAnswer(respuesta: string): number | null {
   const s = String(respuesta)
     .trim()
@@ -320,6 +331,14 @@ export function normalizeStudentAnswer(respuesta: string): number | null {
   // casi nunca es una respuesta matemática — es parte de un nombre de
   // materia/grado o una selección de lista, que se manejan en otro lugar.
   if (NUMERO_ES_REFERENCIA_NO_RESPUESTA.test(s)) return null
+
+  // Hallazgo real (QA Ronda 4, caso residual de Álgebra 1): una pregunta
+  // conceptual sobre el ejercicio activo con un solo número incidental
+  // ("¿por qué se resta 5 de ambos lados?") también caía en este mismo
+  // respaldo — el "5" se extraía como intento de respuesta y se evaluaba
+  // como incorrecto, aunque el alumno solo estaba preguntando por el
+  // procedimiento, no intentando resolver el ejercicio.
+  if (esPreguntaConceptualConNumero(respuesta)) return null
 
   const numbers = Array.from(s.matchAll(/-?\d+(?:[.,]\d+)?(?:\s*\/\s*-?\d+(?:[.,]\d+)?)?/g))
   if (numbers.length === 1) return parseNumericAnswerToken(numbers[0][0])

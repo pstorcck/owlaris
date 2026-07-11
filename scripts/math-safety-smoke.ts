@@ -206,6 +206,25 @@ D) 10
   assert.equal(normalizeStudentAnswer('8'), 8)
   assert.equal(normalizeStudentAnswer('creo que es 8'), 8)
 
+  // Hallazgo real (QA Ronda 4, caso residual de Álgebra 1): una pregunta
+  // conceptual sobre el ejercicio activo con un solo número incidental
+  // ("¿por qué se resta 5 de ambos lados?") también caía en el mismo
+  // respaldo de "un único número en el mensaje" y se evaluaba como
+  // incorrecta, aunque el alumno solo preguntaba por el procedimiento.
+  for (const preguntaConceptual of [
+    '¿por qué se resta 5 de ambos lados?',
+    '¿cómo se despeja la x en este paso con el 3?',
+    '¿por qué multiplicamos por 2 aquí?',
+    'why do we subtract 5 from both sides?',
+    'how do we isolate x with the 4 here?',
+  ]) {
+    assert.equal(normalizeStudentAnswer(preguntaConceptual), null, `"${preguntaConceptual}" no debería normalizar a un número`)
+  }
+  // Pero una respuesta real que casualmente contiene un signo de pregunta
+  // (sin ser una pregunta conceptual con palabra interrogativa) sigue
+  // funcionando como respuesta.
+  assert.equal(normalizeStudentAnswer('es 6?'), 6)
+
   // Números escritos en palabras (con variantes/contracciones reales) y
   // frases equivalentes completas — instructivo de mejoras, punto 19-20.
   const numerosEnPalabras: Array<[string, number]> = [
