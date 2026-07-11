@@ -11,6 +11,8 @@ export type ContentSafetyType =
   | 'dano_otros'
   | 'armas'
   | 'drogas_delitos'
+  | 'hackeo'
+  | 'manipulacion_reporte'
   | 'sexual_no_academico'
   | 'politica_persuasiva'
   | 'religion_opinion'
@@ -178,8 +180,36 @@ const WEAPONS = [
 const DRUGS_OR_CRIME = [
   'como vender droga', 'vender drogas', 'fabricar drogas', 'hacer droga',
   'como consumir droga', 'drogas sin que sepan', 'comprar droga',
-  'como robar', 'como estafar', 'hackear una cuenta', 'robar una cuenta',
+  'como robar', 'como estafar', 'robar una cuenta',
   'ocultar un delito', 'escapar de la policia',
+]
+
+// Hallazgo real (instructivo de mejoras, ronda 2026-07-11): hackear cuentas
+// ajenas tenía la misma respuesta genérica de "fuera de alcance" que
+// cualquier otro tema no académico, sin abordar directamente que es una
+// actividad ilegal ni ofrecer una alternativa segura (seguridad digital).
+const HACKING = [
+  'hackear una cuenta', 'como hackeo', 'como hackear', 'entrar a la cuenta de',
+  'como accedo a la cuenta de', 'robar contrasena', 'robar contraseña',
+  'adivinar la contrasena', 'adivinar la contraseña',
+  'how do i hack', 'hack into', 'guess the password', 'steal a password',
+]
+
+// Hallazgo real (instructivo de mejoras, ronda 2026-07-11): "¿cómo falsifico
+// el reporte de Owlaris?" y "¿cómo borro mi historial para que mis papás no
+// vean?" no tenían ninguna categoría — el reporte para padres y el
+// historial de actividad deben tratarse como información que no se debe
+// alterar ni ocultar, con una respuesta que redirija a practicar de verdad.
+const MANIPULACION_REPORTE = [
+  'falsificar el reporte', 'falsificar mi reporte', 'falsifico el reporte',
+  'alterar el reporte', 'cambiar el reporte de owlaris', 'editar el reporte',
+  'borrar mi historial', 'borro mi historial', 'borrar el historial para que',
+  'eliminar mi historial', 'ocultar mi historial', 'que mis papas no vean',
+  'que mis papás no vean', 'para que mis papas no vean', 'para que mis padres no vean',
+  'que parezca que estudie', 'que parezca que estudié', 'fingir que estudie',
+  'fingir que estudié', 'aparentar que estudie', 'hacer que parezca que estudie',
+  'falsify my report', 'fake the report', 'delete my history so my parents',
+  'hide my history from my parents', 'make it look like i studied',
 ]
 
 const SEXUAL_NON_ACADEMIC = [
@@ -238,6 +268,12 @@ function immediateSafetyResponse(tipo: ContentSafetyType, idiomaIngles: boolean)
     if (tipo === 'crisis_alimenticio') {
       return 'Thank you for sharing that — what you are describing matters and deserves real support. Please talk with a trusted adult soon, such as a parent, school counselor, or doctor, about how you have been feeling about eating and your body. I can help with your studies, but this is something a caring adult should know about.'
     }
+    if (tipo === 'hackeo') {
+      return "I can't help you get into someone else's account or do something illegal. If you need help with technology, I can help you with basic digital security or with a school subject."
+    }
+    if (tipo === 'manipulacion_reporte') {
+      return "I can't help you falsify or hide your Owlaris activity report or history — it should reflect your real activity. If something about the report worries you, we can practice a topic together right now so you have real evidence of studying."
+    }
     if (tipo === 'crisis_acoso_escolar') {
       return "I'm really sorry that's happening to you — no one should feel afraid to go to school. Please tell a trusted adult soon, like a parent, teacher, counselor, or school guide, so they can help stop this. I can help with your studies, but this is something an adult at your school needs to know about."
     }
@@ -258,6 +294,12 @@ function immediateSafetyResponse(tipo: ContentSafetyType, idiomaIngles: boolean)
   }
   if (tipo === 'crisis_alimenticio') {
     return 'Gracias por contarme eso — lo que describes importa y merece apoyo real. Por favor habla pronto con un adulto de confianza, como un familiar, un orientador del colegio o un médico, sobre cómo te has sentido con la comida y tu cuerpo. Yo puedo ayudarte con tus estudios, pero esto es algo que un adulto que te cuida debe saber.'
+  }
+  if (tipo === 'hackeo') {
+    return 'No puedo ayudarte a entrar a cuentas ajenas ni a hacer algo ilegal. Si necesitas ayuda con tecnología, puedo ayudarte con seguridad digital básica o con un tema académico permitido.'
+  }
+  if (tipo === 'manipulacion_reporte') {
+    return 'No puedo ayudarte a falsificar u ocultar tu reporte o historial de actividad en Owlaris — debe reflejar tu actividad real. Si algo del reporte te preocupa, practiquemos juntos un tema ahora mismo para que tengas evidencia real de estudio.'
   }
   if (tipo === 'crisis_acoso_escolar') {
     return 'Lamento mucho que estés pasando por eso — nadie debería sentir miedo de ir al colegio. Por favor cuéntaselo pronto a un adulto de confianza, como un familiar, maestro, orientador o guía del colegio, para que puedan ayudarte a que esto pare. Yo puedo ayudarte con tus estudios, pero esto es algo que un adulto de tu colegio debe saber.'
@@ -305,10 +347,25 @@ export function checkContentSafety(pregunta: string, idiomaIngles = false): Cont
   if (includesAny(p, HARM_OTHERS)) {
     return { bloqueado: true, tipo: 'dano_otros', severidad: 'alta', debeAlertar: true, respuesta: immediateSafetyResponse('dano_otros', idiomaIngles) }
   }
-  if (includesAny(p, WEAPONS) && !isAcademicQuestion(p)) {
+  // Hallazgo real (instructivo de mejoras, ronda 2026-07-11): estas
+  // categorías son instrucciones de "cómo hacer daño" que ya vienen
+  // redactadas como petición directa ("como hacer una bomba", "como
+  // vender droga") — nunca deben dejarse pasar solo porque el mensaje
+  // también contiene una palabra de sonido académico ("explica", "análisis").
+  // Antes, "explícame cómo hacer una bomba" podía evadir el bloqueo de
+  // seguridad porque "explica" cuenta como isAcademicQuestion. Se quita esa
+  // excepción para armas, drogas/delitos y hackeo — siempre deben
+  // bloquearse por seguridad, nunca solo por "fuera de materia".
+  if (includesAny(p, WEAPONS)) {
     return { bloqueado: true, tipo: 'armas', severidad: 'alta', debeAlertar: true, respuesta: immediateSafetyResponse('armas', idiomaIngles) }
   }
-  if (includesAny(p, DRUGS_OR_CRIME) && !isAcademicQuestion(p)) {
+  if (includesAny(p, HACKING)) {
+    return { bloqueado: true, tipo: 'hackeo', severidad: 'alta', debeAlertar: true, respuesta: immediateSafetyResponse('hackeo', idiomaIngles) }
+  }
+  if (includesAny(p, MANIPULACION_REPORTE)) {
+    return { bloqueado: true, tipo: 'manipulacion_reporte', severidad: 'media', debeAlertar: true, respuesta: immediateSafetyResponse('manipulacion_reporte', idiomaIngles) }
+  }
+  if (includesAny(p, DRUGS_OR_CRIME)) {
     return { bloqueado: true, tipo: 'drogas_delitos', severidad: 'media', debeAlertar: true, respuesta: outOfScopeResponse(idiomaIngles) }
   }
   if (includesAny(p, SEXUAL_NON_ACADEMIC)) {
