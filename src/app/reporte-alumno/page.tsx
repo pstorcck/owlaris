@@ -514,12 +514,27 @@ export default async function ReporteAlumnoPage({ searchParams }: { searchParams
         {/* Materias */}
         {resumenMaterias.length > 0 && (
           <div style={{background:'white',borderRadius:'12px',padding:'20px 24px',marginBottom:'24px',border:'1px solid rgba(15,28,46,.06)'}}>
-            <div style={{display:'flex',justifyContent:'space-between',gap:'12px',alignItems:'center',marginBottom:'16px',flexWrap:'wrap'}}>
+            <div style={{display:'flex',justifyContent:'space-between',gap:'12px',alignItems:'center',marginBottom:'14px',flexWrap:'wrap'}}>
               <div>
                 <p style={{fontSize:'11px',fontWeight:700,color:'#94A3B8',margin:'0 0 4px',textTransform:'uppercase',letterSpacing:'.6px'}}>Mapa académico</p>
                 <h2 style={{fontSize:'16px',fontWeight:800,color:'#0F1C2E',margin:0}}>Rendimiento por materia</h2>
               </div>
               <span style={{fontSize:'12px',color:'#64748B'}}>Basado en las últimas {totalSesiones} interacciones</span>
+            </div>
+            {/* Leyenda de estado: el color es un estado (bien encaminado / en
+                progreso / necesita refuerzo), nunca solo color — siempre con
+                ícono y etiqueta. */}
+            <div style={{display:'flex',gap:'16px',flexWrap:'wrap',marginBottom:'16px',padding:'10px 12px',background:'#F8FAFC',borderRadius:'8px'}}>
+              {[
+                { color: '#059669', label: 'En buen camino (≥80%)' },
+                { color: '#D97706', label: 'En progreso (65–79%)' },
+                { color: '#DC2626', label: 'Necesita refuerzo (<65%)' },
+              ].map(item => (
+                <div key={item.label} style={{display:'flex',alignItems:'center',gap:'6px'}}>
+                  <span style={{width:'8px',height:'8px',borderRadius:'50%',background:item.color,flexShrink:0}} />
+                  <span style={{fontSize:'11px',color:'#475569',fontWeight:500}}>{item.label}</span>
+                </div>
+              ))}
             </div>
             <div style={{display:'flex',flexDirection:'column',gap:'12px'}}>
               {resumenMaterias.sort((a,b) => b.interacciones - a.interacciones).map(m => {
@@ -531,14 +546,74 @@ export default async function ReporteAlumnoPage({ searchParams }: { searchParams
                         <p style={{fontSize:'14px',fontWeight:800,color:'#0F1C2E',margin:'0 0 2px'}}>{m.nombre}</p>
                         <p style={{fontSize:'12px',color:'#94A3B8',margin:0}}>{m.interacciones} interacciones · {m.temas.slice(0, 3).join(', ') || 'sin temas clasificados'}</p>
                       </div>
-                      <span style={{fontSize:'14px',fontWeight:800,color}}>{m.tasa !== null ? `${m.tasa}%` : 'N/D'}</span>
+                      <div style={{display:'flex',alignItems:'center',gap:'6px'}}>
+                        <span style={{width:'8px',height:'8px',borderRadius:'50%',background:color,flexShrink:0}} />
+                        <span style={{fontSize:'14px',fontWeight:800,color:'#0F1C2E'}}>{m.tasa !== null ? `${m.tasa}%` : 'N/D'}</span>
+                      </div>
                     </div>
-                    <div style={{height:'8px',background:'#F1F5F9',borderRadius:'999px',overflow:'hidden'}}>
-                      <div style={{height:'100%',width:`${m.tasa ?? 0}%`,background:color,borderRadius:'999px'}} />
+                    {/* Barra: extremo cuadrado en la base (izquierda), 4px
+                        redondeado en el extremo de dato (derecha) — nunca
+                        una píldora completa, que oculta dónde empieza la
+                        base de la medida. */}
+                    <div style={{height:'10px',background:'#F1F5F9',borderRadius:'2px',overflow:'hidden'}}>
+                      <div style={{height:'100%',width:`${m.tasa ?? 0}%`,background:color,borderRadius:'0 4px 4px 0'}} />
                     </div>
                   </div>
                 )
               })}
+            </div>
+          </div>
+        )}
+
+        {/* Aciertos vs. en práctica: proporción general para ver de un
+            vistazo cuánto necesita reforzarse todavía. */}
+        {evaluables > 0 && (
+          <div style={{background:'white',borderRadius:'12px',padding:'20px 24px',marginBottom:'24px',border:'1px solid rgba(15,28,46,.06)'}}>
+            <div style={{marginBottom:'16px'}}>
+              <p style={{fontSize:'11px',fontWeight:700,color:'#94A3B8',margin:'0 0 4px',textTransform:'uppercase',letterSpacing:'.6px'}}>Precisión general</p>
+              <h2 style={{fontSize:'16px',fontWeight:800,color:'#0F1C2E',margin:0}}>Logrado vs. en práctica</h2>
+            </div>
+            <div style={{display:'flex',alignItems:'center',gap:'28px',flexWrap:'wrap'}}>
+              {(() => {
+                const pctCorrecto = correctos / evaluables
+                const angCorrecto = pctCorrecto * 360
+                const cx = 70; const cy = 70; const radio = 52
+                const inicioRad = -90 * Math.PI / 180
+                const finRad = (-90 + angCorrecto) * Math.PI / 180
+                const x1 = cx + radio * Math.cos(inicioRad)
+                const y1 = cy + radio * Math.sin(inicioRad)
+                const x2 = cx + radio * Math.cos(finRad)
+                const y2 = cy + radio * Math.sin(finRad)
+                const largeArc = angCorrecto > 180 ? 1 : 0
+                const pathCorrecto = pctCorrecto <= 0 ? '' : pctCorrecto >= 1
+                  ? `M ${cx} ${cy-radio} A ${radio} ${radio} 0 1 1 ${cx-0.01} ${cy-radio} Z`
+                  : `M ${cx} ${cy} L ${x1} ${y1} A ${radio} ${radio} 0 ${largeArc} 1 ${x2} ${y2} Z`
+                return (
+                  <svg width="140" height="140" viewBox="0 0 140 140">
+                    <circle cx={cx} cy={cy} r={radio} fill="#EDE9FE" />
+                    {pathCorrecto && <path d={pathCorrecto} fill="#059669" />}
+                    <circle cx={cx} cy={cy} r="30" fill="white" />
+                    <text x={cx} y={cy-4} textAnchor="middle" fontSize="18" fontWeight="700" fill="#0F1C2E">{Math.round(pctCorrecto*100)}%</text>
+                    <text x={cx} y={cy+13} textAnchor="middle" fontSize="9" fill="#94A3B8">logrado</text>
+                  </svg>
+                )
+              })()}
+              <div style={{flex:1,minWidth:'160px'}}>
+                <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'8px 0',borderBottom:'1px solid #F8FAFC'}}>
+                  <div style={{display:'flex',alignItems:'center',gap:'8px'}}>
+                    <span style={{width:'10px',height:'10px',borderRadius:'50%',background:'#059669',flexShrink:0}} />
+                    <span style={{fontSize:'13px',color:'#475569'}}>Logrado</span>
+                  </div>
+                  <span style={{fontSize:'13px',fontWeight:700,color:'#0F1C2E'}}>{correctos}</span>
+                </div>
+                <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'8px 0'}}>
+                  <div style={{display:'flex',alignItems:'center',gap:'8px'}}>
+                    <span style={{width:'10px',height:'10px',borderRadius:'50%',background:'#EDE9FE',flexShrink:0}} />
+                    <span style={{fontSize:'13px',color:'#475569'}}>En práctica</span>
+                  </div>
+                  <span style={{fontSize:'13px',fontWeight:700,color:'#0F1C2E'}}>{incorrectos}</span>
+                </div>
+              </div>
             </div>
           </div>
         )}
