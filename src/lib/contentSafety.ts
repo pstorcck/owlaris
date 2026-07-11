@@ -6,6 +6,7 @@ export type ContentSafetyType =
   | 'crisis_abuso'
   | 'crisis_sustancias'
   | 'crisis_alimenticio'
+  | 'crisis_acoso_escolar'
   | 'violencia'
   | 'dano_otros'
   | 'armas'
@@ -140,6 +141,27 @@ const EATING_DISORDER = [
   'i am obsessed with my weight', 'i hate myself for eating',
 ]
 
+// Hallazgo real (QA Ronda 4, 2026-07-11): "en la escuela unos compañeros me
+// están molestando mucho y me han empujado, tengo miedo de ir a clases" no
+// tenía ninguna categoría dedicada — quedaba sin marcar como alerta de
+// seguridad y por lo tanto invisible en el reporte para padres, igual que
+// las revelaciones de bienestar antes de agregar EATING_DISORDER/SUBSTANCE_RISK.
+const BULLYING = [
+  'me estan molestando', 'me están molestando', 'me molestan mucho en la escuela',
+  'me molestan mucho en el colegio', 'me han empujado', 'me empujan en la escuela',
+  'me pegan en la escuela', 'me pegan en el colegio', 'me hacen bullying',
+  'me hacen bulliyng', 'sufro bullying', 'me tienen miedo de ir a clases',
+  'tengo miedo de ir a clases', 'tengo miedo de ir al colegio',
+  'no quiero ir a la escuela por miedo', 'no quiero ir al colegio por miedo',
+  'se burlan de mi todos los dias', 'se burlan de mí todos los días',
+  'me humillan en la escuela', 'me humillan en el colegio',
+  'me amenazan en la escuela', 'me amenazan en el colegio',
+  'being bullied', 'they bully me', 'i get bullied at school',
+  'kids push me at school', 'i am afraid to go to school',
+  'scared to go to school', 'they threaten me at school',
+  'they humiliate me at school',
+]
+
 const HARM_OTHERS = [
   'quiero matar a', 'voy a matar a', 'quiero hacerle daño a', 'quiero hacerle dano a',
   'quiero vengarme', 'voy a lastimar a', 'como lastimar a alguien',
@@ -216,6 +238,9 @@ function immediateSafetyResponse(tipo: ContentSafetyType, idiomaIngles: boolean)
     if (tipo === 'crisis_alimenticio') {
       return 'Thank you for sharing that — what you are describing matters and deserves real support. Please talk with a trusted adult soon, such as a parent, school counselor, or doctor, about how you have been feeling about eating and your body. I can help with your studies, but this is something a caring adult should know about.'
     }
+    if (tipo === 'crisis_acoso_escolar') {
+      return "I'm really sorry that's happening to you — no one should feel afraid to go to school. Please tell a trusted adult soon, like a parent, teacher, counselor, or school guide, so they can help stop this. I can help with your studies, but this is something an adult at your school needs to know about."
+    }
     if (tipo === 'dano_otros' || tipo === 'armas') {
       return 'I cannot help with that. If you or someone else could be in danger, please get help immediately from a trusted adult, teacher, school guide, local emergency services, or another responsible adult nearby.'
     }
@@ -233,6 +258,9 @@ function immediateSafetyResponse(tipo: ContentSafetyType, idiomaIngles: boolean)
   }
   if (tipo === 'crisis_alimenticio') {
     return 'Gracias por contarme eso — lo que describes importa y merece apoyo real. Por favor habla pronto con un adulto de confianza, como un familiar, un orientador del colegio o un médico, sobre cómo te has sentido con la comida y tu cuerpo. Yo puedo ayudarte con tus estudios, pero esto es algo que un adulto que te cuida debe saber.'
+  }
+  if (tipo === 'crisis_acoso_escolar') {
+    return 'Lamento mucho que estés pasando por eso — nadie debería sentir miedo de ir al colegio. Por favor cuéntaselo pronto a un adulto de confianza, como un familiar, maestro, orientador o guía del colegio, para que puedan ayudarte a que esto pare. Yo puedo ayudarte con tus estudios, pero esto es algo que un adulto de tu colegio debe saber.'
   }
   if (tipo === 'dano_otros' || tipo === 'armas') {
     return 'No puedo ayudarte con eso. Si tú o alguien más podría estar en peligro, busca ayuda inmediata con un adulto de confianza, maestro, guía del colegio, emergencias locales u otra persona responsable cercana.'
@@ -270,6 +298,9 @@ export function checkContentSafety(pregunta: string, idiomaIngles = false): Cont
   }
   if (includesAny(p, EATING_DISORDER)) {
     return { bloqueado: true, tipo: 'crisis_alimenticio', severidad: 'alta', debeAlertar: true, respuesta: immediateSafetyResponse('crisis_alimenticio', idiomaIngles) }
+  }
+  if (includesAny(p, BULLYING)) {
+    return { bloqueado: true, tipo: 'crisis_acoso_escolar', severidad: 'alta', debeAlertar: true, respuesta: immediateSafetyResponse('crisis_acoso_escolar', idiomaIngles) }
   }
   if (includesAny(p, HARM_OTHERS)) {
     return { bloqueado: true, tipo: 'dano_otros', severidad: 'alta', debeAlertar: true, respuesta: immediateSafetyResponse('dano_otros', idiomaIngles) }

@@ -218,9 +218,17 @@ export function extractCanonicalOperation(texto: string): string | null {
 // error en vez de calcular uno fresco para el problema que acaba de
 // redactar. Esto hace que una respuesta correcta se califique como
 // incorrecta contra un ejercicio que el alumno nunca vio. Se verifica que
-// al menos uno de los números de la operación etiquetada aparezca en el
-// texto visible del problema — si ninguno coincide, la etiqueta es
-// sospechosa y no debe usarse como verdad para calificar.
+// los números de la operación etiquetada aparezcan en el texto visible del
+// problema — si alguno no coincide, la etiqueta es sospechosa y no debe
+// usarse como verdad para calificar.
+//
+// Hallazgo real (QA Ronda 4, 2026-07-11): exigir que coincidiera solo UN
+// número (con .some) era demasiado débil — un ejercicio nuevo de "coches
+// de juguete" (15 + 5 = 20 coches) fue calificado incorrectamente contra la
+// ecuación vieja "2x+5=17" porque el "5" aparecía en ambos por pura
+// coincidencia, aunque el 2 y el 17 no tenían relación alguna con el
+// problema real. Se exige ahora que TODOS los números de la etiqueta
+// aparezcan en el texto visible (.every), no solo uno.
 function extraerNumeros(texto: string): number[] {
   const matches = String(texto || '').match(/-?\d+(?:\.\d+)?/g) || []
   return matches.map(Number)
@@ -231,7 +239,7 @@ export function opCoincideConTexto(op: string | null, textoVisible: string): boo
   const numerosOp = extraerNumeros(op)
   if (numerosOp.length === 0) return true
   const numerosTexto = new Set(extraerNumeros(textoVisible))
-  return numerosOp.some((n) => numerosTexto.has(n))
+  return numerosOp.every((n) => numerosTexto.has(n))
 }
 
 function normalizeOperation(op: string): string {

@@ -2239,6 +2239,17 @@ ${contextoContenido}`
     // ciegas para historia, español, literatura, etc.
     const estadoEvaluacionHumanistico = (() => {
       if (evaluacionProtocolo) return null
+      // Hallazgo real (QA Ronda 4, 2026-07-11): cuando el alumno entrega la
+      // respuesta numérica final correcta pero el modelo no usa
+      // literalmente la palabra "correcto" (ej. "¡Exacto!", "¡Perfecto!"),
+      // esta detección basada en texto no lo reconocía — la racha de
+      // fallos quedaba intacta y con ella el mensaje de refuerzo "vamos a
+      // bajar la dificultad" seguía repitiéndose turno tras turno incluso
+      // ante una respuesta perfecta (bucle real reportado por QA). Se
+      // prioriza la verificación numérica ya calculada arriba
+      // (respuestaVerificadaCorrecta), independiente de las palabras
+      // exactas que use el modelo.
+      if (respuestaVerificadaCorrecta) return 'correcto'
       const baja = respuesta.toLowerCase()
       if (/\bincorrecto\b|\bno es correcto\b|\bincorrect\b|\bnot correct\b/.test(baja)) return 'incorrecto'
       if (/\bcorrecto\b|\bcorrect\b/.test(baja)) return 'correcto'

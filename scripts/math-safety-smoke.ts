@@ -295,6 +295,20 @@ D) 10
   assert.equal(opCoincideConTexto('x', 'No hay números aquí, solo x.'), true)
   assert.equal(opCoincideConTexto(null, 'cualquier texto'), false)
 
+  // Hallazgo real (QA Ronda 4, 2026-07-11): exigir que coincidiera UN solo
+  // número (con .some) era insuficiente — un problema nuevo de "coches de
+  // juguete" (15 + 5 = 20) fue calificado incorrectamente contra la
+  // ecuación vieja "2x+5=17" porque el "5" coincidía por pura casualidad,
+  // aunque el 2 y el 17 no tenían ninguna relación con el problema real.
+  // Ahora se exige que TODOS los números de la etiqueta coincidan.
+  assert.equal(
+    opCoincideConTexto(
+      '2*x+5=17',
+      'El primer dia hizo 15 coches. El segundo dia hizo 5 mas: 15 + 5 = 20 coches de juguete en total despues de los dos dias'
+    ),
+    false
+  )
+
   console.log('math-safety smoke passed')
 }
 
