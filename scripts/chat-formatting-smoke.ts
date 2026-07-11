@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { sanitizeChatFormatting } from '../src/lib/chatFormatting'
+import { isFormatRequest, sanitizeChatFormatting } from '../src/lib/chatFormatting'
 
 function main() {
   assert.equal(sanitizeChatFormatting('### Ejemplo:\nAlgo de texto'), 'Ejemplo:\nAlgo de texto')
@@ -51,6 +51,21 @@ function main() {
   // Un pipe suelto que no forma parte de una tabla real no debe alterarse.
   const pipeSuelto = 'El resultado es 5 | 6 dependiendo del caso.'
   assert.equal(sanitizeChatFormatting(pipeSuelto), pipeSuelto)
+
+  // Instructivo de mejoras (ronda 2026-07-11), ítems 18, 29: petición de
+  // reformatear el contenido activo (tabla, lista, "organiza esto bonito").
+  for (const frase of [
+    'ponme esto en una tabla',
+    'organiza esto bonito',
+    'organízalo mejor',
+    'hazlo en lista',
+    'put this in a table',
+    'organize this nicely',
+  ]) {
+    assert.equal(isFormatRequest(frase), true, frase)
+  }
+  assert.equal(isFormatRequest('¿qué es la fotosíntesis?'), false)
+  assert.equal(isFormatRequest(''), false)
 
   console.log('chat-formatting smoke passed')
 }

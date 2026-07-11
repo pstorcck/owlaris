@@ -6,6 +6,9 @@ function main() {
   assert.equal(estadoInicial.ejercicioActivo, null)
   assert.equal(estadoInicial.ultimaIntencionAlumno, null)
   assert.equal(estadoInicial.nivelDificultad, 1)
+  // Instructivo de mejoras (ronda 2026-07-11), ítem 30: el estado debe
+  // incluir si el alumno pidió explícitamente subir o bajar el nivel.
+  assert.equal(estadoInicial.pidioCambiarNivel, null)
 
   // Ejemplo del instructivo (sección A): alumno con Matemática activa (una
   // materia del sistema CNB) menciona un tema claramente de otra materia
@@ -147,6 +150,33 @@ function main() {
     materiaActivaId: null,
   })
   assert.equal(vacio.intencion, 'no_evaluable')
+
+  // Instructivo de mejoras (ronda 2026-07-11), ítem 29: nuevas categorías
+  // para peticiones de idioma, del reporte de hoy, y de formato — no deben
+  // clasificarse como cambio de materia ni como pregunta genérica nueva.
+  const solicitudIdioma = clasificarIntencion({
+    pregunta: '¿puedes responder en inglés?',
+    ultimoMensajeAsistente: 'Resuelve: 2x + 5 = 17',
+    hayEjercicioActivo: true,
+    materiaActivaId: 'Matemática',
+  })
+  assert.equal(solicitudIdioma.intencion, 'solicitud_idioma')
+
+  const solicitudReporte = clasificarIntencion({
+    pregunta: 'dame el reporte de hoy',
+    ultimoMensajeAsistente: '',
+    hayEjercicioActivo: false,
+    materiaActivaId: null,
+  })
+  assert.equal(solicitudReporte.intencion, 'solicitud_reporte')
+
+  const solicitudFormato = clasificarIntencion({
+    pregunta: 'ponme esto en una tabla',
+    ultimoMensajeAsistente: '',
+    hayEjercicioActivo: false,
+    materiaActivaId: null,
+  })
+  assert.equal(solicitudFormato.intencion, 'solicitud_formato')
 
   console.log('intent-classifier smoke passed')
 }

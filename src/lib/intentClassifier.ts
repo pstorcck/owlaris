@@ -1,11 +1,17 @@
 import { detectarMateriaDesdeTexto, isLanguageSwitchRequest, materiaActualEnSistemaCNB, normalizarMateria } from './materiaDetection'
 import { isReviewMistakesRequest } from './mistakeReview'
 import { isCourseTopicListRequest, matchNumberedListSelection } from './courseTopics'
-import { isExerciseRecallRequest, isLikelyMathAnswerText, isPendingContextQuestion } from './tutorContext'
+import { isExerciseRecallRequest, isLikelyMathAnswerText, isPendingContextQuestion, isReporteDeHoyRequest } from './tutorContext'
 import { isWorkedExampleRequest } from './mathPractice'
 import { isExplicitCourseSwitchRequest } from './courseSwitchDetection'
+import { isFormatRequest } from './chatFormatting'
 
 // Categorías de intención del alumno — instructivo de mejoras, punto 2.
+// solicitud_idioma, solicitud_reporte y solicitud_formato se agregan en el
+// instructivo de mejoras (ronda 2026-07-11), ítem 29: peticiones de idioma
+// de respuesta, del "Reporte de hoy" real, o de formato (tabla/lista) no
+// son ni un cambio de tema ni una pregunta académica nueva — son acciones
+// puntuales sobre la conversación en curso.
 export type StudentIntent =
   | 'cambio_materia_grado'
   | 'seleccion_lista'
@@ -13,15 +19,43 @@ export type StudentIntent =
   | 'aclaracion_mismo_paso'
   | 'solicitud_lista_temas'
   | 'solicitud_revisar_errores'
+  | 'solicitud_idioma'
+  | 'solicitud_reporte'
+  | 'solicitud_formato'
   | 'respuesta_ejercicio'
   | 'pregunta_directa'
   | 'no_evaluable'
 
 export type BloqueEstructurado = 'lista_temas' | 'menu_opciones' | 'explicacion_pasos' | 'ejercicio' | null
 
-// Estado conversacional del alumno — instructivo de mejoras, punto 23.
-// Se construye y actualiza en el flujo principal (preguntar/route.ts); este
-// módulo solo define su forma y la lógica de clasificación que lo consulta.
+// Estado conversacional del alumno — instructivo de mejoras, punto 23 y,
+// en su revisión más reciente (ronda 2026-07-11), ítem 30 (auditoría
+// completa del estado pedagógico).
+//
+// AUDITORÍA (ítem 30): este tipo describe la forma completa del estado que
+// Owlaris debería mantener por turno, pero preguntar/route.ts NO construye
+// ni persiste un único objeto EstadoPedagogico — cada pieza equivalente
+// vive hoy en una variable local propia dentro de ese archivo:
+//   gradoActivo          -> gradoEfectivo
+//   materiaActiva        -> materiaConsultaSharePoint / materia_id
+//   fuenteActiva         -> documentoFuente
+//   temaActivo           -> tema_detectado (por turno, no persistido)
+//   subtemaActivo        -> sin variable dedicada (se infiere del prompt)
+//   ejercicioActivo      -> pendingMathOperation / pendingMathId
+//   ejercicioAnterior    -> ultimoMensajeAsistente(historial) + inferCanonicalOperationFromText
+//   pasoActual           -> pasoIntermedio (evaluacionProtocolo)
+//   preguntaPendiente    -> preguntaPendiente (registrarPendiente)
+//   ultimoBloqueEstructurado / ultimaListaTemas -> extractCourseTopicIndex sobre el último mensaje, recalculado cada vez (no cacheado)
+//   estadoEjercicio      -> sin variable dedicada (se infiere de pendingMathId != null)
+//   ultimaIntencionAlumno -> no se persiste entre turnos (clasificarIntencion se llama de nuevo cada vez)
+//   aciertosConsecutivos / fallosConsecutivos -> rachaAprendizaje (obtenerRachaAprendizaje)
+//   nivelDificultad      -> nivelDificultadActual
+//   confianzaFuente      -> sin variable dedicada
+//   pidioCambiarNivel    -> isExplicitDifficultyUpRequest(pregunta), calculado por turno
+// Consolidar todo esto en un único objeto persistido (en vez de ~15
+// variables locales recalculadas por turno) es un refactor de mayor
+// alcance que toca casi todo route.ts — se documenta aquí la equivalencia
+// real en vez de intentar una reescritura arriesgada tarde en esta sesión.
 export type EstadoPedagogico = {
   gradoActivo: string | null
   materiaActiva: string | null
@@ -41,6 +75,9 @@ export type EstadoPedagogico = {
   fallosConsecutivos: number
   nivelDificultad: number
   confianzaFuente: number | null
+  // Ítem 1/30: si el alumno pidió explícitamente subir o bajar el nivel en
+  // este turno — ver isExplicitDifficultyUpRequest en mathPractice.ts.
+  pidioCambiarNivel: 'subir' | 'bajar' | null
 }
 
 export function estadoPedagogicoInicial(): EstadoPedagogico {
@@ -62,6 +99,7 @@ export function estadoPedagogicoInicial(): EstadoPedagogico {
     aciertosConsecutivos: 0,
     fallosConsecutivos: 0,
     nivelDificultad: 1,
+    pidioCambiarNivel: null,
     confianzaFuente: null,
   }
 }
@@ -123,6 +161,9 @@ export function clasificarIntencion(input: ClasificacionInput): Clasificacion {
 
   if (isReviewMistakesRequest(pregunta)) return { intencion: 'solicitud_revisar_errores' }
   if (isCourseTopicListRequest(pregunta)) return { intencion: 'solicitud_lista_temas' }
+  if (isReporteDeHoyRequest(pregunta)) return { intencion: 'solicitud_reporte' }
+  if (isLanguageSwitchRequest(pregunta)) return { intencion: 'solicitud_idioma' }
+  if (isFormatRequest(pregunta)) return { intencion: 'solicitud_formato' }
   if (isExerciseRecallRequest(pregunta)) return { intencion: 'recordar_ejercicio' }
   if (isPendingContextQuestion(pregunta) && !isLikelyMathAnswerText(pregunta)) return { intencion: 'aclaracion_mismo_paso' }
 

@@ -57,3 +57,32 @@ export function sanitizeChatFormatting(text: string): string {
 
   return out
 }
+
+// Hallazgo real (instructivo de mejoras, ronda 2026-07-11), ítems 18, 29:
+// una petición de formato ("ponme esto en una tabla", "organiza esto
+// bonito", "hazlo en lista") es una petición de REFORMATEAR el contenido
+// activo, no una señal de cambio de tema — se usa como categoría propia en
+// el clasificador de intención para que no se confunda con una pregunta
+// nueva sin relación con lo que se venía trabajando.
+function normalizeText(value: string) {
+  return (value || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+export function isFormatRequest(value: string): boolean {
+  const text = normalizeText(value)
+  if (!text) return false
+  return [
+    'ponme esto en una tabla', 'en una tabla', 'en formato de tabla', 'hazlo en tabla',
+    'organiza esto bonito', 'organizalo mejor', 'organiza esto mejor', 'ordenalo mejor',
+    'hazlo en lista', 'ponlo en una lista', 'en viñetas', 'en bullets',
+    'hazlo mas bonito', 'hazlo mas ordenado', 'ponlo mas claro',
+    'put this in a table', 'in a table', 'in table format', 'make it a table',
+    'organize this nicely', 'make it more organized', 'put it in a list',
+    'in bullet points', 'make it clearer', 'make it neater',
+  ].some((needle) => text.includes(needle))
+}

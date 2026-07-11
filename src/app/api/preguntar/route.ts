@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient, createClient } from '@/lib/supabase/server'
 import { checkContentSafety, type ContentSafetyResult } from '@/lib/contentSafety'
+import { buildContradictionClarificationResponse, detectContradictoryInstruction } from '@/lib/contradictoryInstructions'
 import { guardHumanisticResponse } from '@/lib/humanisticSafety'
 import { describeFinalAnswerPolicyForPrompt, guardNoFinalAnswer } from '@/lib/pedagogicalGuard'
 import { buildGradeAdaptationInstruction } from '@/lib/gradeAdaptation'
@@ -1089,6 +1090,43 @@ export async function POST(req: NextRequest) {
         tokens: 0,
         safety_tipo: safety.tipo,
         safety_severidad: safety.severidad,
+      })
+    }
+
+    // Hallazgo real (instructivo de mejoras, ronda 2026-07-11), ítems
+    // 19-21: un mensaje con dos instrucciones opuestas en la misma entrada
+    // ("dame la respuesta pero no me la digas", "sube el nivel pero
+    // bájalo") no tenía ningún manejo específico — el modelo podía cumplir
+    // en silencio una de las dos partes (obediencia incondicional a una
+    // lectura arbitraria) o responder con un error genérico sin explicar
+    // el conflicto. Se detecta de forma determinística y se responde con
+    // una pregunta de aclaración puntual, con un límite claro.
+    const contradiccionDetectada = detectContradictoryInstruction(pregunta)
+    if (contradiccionDetectada) {
+      const respuestaContradiccion = buildContradictionClarificationResponse(contradiccionDetectada, idiomaIngles)
+      await supabase.from('interacciones').insert({
+        usuario_id: user.id,
+        colegio_id: perfil.colegio_id,
+        materia_id: null,
+        grado: grado_override || perfil.grado || '',
+        tema_detectado: idiomaIngles ? 'Contradictory instructions' : 'Instrucciones contradictorias',
+        pregunta,
+        respuesta: respuestaContradiccion,
+        tokens_usados: 0,
+        costo_usd: 0,
+        modelo_usado: 'contradiction_guard',
+        documento_fuente: null,
+        sospecha_copia: false,
+        operacion_canonica: null,
+        op_estado: null,
+        estado_evaluacion: 'contexto_pendiente',
+        guard_activado: true,
+      })
+      return NextResponse.json({
+        respuesta: respuestaContradiccion,
+        source: 'contradiction_guard',
+        nuevo_estado: 'activo',
+        tokens: 0,
       })
     }
 
