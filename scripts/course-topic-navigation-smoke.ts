@@ -5,11 +5,15 @@
 import assert from 'node:assert/strict'
 import {
   buildAreaPresenceResponse,
+  buildBlockTopicsResponse,
   buildNextTopicResponse,
   extractAreaQuery,
+  extractBlockQuery,
+  extractCourseBlocks,
   extractCourseTopicIndex,
   extractNextTopicReference,
   findNextTopic,
+  isBlockGroupingQuestion,
   isBroadAreaPresenceQuestion,
   isNextTopicRequest,
 } from '../src/lib/courseTopics'
@@ -107,6 +111,64 @@ Cantidad de temas: 5
     const respuesta = buildAreaPresenceResponse({ index, area: 'ecología', idiomaIngles: false })
     assert.match(respuesta, /no veo/i)
     assert.doesNotMatch(respuesta, /^Sí/i)
+  })
+
+  // Ítem 24: reconocer bloques/agrupaciones de temas cuando la fuente los
+  // organiza con encabezados de bloque/unidad antes de cada grupo.
+  const contenidoConBloques = `
+## Índice de temas
+Cantidad de temas: 6
+## Bloque 3: Campos e interacciones
+1. Fuerza y movimiento
+2. Energía en interacciones
+3. Ondas y su propagación
+## Bloque 4: Estructura de la materia
+4. Átomos y moléculas
+5. Estados de la materia
+6. Reacciones químicas
+`
+  const bloques = extractCourseBlocks(contenidoConBloques)
+
+  test('extrae los bloques con su nombre y el rango de temas correcto', () => {
+    assert.equal(bloques.length, 2)
+    assert.equal(bloques[0].nombre, 'Campos e interacciones')
+    assert.deepEqual([bloques[0].desde, bloques[0].hasta], [1, 3])
+    assert.equal(bloques[1].nombre, 'Estructura de la materia')
+    assert.deepEqual([bloques[1].desde, bloques[1].hasta], [4, 6])
+  })
+
+  for (const frase of [
+    '¿qué temas incluye el bloque de campos e interacciones?',
+    '¿cuáles son los temas de la unidad de estructura de la materia?',
+    'what topics does the block include for fields and interactions',
+  ]) {
+    test(`block-grouping-detectada: ${frase}`, () => {
+      assert.equal(isBlockGroupingQuestion(frase), true, frase)
+    })
+  }
+  test('no detecta agrupación en una pregunta normal', () => {
+    assert.equal(isBlockGroupingQuestion('¿qué es la fotosíntesis?'), false)
+  })
+
+  test('extrae el nombre del bloque consultado', () => {
+    assert.equal(extractBlockQuery('¿qué temas incluye el bloque de campos e interacciones?'), 'campos e interacciones')
+  })
+
+  test('responde con los temas reales del bloque consultado', () => {
+    const respuesta = buildBlockTopicsResponse({ blocks: bloques, query: 'campos e interacciones', idiomaIngles: false })
+    assert.match(respuesta, /Fuerza y movimiento/)
+    assert.match(respuesta, /Ondas y su propagación/)
+    assert.doesNotMatch(respuesta, /Átomos y moléculas/)
+  })
+
+  test('responde con cautela si el bloque consultado no existe en la fuente', () => {
+    const respuesta = buildBlockTopicsResponse({ blocks: bloques, query: 'ecología', idiomaIngles: false })
+    assert.match(respuesta, /no encontré/i)
+  })
+
+  test('sin bloques en la fuente (documento plano sin agrupar), no se inventan agrupaciones', () => {
+    const sinBloques = extractCourseBlocks('## Índice de temas\n1. Fotosíntesis\n2. Respiración celular')
+    assert.equal(sinBloques.length, 0)
   })
 
   if (failures.length > 0) {

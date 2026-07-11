@@ -348,3 +348,103 @@ export function buildAreaPresenceResponse(input: {
     ? `Yes, based on the official index: ${coincidencias.join(', ')}.`
     : `Sí, según el índice oficial: ${coincidencias.join(', ')}.`
 }
+
+// Hallazgo real (instructivo de mejoras, ronda 2026-07-11), ítem 24:
+// reconocer bloques/agrupaciones de temas (ej. "campos e interacciones"
+// que abarca los temas 15-20) cuando el documento oficial los organiza en
+// secciones con encabezado ("## Bloque 3: Campos e interacciones") antes
+// de cada grupo de temas. Depende de que la fuente use esa estructura de
+// encabezados — si el documento solo lista temas sin agrupar, no hay
+// bloques que reconocer y las funciones simplemente devuelven una lista
+// vacía (no inventan agrupaciones que no están en la fuente).
+export type CourseTopicBlock = { nombre: string; temas: string[]; desde: number; hasta: number }
+
+const PATRON_BLOQUE = /^\s*#{1,4}\s*(?:bloque|unidad|unit|block)\s*\d*\s*[:.\-–—]?\s*(.+)$/i
+
+export function extractCourseBlocks(content: string): CourseTopicBlock[] {
+  const lines = (content || '').split(/\r?\n/)
+  const blocks: CourseTopicBlock[] = []
+  let currentBlockName: string | null = null
+  let currentTopics: string[] = []
+  let inIndex = false
+  let topicCounter = 0
+
+  const commitBlock = () => {
+    if (currentBlockName && currentTopics.length > 0) {
+      blocks.push({
+        nombre: currentBlockName,
+        temas: [...currentTopics],
+        desde: topicCounter - currentTopics.length + 1,
+        hasta: topicCounter,
+      })
+    }
+    currentTopics = []
+  }
+
+  for (const line of lines) {
+    const normalized = normalizeText(line)
+    if (!inIndex && /^(#{1,4}\s*)?(indice de temas|indice del curso|temas|secuencia de temas|mapa del curso|course index|topics|course map)\b/.test(normalized)) {
+      inIndex = true
+      continue
+    }
+    if (!inIndex) continue
+
+    const bloqueMatch = line.match(PATRON_BLOQUE)
+    if (bloqueMatch) {
+      commitBlock()
+      currentBlockName = cleanTopic(bloqueMatch[1])
+      continue
+    }
+
+    const item = line.match(/^\s*(?:[-*•]|\d{1,3}[.)])\s+(.+)$/)
+    if (item && currentBlockName && isProbablyTopic(item[1])) {
+      topicCounter += 1
+      currentTopics.push(cleanTopic(item[1]))
+    }
+  }
+  commitBlock()
+  return blocks
+}
+
+export function isBlockGroupingQuestion(value: string): boolean {
+  const text = normalizeText(value)
+  if (!text) return false
+  return [
+    'que temas incluye el bloque', 'que temas tiene el bloque', 'cuales son los temas del bloque',
+    'que abarca el bloque', 'que temas incluye la unidad', 'cuales son los temas de la unidad',
+    'que abarca la unidad', 'what topics does the block include', 'what topics are in the unit',
+    'what does the block cover', 'what does the unit cover',
+  ].some((needle) => text.includes(needle))
+}
+
+export function extractBlockQuery(value: string): string | null {
+  const texto = (value || '').trim()
+  const match = /(?:bloque|unidad|unit|block)\s+(?:de\s+)?(.+?)[?¿]?$/i.exec(texto)
+  if (!match) return null
+  const query = match[1].trim()
+  return query.length >= 2 ? query : null
+}
+
+export function findBlockByQuery(blocks: CourseTopicBlock[], query: string | null): CourseTopicBlock | null {
+  if (!query || blocks.length === 0) return null
+  const norm = normalizeText(query)
+  return blocks.find((b) => normalizeText(b.nombre).includes(norm) || norm.includes(normalizeText(b.nombre))) || null
+}
+
+export function buildBlockTopicsResponse(input: {
+  blocks: CourseTopicBlock[]
+  query: string | null
+  idiomaIngles?: boolean
+}): string {
+  const { blocks, query, idiomaIngles } = input
+  const block = findBlockByQuery(blocks, query)
+  if (!block) {
+    return idiomaIngles
+      ? `I could not find a block or unit matching "${query}" in the official index I have available.`
+      : `No encontré un bloque o unidad que coincida con "${query}" en el índice oficial que tengo disponible.`
+  }
+  const items = block.temas.map((t, i) => `${block.desde + i}. ${t}`).join('\n')
+  return idiomaIngles
+    ? `The block "${block.nombre}" covers topics ${block.desde} to ${block.hasta}:\n\n${items}`
+    : `El bloque "${block.nombre}" abarca los temas ${block.desde} a ${block.hasta}:\n\n${items}`
+}

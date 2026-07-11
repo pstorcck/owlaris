@@ -16,11 +16,15 @@ import { limpiarTemaGeneral } from '@/lib/temaGeneral'
 import { ventanaHoyGuatemala } from '@/lib/fechaGuatemala'
 import {
   buildAreaPresenceResponse,
+  buildBlockTopicsResponse,
   buildCourseTopicListResponse,
   buildNextTopicResponse,
   extractAreaQuery,
+  extractBlockQuery,
+  extractCourseBlocks,
   extractCourseTopicIndex,
   extractNextTopicReference,
+  isBlockGroupingQuestion,
   isBroadAreaPresenceQuestion,
   isCourseTopicListRequest,
   isNextTopicRequest,
@@ -2208,6 +2212,44 @@ export async function POST(req: NextRequest) {
         interaction_id: insertedRow?.id || null,
         pending_math_interaction_id: null,
       })
+    }
+
+    // Hallazgo real (instructivo de mejoras, ronda 2026-07-11), ítem 24:
+    // reconocer bloques/agrupaciones de temas (ej. "campos e interacciones"
+    // que abarca varios temas seguidos) cuando la fuente oficial los
+    // organiza con encabezados de bloque/unidad antes de cada grupo. Si el
+    // documento no usa esa estructura, extractCourseBlocks devuelve una
+    // lista vacía y esta rama simplemente no se activa (no se inventan
+    // agrupaciones que no están en la fuente).
+    const consultaBloque = tipoPregunta === 'academica' && !esBienvenida ? extractBlockQuery(pregunta) : null
+    if (tipoPregunta === 'academica' && !esBienvenida && isBlockGroupingQuestion(pregunta) && consultaBloque && contenidoCurricular) {
+      const bloques = extractCourseBlocks(contenidoCurricular)
+      if (bloques.length > 0) {
+        const respuesta = buildBlockTopicsResponse({ blocks: bloques, query: consultaBloque, idiomaIngles })
+        const { data: insertedRow } = await supabase.from('interacciones').insert({
+          usuario_id: user.id,
+          colegio_id: perfil.colegio_id,
+          materia_id: materia_uuid, materia_nombre_snapshot: materiaConsultaSharePoint || null,
+          grado: gradoEfectivo,
+          tema_detectado: 'Consulta de bloque del índice',
+          pregunta,
+          respuesta,
+          tokens_usados: 0,
+          costo_usd: 0,
+          modelo_usado: 'course_index_guard',
+          documento_fuente: documentoFuente,
+          sospecha_copia: false,
+          guard_activado: true,
+        }).select('id').single()
+        return NextResponse.json({
+          respuesta,
+          source: 'course_index_guard',
+          tokens: 0,
+          documento_fuente: documentoFuente,
+          interaction_id: insertedRow?.id || null,
+          pending_math_interaction_id: null,
+        })
+      }
     }
 
     const operacionDirecta = inferCanonicalOperationFromText(pregunta)
