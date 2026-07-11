@@ -61,6 +61,7 @@ import {
   collectRecentMathOperations,
   describeMathTopic,
   inferMathPracticeFocusFromOperation,
+  isExplicitDifficultyUpRequest,
   isRepeatedMathOperation,
   isWorkedExampleRequest,
   resolveMathPracticeFocus,
@@ -1942,6 +1943,7 @@ export async function POST(req: NextRequest) {
         correctStreak: aciertosConsecutivos,
         wrongStreak: fallosConsecutivos,
         idiomaIngles,
+        pidioSubirNivel: isExplicitDifficultyUpRequest(pregunta),
       })
       const nivelSiguiente = adaptacionDificultad.nivel_nuevo
       const operacionesHistorial = collectRecentMathOperations([
@@ -2552,6 +2554,7 @@ ${contextoContenido}`
         correctStreak: aciertosConsecutivosFallback,
         wrongStreak: fallosConsecutivosFallback,
         idiomaIngles,
+        pidioSubirNivel: isExplicitDifficultyUpRequest(pregunta),
       }),
     })
 

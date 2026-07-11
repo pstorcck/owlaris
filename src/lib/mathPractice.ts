@@ -351,16 +351,60 @@ function exerciseText(op: string, idiomaIngles: boolean) {
     : `Intenta este ejercicio distinto: ${visible}. ¿Cuál es el resultado?`
 }
 
+// Hallazgo real (instructivo de mejoras, ronda 2026-07-11), ítem 1: el
+// alumno que pide explícitamente "sube el nivel" o "quiero algo más
+// difícil" y luego responde correctamente debía esperar hasta completar 5
+// aciertos seguidos para que la dificultad subiera de verdad — la petición
+// explícita no tenía ningún efecto inmediato.
+export function isExplicitDifficultyUpRequest(value: string): boolean {
+  const text = (value || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+  if (!text) return false
+  return [
+    'sube el nivel', 'subele el nivel', 'sube la dificultad', 'subele la dificultad',
+    'quiero algo mas dificil', 'quiero algo mas complicado', 'quiero subir de nivel',
+    'quiero subir el nivel', 'dame algo mas dificil', 'dame algo mas complicado',
+    'ponme algo mas dificil', 'ponme algo mas complicado', 'quiero un reto mas grande',
+    'raise the level', 'raise the difficulty', 'i want something harder',
+    'i want something more difficult', 'give me something harder',
+    'make it harder', 'level up',
+  ].some((needle) => text.includes(needle))
+}
+
 export function calculateAdaptiveDifficulty(input: {
   currentLevel: number
   correctStreak: number
   wrongStreak: number
   idiomaIngles?: boolean
+  pidioSubirNivel?: boolean
 }): DifficultyAdaptation {
   const nivelAnterior = Math.min(8, Math.max(1, Number.isFinite(input.currentLevel) ? Math.round(input.currentLevel) : 1))
   const aciertos = Math.max(0, Math.round(input.correctStreak || 0))
   const fallos = Math.max(0, Math.round(input.wrongStreak || 0))
   const english = !!input.idiomaIngles
+
+  if (input.pidioSubirNivel && aciertos > 0) {
+    const nivelNuevo = Math.min(8, nivelAnterior + 1)
+    const tipo: DifficultyAdaptationType = nivelNuevo > nivelAnterior ? 'sube' : 'mantiene'
+    return {
+      tipo,
+      nivel_anterior: nivelAnterior,
+      nivel_nuevo: nivelNuevo,
+      aciertos_consecutivos: aciertos,
+      fallos_consecutivos: fallos,
+      motivo: english
+        ? tipo === 'sube'
+          ? 'The student explicitly asked for a harder level and answered correctly, so Owlaris raises the difficulty right away.'
+          : 'The student explicitly asked for a harder level and answered correctly, but is already at the highest level.'
+        : tipo === 'sube'
+          ? 'El estudiante pidió explícitamente un nivel más difícil y respondió correctamente, así que Owlaris sube la dificultad de inmediato.'
+          : 'El estudiante pidió explícitamente un nivel más difícil y respondió correctamente, pero ya está en el nivel más alto.',
+    }
+  }
 
   if (fallos > 0 && fallos % 4 === 0) {
     const nivelNuevo = Math.max(1, nivelAnterior - 1)

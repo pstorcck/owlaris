@@ -190,6 +190,7 @@ export type MathEvaluation = {
   op: string | null
   guardActivado: boolean
   pasoIntermedio?: boolean
+  procedimientoMostrado?: boolean
 }
 
 export function extractAndCleanOperation(rawText: string): { visibleText: string; operation: string | null } {
@@ -628,6 +629,41 @@ function extractMultipleChoiceValue(tutorQuestion: string, studentAnswer: string
   return selected ? parseNumericAnswerToken(selected[2]) : null
 }
 
+// Hallazgo real (instructivo de mejoras, ronda 2026-07-11), ítem 2:
+// handleMathEvaluation solo comparaba el número final del alumno contra el
+// resultado correcto — un problema de aplicación (palabras) respondido con
+// solo el número final, sin mostrar la ecuación o el procedimiento, se
+// marcaba "correcto" igual que si hubiera mostrado el razonamiento
+// completo. Se distingue este caso para pedir explícitamente el
+// procedimiento, sin cambiar el estado de evaluación (el número SÍ es
+// correcto) para no afectar rachas ni niveles de dificultad ya calculados.
+const PALABRAS_PROBLEMA_APLICACION = [
+  'tiene', 'tenia', 'compro', 'vendio', 'reparti', 'cada uno', 'cada una',
+  'quedan', 'quedaron', 'gasto', 'ahorro', 'gano', 'perdio', 'recorrio',
+  'cuantos', 'cuantas', 'en total', 'entre', 'si', 'juan', 'maria', 'pedro',
+  'has', 'had', 'bought', 'sold', 'each', 'left', 'total', 'spent', 'saved',
+  'earned', 'lost', 'how many', 'how much',
+]
+
+export function looksLikeWordProblem(tutorQuestion: string): boolean {
+  const text = (tutorQuestion || '').toLowerCase()
+  if (!text || text.length < 30) return false
+  const tienePalabraClave = PALABRAS_PROBLEMA_APLICACION.some((p) => text.includes(p))
+  const tieneVariasOraciones = (text.match(/[.!?]/g) || []).length >= 1 && text.split(/\s+/).length >= 10
+  return tienePalabraClave && tieneVariasOraciones
+}
+
+export function respuestaEsSoloNumero(studentAnswer: string): boolean {
+  const texto = (studentAnswer || '').trim()
+  if (!texto) return false
+  // Un número (entero, decimal, negativo o fracción simple), opcionalmente
+  // con una unidad corta al final (ej. "24 manzanas") — sin ninguna palabra
+  // de razonamiento ("porque", "ya que", signos de operación visibles).
+  const esNumeroConUnidadOpcional = /^-?\d+(?:[.,]\d+)?(?:\s*\/\s*-?\d+(?:[.,]\d+)?)?\s*[a-záéíóúñ]{0,15}\.?$/i.test(texto)
+  if (!esNumeroConUnidadOpcional) return false
+  return !/porque|ya que|because|since|[-+*/=]/i.test(texto)
+}
+
 export async function handleMathEvaluation(
   tutorQuestion: string,
   studentAnswer: string,
@@ -667,14 +703,23 @@ export async function handleMathEvaluation(
     : null
   if (pasoIntermedio) estado = 'paso_correcto'
   const studentFeedbackValue = studentN !== null ? formatNumberForFeedback(studentN) : studentAnswer
-  const feedbackBase = pasoIntermedio
+  let feedbackBase = pasoIntermedio
     ? generateIntermediateStepFeedback(studentAnswer, idiomaIngles)
     : generatePedagogicalFeedback(estado, studentFeedbackValue, correctAnswer, idiomaIngles, op)
+
+  const esRespuestaCorrecta = estado === 'correcto' || estado === 'equivalente'
+  const procedimientoMostrado = !(esRespuestaCorrecta && looksLikeWordProblem(tutorQuestion) && respuestaEsSoloNumero(studentAnswer))
+  if (esRespuestaCorrecta && !procedimientoMostrado) {
+    feedbackBase = idiomaIngles
+      ? `Correct, ${studentFeedbackValue} is the right answer. But this was an applied problem — can you show me the equation or operation you used to get there?`
+      : `¡Correcto! ${studentFeedbackValue} es la respuesta correcta. Pero este era un problema de aplicación — ¿me puedes mostrar la ecuación u operación que usaste para llegar a ese resultado?`
+  }
+
   const { feedback, guardActivado } = contradictionGuard(feedbackBase, estado, studentN, correctAnswer, idiomaIngles)
 
-  logEvaluation({ op, correctAnswer, studentAnswer, studentN, estado, pasoIntermedio: !!pasoIntermedio, guardActivado })
+  logEvaluation({ op, correctAnswer, studentAnswer, studentN, estado, pasoIntermedio: !!pasoIntermedio, guardActivado, procedimientoMostrado })
 
-  return { estado, feedback, correctAnswer, op, guardActivado, pasoIntermedio: !!pasoIntermedio }
+  return { estado, feedback, correctAnswer, op, guardActivado, pasoIntermedio: !!pasoIntermedio, procedimientoMostrado }
 }
 
 function selectRelevantMathText(text: string): string {
