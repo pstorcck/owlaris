@@ -68,6 +68,30 @@ const SOLICITUD_TRABAJO_CONCEPTUAL = [
   /(?:summary|list)\s+.*ready\s+to\s+copy\s+and\s+paste/i,
 ]
 
+// Hallazgo real (instructivo de mejoras, ronda 2026-07-11), ítems 8-9: pedir
+// que el texto "no parezca escrito por una IA" o "parezca que lo escribió
+// el alumno" es una petición de disfrazar autoría, no un pedido normal de
+// ayuda con la redacción — debe activar el mismo modo de guía (nunca un
+// texto terminado listo para presentar como propio), en CUALQUIER materia,
+// no solo las conceptuales.
+const SOLICITUD_DISFRAZAR_AUTORIA_IA = [
+  /como\s+si\s+(?:yo\s+lo|lo\s+yo|yo|lo)?\s*hubiera\s+escrito(?:\s+yo)?/i,
+  /que\s+no\s+parezca\s+(?:que\s+lo\s+escribi[oó]\s+)?(?:una\s+|la\s+)?ia\b/i,
+  /que\s+no\s+parezca\s+generado\s+por\s+ia/i,
+  /que\s+no\s+se\s+note\s+que\s+es\s+ia/i,
+  /que\s+no\s+suene\s+a\s+ia/i,
+  /que\s+no\s+lo\s+detecte\s+(?:el\s+)?turnitin/i,
+  /escrito\s+por\s+una\s+ia/i,
+  /as\s+if\s+i\s+wrote\s+it/i,
+  /so\s+it\s+doesn'?t\s+sound\s+like\s+ai/i,
+  /make\s+it\s+(?:sound\s+like\s+i\s+wrote\s+it|undetectable)/i,
+  /so\s+(?:turnitin|it)\s+doesn'?t\s+(?:flag|detect)\s+(?:it|this)/i,
+]
+
+export function isDisguiseAiAuthorshipRequest(text: string): boolean {
+  return SOLICITUD_DISFRAZAR_AUTORIA_IA.some((pattern) => pattern.test(text || ''))
+}
+
 const FRASES_RESPUESTA_FINAL = [
   // Anuncios explícitos de respuesta final (con o sin "correcta/o")
   /\b(?:la\s+)?respuesta\s+(?:correcta\s+|final\s+)?(?:es|ser[ií]a|:)\s*[^\n.]+[.\n]?/gi,
@@ -117,7 +141,8 @@ export function shouldGuideWithoutFinalAnswer(options: GuardOptions): boolean {
   return options.materiaNumerica ||
     SOLICITUD_RESPUESTA_DIRECTA.some((pattern) => pattern.test(pregunta)) ||
     CONTEXTO_PRACTICA.some((pattern) => pattern.test(pregunta)) ||
-    (!options.materiaNumerica && SOLICITUD_TRABAJO_CONCEPTUAL.some((pattern) => pattern.test(pregunta)))
+    (!options.materiaNumerica && SOLICITUD_TRABAJO_CONCEPTUAL.some((pattern) => pattern.test(pregunta))) ||
+    isDisguiseAiAuthorshipRequest(pregunta)
 }
 
 // La regla de no dar la respuesta final es interna: el alumno no debe leer un
@@ -191,5 +216,6 @@ En materias conceptuales, si te piden escribir un ensayo, la conclusión de un t
 Esta misma regla aplica si piden un resumen completo o una lista de puntos "lista para entregar" o "para copiar y pegar": rechazar la petición de palabra pero igual entregar casi todo el contenido factual en formato de lista no cumple la regla — entrégalo por partes también (ej. explica un punto a la vez y pide que el alumno intente resumir el siguiente antes de dártelo tú), no como una lista completa de una sola vez.
 Usa pistas, preguntas guiadas, ejemplos parciales, recordatorios de conceptos y verificación paso a paso. Varía cómo guías para no sonar repetitivo.
 Solo confirma la respuesta final cuando el estudiante ya la propuso correctamente o completó correctamente el razonamiento.
-Si insiste en que quiere solo la respuesta, redirígelo con naturalidad hacia resolverlo juntos paso a paso, sin repetir siempre la misma frase ni anunciar la regla.`
+Si insiste en que quiere solo la respuesta, redirígelo con naturalidad hacia resolverlo juntos paso a paso, sin repetir siempre la misma frase ni anunciar la regla.
+Si el estudiante pide que el texto "no parezca escrito por una IA", "parezca que lo escribió él/ella" o "no lo detecte Turnitin", no seas cómplice de presentar trabajo generado por IA como si fuera enteramente del alumno: ofrécele ayudarlo a escribirlo con sus propias palabras, por partes y guiándolo, pero no entregues un texto terminado listo para presentar como propio.`
 }

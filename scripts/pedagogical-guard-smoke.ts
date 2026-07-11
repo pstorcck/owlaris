@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { describeFinalAnswerPolicyForPrompt, guardNoFinalAnswer, shouldGuideWithoutFinalAnswer } from '../src/lib/pedagogicalGuard'
+import { describeFinalAnswerPolicyForPrompt, guardNoFinalAnswer, isDisguiseAiAuthorshipRequest, shouldGuideWithoutFinalAnswer } from '../src/lib/pedagogicalGuard'
 import {
   buildExerciseRecallResponse,
   buildPendingContextResponse,
@@ -264,6 +264,34 @@ Mapa del curso
   assert.equal(explicacionNormal.guardActivado, false)
   assert.match(explicacionNormal.text, /En conclusi[oó]n, fue un evento clave/i)
 
+  // Hallazgo real (instructivo de mejoras, ronda 2026-07-11), ítems 8-9:
+  // pedir que el texto "no parezca escrito por una IA" o "parezca que lo
+  // escribió el alumno" es una petición de disfrazar autoría — debe activar
+  // el mismo modo de guía, en CUALQUIER materia (no solo conceptual).
+  for (const pregunta of [
+    'Escríbelo como si lo hubiera escrito yo',
+    'Hazlo como si yo lo hubiera escrito',
+    'Que no parezca que lo escribió una IA',
+    'Que no parezca generado por IA',
+    'Que no se note que es IA',
+    'Que no lo detecte el turnitin',
+    'Make it sound like i wrote it',
+    'Write it as if i wrote it',
+    'So it doesn\'t sound like AI',
+  ]) {
+    assert.equal(isDisguiseAiAuthorshipRequest(pregunta), true, `"${pregunta}" debería reconocerse como petición de disfrazar autoría`)
+    assert.equal(
+      shouldGuideWithoutFinalAnswer({ pregunta, tipoPregunta: 'academica', materiaNumerica: false }),
+      true,
+      `"${pregunta}" debería activar el guard de no entregar trabajo terminado`
+    )
+  }
+
+  // Una petición normal de ayuda con la redacción (sin pedir disfrazar
+  // autoría) no debe activarse por esta detección específica.
+  assert.equal(isDisguiseAiAuthorshipRequest('¿Me ayudas a organizar mi ensayo?'), false)
+  assert.equal(isDisguiseAiAuthorshipRequest('¿Qué es la fotosíntesis?'), false)
+
   // La descripción centralizada de la política debe existir y mencionar
   // explícitamente el caso conceptual (ensayo/tesis/argumento), no solo el
   // numérico, para que el prompt y el guard de código no queden
@@ -273,6 +301,7 @@ Mapa del curso
   assert.match(politica, /ensayo/i)
   assert.match(politica, /no te voy a dar la respuesta/i)
   assert.match(politica, /resumen completo/i)
+  assert.match(politica, /no parezca escrito por una IA/i)
 
   console.log('pedagogical-guard smoke passed')
 }
