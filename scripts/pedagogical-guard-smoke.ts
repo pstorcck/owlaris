@@ -302,6 +302,14 @@ Mapa del curso
   assert.match(politica, /no te voy a dar la respuesta/i)
   assert.match(politica, /resumen completo/i)
   assert.match(politica, /no parezca escrito por una IA/i)
+  // Hallazgo real (QA Ronda 4, backlog): la calidad de las pistas era
+  // inconsistente entre materias — matemáticas ya ajusta la pista a la
+  // estructura del error (buildGuidedMathHint), pero materias conceptuales
+  // solo tenían guía genérica. Se agrega instrucción para variar el tipo
+  // de pista según el tipo de error conceptual (definición, causa-efecto,
+  // comparación, secuencia), no solo en matemáticas.
+  assert.match(politica, /ajusta el TIPO de pista al tipo de error/i)
+  assert.match(politica, /causa-efecto/i)
 
   console.log('pedagogical-guard smoke passed')
 }
