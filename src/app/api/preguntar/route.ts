@@ -66,6 +66,7 @@ import {
   buildPendingContextResponse,
   buildProgressResponse,
   describeCompoundMessagePolicyForPrompt,
+  describeResumeTopicPolicyForPrompt,
   describeSameExercisePolicyForPrompt,
   isCompoundMultiIntentMessage,
   isConversationHistoryMetaQuestion,
@@ -73,6 +74,7 @@ import {
   isLikelyMathAnswerText,
   isPendingContextQuestion,
   isProgressQuestion,
+  isResumeTopicChipRequest,
   stripUnapprovedExternalResources,
 } from '@/lib/tutorContext'
 import { withOpenAIRetry } from '@/lib/openaiRetry'
@@ -1251,6 +1253,7 @@ export async function POST(req: NextRequest) {
       const preguntaLow = pregunta.toLowerCase()
       const cambioExplicito = /(?:quiero estudiar|cambia(?:mos)? a|ahora estudiemos|vamos con)\s+(.+)/i.exec(pregunta)
       const mencionaMateria = MATERIAS_KEYWORDS.some(m => preguntaLow.includes(m))
+      const materiasDisponiblesBody: string[] = Array.isArray(body.materias_disponibles) ? body.materias_disponibles : []
       if (cambioExplicito && mencionaMateria) {
         const nuevaMateria = normalizarMateria(cambioExplicito[1].trim())
         // Comparar contra la materia actual ya normalizada, no el string crudo:
@@ -1258,6 +1261,25 @@ export async function POST(req: NextRequest) {
         // biología" no está cambiando de materia, solo la nombra en otro
         // idioma — normalizarMateria("Biology") también da "Biología".
         if (nuevaMateria && nuevaMateria !== normalizarMateria(materia_id) && !nuevaMateria.startsWith('__')) {
+          // Hallazgo real (QA 80 pruebas, 2026-07-08): en Grado 12 (solo con
+          // "Environmental Systems" configurada), al decir "mejor hablemos
+          // de matemáticas" el tutor confirmaba "Claro, cambiamos a
+          // Matemática" sin verificar que esa materia existiera realmente
+          // para el grado del alumno — no hay ningún botón ni contenido
+          // detrás de esa confirmación. A diferencia del camino de cursos
+          // eScholaris más abajo (que sí valida contra materiasDisponibles),
+          // este camino basado en palabras clave CNB nunca lo hacía.
+          const materiaRealmenteDisponible = materiasDisponiblesBody.length === 0 ||
+            materiasDisponiblesBody.some((m) => normalizarMateria(m) === nuevaMateria || m.toLowerCase() === nuevaMateria.toLowerCase())
+          if (!materiaRealmenteDisponible) {
+            return NextResponse.json({
+              respuesta: idiomaIngles
+                ? `${nuevaMateria} is not available for your current grade. The subjects available right now are: ${materiasDisponiblesBody.join(', ') || 'none configured yet'}. Which one would you like to work on?`
+                : `${nuevaMateria} no está disponible para tu grado actual. Las materias disponibles ahora mismo son: ${materiasDisponiblesBody.join(', ') || 'ninguna configurada todavía'}. ¿Con cuál quieres trabajar?`,
+              nuevo_estado: 'activo',
+              tokens: 0,
+            })
+          }
           Array.from(cacheContenido.keys()).forEach(key => { if (key.includes(materia_id)) cacheContenido.delete(key) })
           Array.from(indiceDocumentos.keys()).forEach(key => { if (key.includes(materia_id)) indiceDocumentos.delete(key) })
           return NextResponse.json({ respuesta: 'Claro, cambiamos a ' + nuevaMateria + '. ¿Tienes una duda específica o quieres que te proponga un tema?', nuevo_estado: 'activo', materia_detectada: nuevaMateria, tokens: 0, pending_math_interaction_id: null, nivel_dificultad: 1, aciertos_consecutivos: 0, fallos_consecutivos: 0, practica_enfoque: 'general' })
@@ -1270,7 +1292,6 @@ export async function POST(req: NextRequest) {
         // punto 12). isExplicitCourseSwitchRequest reconoce esos nombres de
         // curso sin depender del set CNB; solo se cambia si además coincide
         // con una materia realmente disponible para el alumno.
-        const materiasDisponiblesBody: string[] = Array.isArray(body.materias_disponibles) ? body.materias_disponibles : []
         const cursoExplicito = isExplicitCourseSwitchRequest(pregunta, materiasDisponiblesBody)
         if (cursoExplicito.detectado && cursoExplicito.coincideDisponible &&
           normalizarMateria(cursoExplicito.coincideDisponible) !== normalizarMateria(materia_id) &&
@@ -2106,6 +2127,29 @@ export async function POST(req: NextRequest) {
       ? `\n\nNOTA: ${describeCompoundMessagePolicyForPrompt()}`
       : ''
 
+    // Hallazgo real (QA Ronda 2, revisión 2026-07-10): el chip "Resume el
+    // tema" es no determinístico — solo envía ese texto literal y el
+    // modelo decide por su cuenta qué resumir a partir del historial
+    // reciente. Se le da una señal explícita de cuál es el tema/ejercicio
+    // correcto a resumir, igual que ya se hace para el ejercicio pendiente.
+    const contextoResumenTema = isResumeTopicChipRequest(pregunta)
+      ? `\n\nNOTA: ${describeResumeTopicPolicyForPrompt({ pendingOperation: pendingMathOperation, materia: materiaConsultaSharePoint || null, idiomaIngles })}`
+      : ''
+
+    // Hallazgo real (QA 80 pruebas, 2026-07-08): en Grado 12 (solo con
+    // "Environmental Systems" configurada), ante "mejor hablemos de
+    // matemáticas" el modelo ofreció cambiar a Matemáticas como si fuera
+    // una opción válida, aunque no existe ningún botón ni contenido para
+    // esa materia en ese grado — esta frase no coincide con el patrón
+    // determinístico de cambio de materia de arriba (que sí valida
+    // disponibilidad), así que llega hasta aquí sin ninguna restricción.
+    // Se le da al modelo la lista real de materias disponibles para que no
+    // ofrezca ni confirme un cambio a algo que no existe.
+    const materiasDisponiblesParaPrompt: string[] = Array.isArray(body.materias_disponibles) ? body.materias_disponibles : []
+    const contextoMateriasDisponibles = materiasDisponiblesParaPrompt.length > 0
+      ? `\n\nMATERIAS REALMENTE DISPONIBLES para este alumno en su grado actual: ${materiasDisponiblesParaPrompt.join(', ')}. Nunca ofrezcas ni confirmes un cambio a una materia que no esté en esta lista — si el alumno menciona una que no está, acláraselo explícitamente en vez de responder como si fuera posible cambiarse a ella.`
+      : ''
+
     // Sprint de estabilización (auditoría 2026-07-07): antes el grado se
     // pasaba como dato inerte ("Grado: 4to Primaria") sin ninguna
     // instrucción de cómo adaptar vocabulario/extensión/tono/ejemplos/nivel
@@ -2138,7 +2182,7 @@ export async function POST(req: NextRequest) {
       contextoContenido += `\n\nEJERCICIO ACTIVO PENDIENTE: ${pendingMathOperation}. Si el mensaje del alumno no resuelve este ejercicio, respóndele brevemente lo que preguntó y luego regresa a este mismo ejercicio. NO le preguntes de nuevo qué tema quiere trabajar ni le muestres una lista de temas — el tema ya está activo. Si en cambio decides presentar un ejercicio o problema NUEVO y distinto a este, la etiqueta [OP: ...] debe reflejar exactamente los números de ESE ejercicio nuevo — nunca reutilices el operando pendiente de arriba en la etiqueta de un problema distinto.`
     }
 
-    const systemPrompt = `${promptBase}${promptPadre}${contextoIdioma}${contextoIdiomaDistinto}${contextoMensajeCompuesto}${contextoGrado}
+    const systemPrompt = `${promptBase}${promptPadre}${contextoIdioma}${contextoIdiomaDistinto}${contextoMensajeCompuesto}${contextoResumenTema}${contextoMateriasDisponibles}${contextoGrado}
 
 CONTEXTO DEL ALUMNO:
 - Nombre: ${perfil.nombre_completo.split(' ')[0]}

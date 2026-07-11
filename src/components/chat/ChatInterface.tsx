@@ -1351,7 +1351,7 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
         .scrollbar-hide::-webkit-scrollbar{display:none} .scrollbar-hide{-ms-overflow-style:none;scrollbar-width:none}
         .o-ver-mas { background:rgba(109,40,217,.06); border:1px solid rgba(109,40,217,.15); border-radius:8px; padding:4px 12px; font-size:11px; font-weight:600; color:#7C3AED; cursor:pointer; transition:all .2s; margin-top:10px; display:inline-flex; align-items:center; gap:4px; }
         .o-ver-mas:hover{background:rgba(109,40,217,.12)}
-        .o-fuente { display:inline-flex; align-items:center; gap:4px; background:rgba(14,165,233,.06); border:1px solid rgba(14,165,233,.15); border-radius:6px; padding:3px 9px; font-size:10px; font-weight:600; color:#0EA5E9; margin-top:10px; letter-spacing:.3px; }
+        .o-fuente { display:inline-flex; align-items:center; gap:4px; background:rgba(100,116,139,.06); border:1px solid rgba(100,116,139,.15); border-radius:6px; padding:3px 9px; font-size:10px; font-weight:600; color:#64748B; margin-top:10px; letter-spacing:.3px; cursor:default; }
         .o-avatar-ring { background:linear-gradient(135deg,#7C3AED,#0EA5E9); padding:2px; border-radius:50%; }
         .estado-badge { display:inline-flex; align-items:center; gap:6px; background:rgba(109,40,217,.08); border:1px solid rgba(109,40,217,.15); border-radius:20px; padding:4px 12px; font-size:11px; font-weight:600; color:#7C3AED; }
         @keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}

@@ -360,6 +360,36 @@ export function buildProgressResponse(input: {
     : `Ahora mismo estás en el nivel de dificultad ${input.currentLevel} de 8${materiaTexto}, sin una racha activa todavía en esta sesión. ${cierre}`
 }
 
+// Hallazgo real (QA Ronda 2, revisión 2026-07-10): el botón/chip "Resume el
+// tema" solo envía ese texto literal como si el alumno lo hubiera escrito,
+// sin ninguna señal explícita de CUÁL tema resumir — el modelo decide por
+// su cuenta a partir del historial reciente (y el frontend solo manda los
+// últimos 6 mensajes), así que el resultado es no determinístico: a veces
+// resume el ejercicio activo, a veces un tema anterior, a veces algo
+// genérico. isResumeTopicChipRequest detecta este clic específico para
+// poder inyectar un contexto explícito (ejercicio pendiente o materia
+// activa) que le diga al modelo exactamente qué debe resumir, en vez de
+// dejarlo a su criterio.
+export function isResumeTopicChipRequest(value: string): boolean {
+  const text = normalizeText(value)
+  return text === 'resume el tema' || text === 'summarize the topic'
+}
+
+export function describeResumeTopicPolicyForPrompt(input: {
+  pendingOperation?: string | null
+  materia?: string | null
+  idiomaIngles?: boolean
+}): string {
+  const tema = input.pendingOperation
+    ? (input.idiomaIngles ? `the exercise we are currently working on (${formatOperation(input.pendingOperation)})` : `el ejercicio en el que estamos trabajando ahora mismo (${formatOperation(input.pendingOperation)})`)
+    : input.materia
+      ? (input.idiomaIngles ? `the most specific topic covered so far in ${input.materia} this session` : `el tema más específico que se haya cubierto hasta ahora en ${input.materia} en esta sesión`)
+      : (input.idiomaIngles ? 'the most recent specific topic discussed in this session' : 'el tema más específico y reciente que se haya discutido en esta sesión')
+  return input.idiomaIngles
+    ? `The student clicked "Summarize the topic". Summarize specifically ${tema} — do not give a generic summary and do not default to the very first topic of the whole conversation if a more recent one is active.`
+    : `El alumno presionó "Resume el tema". Resume específicamente ${tema} — no des un resumen genérico ni te vayas al primer tema de toda la conversación si hay uno más reciente activo.`
+}
+
 export function stripUnapprovedExternalResources(value: string, idiomaIngles = false) {
   const original = value || ''
   const lines = original
