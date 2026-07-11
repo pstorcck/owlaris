@@ -492,10 +492,19 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
     setMensajes(prev => [...prev, msgU])
     setCargando(true)
 
+    // Hallazgo real (QA Ronda 4, backlog): sin límite de tiempo en el
+    // fetch, una solicitud lenta o colgada del backend dejaba al alumno
+    // viendo el spinner "Coaching..." indefinidamente, sin respuesta NI
+    // error visible (~40s reportados). Un timeout de cliente asegura que
+    // siempre aparezca un mensaje accionable si la respuesta tarda demasiado.
+    const timeoutController = new AbortController()
+    const timeoutId = setTimeout(() => timeoutController.abort(), 45000)
+
     try {
       const res: Response = await fetch('/api/preguntar', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        signal: timeoutController.signal,
         body: JSON.stringify({
           pregunta: tp,
 
@@ -595,8 +604,16 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
           { icon: '▤', text: 'Temas de esta materia' },
         ])
       }
-    } catch (e) { setError(e instanceof Error && e.message ? e.message : 'Hubo un problema. Intenta de nuevo.') }
-    finally { setCargando(false); inputRef.current?.focus() }
+    } catch (e) {
+      if (e instanceof DOMException && e.name === 'AbortError') {
+        setError(idiomaActivo
+          ? 'The response is taking longer than usual. Please try again.'
+          : 'La respuesta está tardando más de lo normal. Intenta de nuevo.')
+      } else {
+        setError(e instanceof Error && e.message ? e.message : 'Hubo un problema. Intenta de nuevo.')
+      }
+    }
+    finally { clearTimeout(timeoutId); setCargando(false); inputRef.current?.focus() }
   }
 
   // Conversación continua: cuando el búho termina de hablar, reactiva el
