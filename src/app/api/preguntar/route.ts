@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient, createClient } from '@/lib/supabase/server'
 import { checkContentSafety, type ContentSafetyResult } from '@/lib/contentSafety'
+import { extractRelevantContentWindow } from '@/lib/relevantContentWindow'
 import { buildContradictionClarificationResponse, detectContradictoryInstruction } from '@/lib/contradictoryInstructions'
 import { guardHumanisticResponse } from '@/lib/humanisticSafety'
 import { describeFinalAnswerPolicyForPrompt, guardNoFinalAnswer } from '@/lib/pedagogicalGuard'
@@ -2452,7 +2453,7 @@ export async function POST(req: NextRequest) {
     } else if (tipoPregunta === 'formativa') {
       contextoContenido = `El alumno toca un tema formativo. Usa los documentos de configuración para orientarlo.`
     } else if (contenidoCurricular) {
-      contextoContenido = `CONTENIDO ACADEMICO (fuente principal):\n---\n${contenidoCurricular.substring(0, 3000)}\n---`
+      contextoContenido = `CONTENIDO ACADEMICO (fuente principal):\n---\n${extractRelevantContentWindow(contenidoCurricular, pregunta, 3000)}\n---`
     } else {
       contextoContenido = `No se encontro documento especifico en SharePoint. No inventes contenido academico. Indica que no hay suficiente informacion en el material disponible de la materia.`
     }
