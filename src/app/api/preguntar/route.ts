@@ -8,8 +8,8 @@ import { buildGradeAdaptationInstruction } from '@/lib/gradeAdaptation'
 import { pareceIdiomaDistinto } from '@/lib/languageDetection'
 import { buscarStaffColegio, buscarSuperadmins, elegirFuenteDestinatariosAlerta, resolverDestinatariosAlerta, type DestinatarioAlerta } from '@/lib/alertaEmergencia'
 import { verificarLimiteFrecuencia } from '@/lib/rateLimit'
-import { sanitizeChatFormatting } from '@/lib/chatFormatting'
-import { detectarMateriaDesdeTexto, materiaActualEnSistemaCNB, normalizarMateria } from '@/lib/materiaDetection'
+import { isExplicitTableRequest, sanitizeChatFormatting } from '@/lib/chatFormatting'
+import { detectarMateriaDesdeTexto, isLanguageSwitchRequest, materiaActualEnSistemaCNB, normalizarMateria } from '@/lib/materiaDetection'
 import { isExplicitCourseSwitchRequest } from '@/lib/courseSwitchDetection'
 import { isReviewMistakesRequest, primeraOperacionValida, temaMasFrecuente } from '@/lib/mistakeReview'
 import { limpiarTemaGeneral } from '@/lib/temaGeneral'
@@ -19,15 +19,19 @@ import {
   buildBlockTopicsResponse,
   buildCourseTopicListResponse,
   buildNextTopicResponse,
+  buildStandardsAlignmentResponse,
   extractAreaQuery,
   extractBlockQuery,
   extractCourseBlocks,
   extractCourseTopicIndex,
   extractNextTopicReference,
+  extractStandardQuery,
+  findBlockByQuery,
   isBlockGroupingQuestion,
   isBroadAreaPresenceQuestion,
   isCourseTopicListRequest,
   isNextTopicRequest,
+  isStandardsAlignmentQuestion,
   matchNumberedListSelection,
 } from '@/lib/courseTopics'
 import {
@@ -51,6 +55,7 @@ import {
   extractAndCleanOperation,
   handleMathEvaluation,
   inferCanonicalOperationFromText,
+  inferSubtractionWordProblem,
   isLikelyNumericSubject,
   isSafeCanonicalOperation,
   looksLikeMathPracticePrompt,
@@ -1334,7 +1339,15 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ respuesta: idiomaIngles ? 'Ok, ' + materiaDetectada + '. Do you have a specific question or would you like me to suggest a topic?' : 'Ok, ' + materiaDetectada + '. ¿Tienes una duda específica o quieres que te proponga un tema?', nuevo_estado: 'activo', nombre_alumno: nombreAlumno, grado_detectado: gradoAlumno, materia_detectada: materiaDetectada, tokens: 0, pending_math_interaction_id: null, nivel_dificultad: 1, aciertos_consecutivos: 0, fallos_consecutivos: 0, practica_enfoque: 'general' })
     }
 
-    if (estado === 'activo' && materia_id && materiaActualEnSistemaCNB(materia_id)) {
+    // Hallazgo real CRÍTICO (verificación posterior, 2026-07-12): este
+    // bloque es la implementación REAL usada en producción para detectar
+    // cambio de materia — es independiente de clasificarIntencion() en
+    // intentClassifier.ts (que sí tenía la exclusión de idioma pero nunca
+    // se llama desde aquí). Por eso "responde en inglés" seguía
+    // confundiéndose con "cambiar a la clase de Inglés" pese al fix
+    // anterior: ese fix solo tocó código que route.ts no ejecuta. Se
+    // agrega la misma exclusión aquí, en el camino que sí corre.
+    if (estado === 'activo' && materia_id && materiaActualEnSistemaCNB(materia_id) && !isLanguageSwitchRequest(pregunta)) {
       const materiaDetectada = detectarMateriaDesdeTexto(pregunta)
       if (materiaDetectada && materiaDetectada !== normalizarMateria(materia_id)) return NextResponse.json({ respuesta: 'Estamos en ' + materia_id + '. "' + pregunta.trim() + '" parece un tema de ' + materiaDetectada + '. ¿Quieres seguir con ' + materia_id + ' o cambiar a ' + materiaDetectada + '?', nuevo_estado: 'esperando_confirmacion_cambio_materia', materia_sugerida: materiaDetectada, tokens: 0 })
     }
@@ -1971,7 +1984,14 @@ export async function POST(req: NextRequest) {
 
     if (!evaluacionProtocolo && normalizeStudentAnswer(pregunta) !== null) {
       const ultimaPregunta = ultimoMensajeAsistente(historial)
-      const opInferida = inferCanonicalOperationFromText(ultimaPregunta)
+      // Hallazgo real CRÍTICO (rondas anteriores, sin corregir hasta esta
+      // verificación): un problema de aplicación en prosa sin [OP:] (el
+      // modelo no siempre lo incluye pese a la instrucción) no tenía
+      // ningún respaldo determinístico — inferCanonicalOperationFromText
+      // exige números juntos con un operador y nunca los encuentra en
+      // prosa. inferSubtractionWordProblem cubre el patrón más común
+      // (inicio - cambio = final) de forma muy conservadora.
+      const opInferida = inferCanonicalOperationFromText(ultimaPregunta) || inferSubtractionWordProblem(ultimaPregunta)
       if (opInferida && isSafeCanonicalOperation(opInferida) && solveOperation(opInferida) !== null) {
         evaluacionProtocolo = await handleMathEvaluation(
           ultimaPregunta + '\n[OP: ' + opInferida + ']',
@@ -2226,17 +2246,23 @@ export async function POST(req: NextRequest) {
       })
     }
 
-    // Hallazgo real (instructivo de mejoras, ronda 2026-07-11), ítem 24:
-    // reconocer bloques/agrupaciones de temas (ej. "campos e interacciones"
-    // que abarca varios temas seguidos) cuando la fuente oficial los
-    // organiza con encabezados de bloque/unidad antes de cada grupo. Si el
-    // documento no usa esa estructura, extractCourseBlocks devuelve una
-    // lista vacía y esta rama simplemente no se activa (no se inventan
-    // agrupaciones que no están en la fuente).
+    // Hallazgo real (instructivo de mejoras, ronda 2026-07-11, corregido en
+    // verificación posterior 2026-07-12), ítem 24: reconocer bloques/
+    // agrupaciones de temas (ej. "dame los temas de campos e
+    // interacciones") cuando la fuente oficial los organiza con
+    // encabezados de bloque/unidad antes de cada grupo. La versión inicial
+    // solo reconocía frases con "bloque"/"unidad" explícito; el hallazgo
+    // real usó "dame los temas de X" sin esas palabras, así que se amplió
+    // la detección — pero eso crea ambigüedad con una petición normal
+    // ("dame los temas de esta clase"). Se resuelve exigiendo que el
+    // nombre consultado coincida con un bloque REAL extraído de la fuente
+    // (findBlockByQuery); si no coincide con ninguno, no se intercepta y
+    // la petición sigue el flujo normal del índice completo.
     const consultaBloque = tipoPregunta === 'academica' && !esBienvenida ? extractBlockQuery(pregunta) : null
     if (tipoPregunta === 'academica' && !esBienvenida && isBlockGroupingQuestion(pregunta) && consultaBloque && contenidoCurricular) {
       const bloques = extractCourseBlocks(contenidoCurricular)
-      if (bloques.length > 0) {
+      const bloqueEncontrado = findBlockByQuery(bloques, consultaBloque)
+      if (bloqueEncontrado) {
         const respuesta = buildBlockTopicsResponse({ blocks: bloques, query: consultaBloque, idiomaIngles })
         const { data: insertedRow } = await supabase.from('interacciones').insert({
           usuario_id: user.id,
@@ -2262,6 +2288,42 @@ export async function POST(req: NextRequest) {
           pending_math_interaction_id: null,
         })
       }
+    }
+
+    // Hallazgo real CRÍTICO (verificación posterior, 2026-07-12): al
+    // preguntar si el curso está alineado con un estándar oficial (NGSS,
+    // Common Core...), el modelo respondía con total confianza afirmando
+    // una alineación inventada, sin ninguna fuente que la respalde — peor
+    // que antes (antes evadía la pregunta, ahora alucina con precisión
+    // falsa). La instrucción de PROMPT_BASE no bastaba; se intercepta de
+    // forma determinística: solo se confirma si el nombre del estándar
+    // aparece literalmente en el contenido oficial disponible.
+    if (tipoPregunta === 'academica' && !esBienvenida && isStandardsAlignmentQuestion(pregunta)) {
+      const estandarConsultado = extractStandardQuery(pregunta)
+      const respuesta = buildStandardsAlignmentResponse({ content: contenidoCurricular, standard: estandarConsultado, idiomaIngles })
+      const { data: insertedRow } = await supabase.from('interacciones').insert({
+        usuario_id: user.id,
+        colegio_id: perfil.colegio_id,
+        materia_id: materia_uuid, materia_nombre_snapshot: materiaConsultaSharePoint || null,
+        grado: gradoEfectivo,
+        tema_detectado: 'Consulta de alineación curricular',
+        pregunta,
+        respuesta,
+        tokens_usados: 0,
+        costo_usd: 0,
+        modelo_usado: 'course_index_guard',
+        documento_fuente: documentoFuente,
+        sospecha_copia: false,
+        guard_activado: true,
+      }).select('id').single()
+      return NextResponse.json({
+        respuesta,
+        source: 'course_index_guard',
+        tokens: 0,
+        documento_fuente: documentoFuente,
+        interaction_id: insertedRow?.id || null,
+        pending_math_interaction_id: null,
+      })
     }
 
     const operacionDirecta = inferCanonicalOperationFromText(pregunta)
@@ -2432,7 +2494,10 @@ ${contextoContenido}`
     if (studentN !== null) {
       const respuestaLow = respuesta.toLowerCase()
       const dijoIncorrecto = respuestaLow.includes('incorrecto') || respuestaLow.includes('incorrect')
-      const opDeContexto = inferCanonicalOperationFromText(ultimoMensajeAsistente(historial)) || inferCanonicalOperationFromText(respuesta)
+      const ultimoMensajeParaOp = ultimoMensajeAsistente(historial)
+      const opDeContexto = inferCanonicalOperationFromText(ultimoMensajeParaOp) ||
+        inferCanonicalOperationFromText(respuesta) ||
+        inferSubtractionWordProblem(ultimoMensajeParaOp)
       const respuestaCorrectaCalculada = opDeContexto ? solveOperation(opDeContexto) : null
       respuestaVerificadaCorrecta = respuestaCorrectaCalculada !== null && Math.abs(studentN - respuestaCorrectaCalculada) < 0.001
       if (dijoIncorrecto && respuestaVerificadaCorrecta) {
@@ -2607,7 +2672,7 @@ ${contextoContenido}`
     if (estadoEvaluacionHumanistico === 'incorrecto') {
       respuesta = reforzarDiagnosticoPorFallos(respuesta, idiomaIngles, fallosConsecutivosFallback)
     }
-    respuesta = sanitizeChatFormatting(respuesta)
+    respuesta = sanitizeChatFormatting(respuesta, isExplicitTableRequest(pregunta))
 
     const { data: insertedRow, error: insertErr } = await supabase.from('interacciones').insert({
       usuario_id: user.id, colegio_id: perfil.colegio_id, materia_id: materia_uuid, materia_nombre_snapshot: materiaConsultaSharePoint || null,

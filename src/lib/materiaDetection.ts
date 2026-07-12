@@ -88,15 +88,26 @@ export function materiaActualEnSistemaCNB(materiaId: string): boolean {
 // answer in english", "responde en inglés"), no un cambio de materia. Sin
 // esta excepción, pedir la respuesta en otro idioma en medio de Matemática
 // (por ejemplo) activaba "cambio_materia_grado" hacia Inglés.
+// Hallazgo real (verificación posterior, 2026-07-12): dos problemas
+// distintos hacían que esto siguiera fallando pese al fix original. (1) La
+// función no le quitaba los acentos al texto, así que "explícame" (con
+// acento) nunca coincidía con un patrón escrito "explicame" — se agrega
+// normalización de acentos, igual que el resto del archivo. (2) Solo
+// cubría responde/contesta/habla — el verbo más natural para esto,
+// "explica"/"explícame"/"explicarme"/"explicas", no estaba cubierto en
+// ninguna de sus formas. Se usa un comodín de sufijo (\w*) sobre la raíz
+// del verbo en vez de enumerar cada conjugación.
 const PETICION_SOLO_IDIOMA = [
-  /\b(?:responde|respondeme|contesta|contestame|habla|hablame|puedes\s+(?:hablar|responder|contestar))\s+en\s+ingl[ée]s\b/i,
-  /\ben\s+ingl[ée]s\s+por\s+favor\b/i,
-  /\btraduce(?:lo|melo)?\s+(?:esto\s+)?(?:al|a)\s+ingl[ée]s\b/i,
-  /\b(?:respond|answer|reply|talk|speak)\s+in\s+english\b/i,
-  /\bin\s+english\s+please\b/i,
-  /\bcan\s+you\s+(?:answer|respond|reply|talk|speak)\s+in\s+english\b/i,
-  /\btranslate\s+(?:this|it|that)?\s*(?:to|into)\s+english\b/i,
+  /\b(?:responde\w*|contesta\w*|habla\w*|explica\w*|dime\w*|cuentame|escribelo|ponlo|puedes\s+\w+)\s+(?:esto\s+|eso\s+|lo\s+mismo\s+)?en\s+ingles\b/,
+  /\ben\s+ingles\s+por\s+favor\b/,
+  /\btraduce\w*\s+(?:esto\s+)?(?:al|a)\s+ingles\b/,
+  /\b(?:respond|answer|reply|talk|speak|explain|say|write)\w*\s+(?:this|it|that)?\s*in\s+english\b/,
+  /\bin\s+english\s+please\b/,
+  /\bcan\s+you\s+\w+\s+(?:this|it|that)?\s*in\s+english\b/,
+  /\btranslate\s+(?:this|it|that)?\s*(?:to|into)\s+english\b/,
 ]
 export function isLanguageSwitchRequest(text: string): boolean {
-  return PETICION_SOLO_IDIOMA.some((pattern) => pattern.test(text || ''))
+  const t = (text || '').toLowerCase()
+    .replace(/á/g,'a').replace(/é/g,'e').replace(/í/g,'i').replace(/ó/g,'o').replace(/ú/g,'u')
+  return PETICION_SOLO_IDIOMA.some((pattern) => pattern.test(t))
 }

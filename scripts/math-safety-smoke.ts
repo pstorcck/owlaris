@@ -3,6 +3,7 @@ import {
   buildGuidedMathHint,
   handleMathEvaluation,
   inferCanonicalOperationFromText,
+  inferSubtractionWordProblem,
   isLikelyNumericSubject,
   looksLikeMathPracticePrompt,
   normalizeStudentAnswer,
@@ -327,6 +328,25 @@ D) 10
     ),
     false
   )
+
+  // Hallazgo real CRÍTICO (rondas anteriores, sin corregir hasta esta
+  // verificación): un problema de aplicación en prosa ("tenía 150 y gastó
+  // 40, ¿cuánto le queda?") no tenía ningún respaldo determinístico —
+  // inferCanonicalOperationFromText exige los números juntos con un
+  // operador, y nunca los encuentra en prosa.
+  assert.equal(
+    inferSubtractionWordProblem('Ana tenía 150 quetzales y gastó 40 en útiles escolares, ¿cuántos quetzales le quedan?'),
+    '150-40'
+  )
+  assert.equal(inferSubtractionWordProblem('Juan tenía 20 canicas y perdió 5, ¿cuántas le quedan?'), '20-5')
+  assert.equal(inferSubtractionWordProblem('Tom had 150 dollars and spent 40, how many are left?'), '150-40')
+
+  // No debe activarse fuera del patrón muy específico que cubre (evita
+  // adivinar operaciones que no están claramente indicadas).
+  assert.equal(inferSubtractionWordProblem('¿Cuánto es 24/3+5?'), null)
+  assert.equal(inferSubtractionWordProblem('María tiene 150 y su hermana tiene 40 años, ¿cuántos años tiene su tío?'), null)
+  assert.equal(inferSubtractionWordProblem('¿Qué es la fotosíntesis?'), null)
+  assert.equal(inferSubtractionWordProblem(''), null)
 
   console.log('math-safety smoke passed')
 }

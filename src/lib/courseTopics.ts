@@ -406,6 +406,15 @@ export function extractCourseBlocks(content: string): CourseTopicBlock[] {
   return blocks
 }
 
+// Hallazgo real (verificación posterior, 2026-07-12): "dame los temas de
+// campos e interacciones" — sin decir "bloque" ni "unidad" — no activaba
+// esta detección en absoluto; el sistema devolvía el índice completo sin
+// filtrar. Se agrega la forma genérica "temas de X" como disparador
+// también. La ambigüedad con una petición normal ("dame los temas de esta
+// clase") se resuelve en route.ts: solo se responde con el bloque
+// filtrado si el nombre consultado coincide con un bloque real extraído
+// de la fuente (findBlockByQuery) — si no coincide con ninguno, la
+// petición sigue el flujo normal del índice completo.
 export function isBlockGroupingQuestion(value: string): boolean {
   const text = normalizeText(value)
   if (!text) return false
@@ -414,12 +423,16 @@ export function isBlockGroupingQuestion(value: string): boolean {
     'que abarca el bloque', 'que temas incluye la unidad', 'cuales son los temas de la unidad',
     'que abarca la unidad', 'what topics does the block include', 'what topics are in the unit',
     'what does the block cover', 'what does the unit cover',
+    'dame los temas de', 'dame el listado de temas de', 'quiero los temas de',
+    'cuales son los temas de', 'que temas tiene', 'give me the topics of',
+    'what are the topics of', 'topics of', 'topics in',
   ].some((needle) => text.includes(needle))
 }
 
 export function extractBlockQuery(value: string): string | null {
   const texto = (value || '').trim()
-  const match = /(?:bloque|unidad|unit|block)\s+(?:de\s+)?(.+?)[?¿]?$/i.exec(texto)
+  const match = /(?:bloque|unidad|unit|block)\s+(?:de\s+)?(.+?)[?¿]?$/i.exec(texto) ||
+    /(?:temas|topics)\s+(?:de|of|in)\s+(.+?)[?¿]?$/i.exec(texto)
   if (!match) return null
   const query = match[1].trim()
   return query.length >= 2 ? query : null
@@ -447,4 +460,59 @@ export function buildBlockTopicsResponse(input: {
   return idiomaIngles
     ? `The block "${block.nombre}" covers topics ${block.desde} to ${block.hasta}:\n\n${items}`
     : `El bloque "${block.nombre}" abarca los temas ${block.desde} a ${block.hasta}:\n\n${items}`
+}
+
+// Hallazgo real CRÍTICO (verificación posterior al instructivo, 2026-07-12):
+// la instrucción de PROMPT_BASE de "nunca inventes alineación a estándares
+// oficiales" no se cumplía de forma confiable — al preguntar si el curso
+// está alineado con NGSS, el modelo respondió con total confianza "Sí...
+// específicamente con el bloque de 'High School Life Sciences'", una
+// afirmación inventada sin ninguna fuente que la respalde. Una instrucción
+// de prompt por sí sola no es suficiente para esto — se agrega un guard
+// determinístico: solo se confirma una alineación si el nombre del
+// estándar aparece LITERALMENTE en el contenido oficial disponible; si no,
+// se responde con cautela explícita en vez de dejar que el modelo decida.
+export function isStandardsAlignmentQuestion(value: string): boolean {
+  const text = normalizeText(value)
+  if (!text) return false
+  const mencionaEstandar = /\b(ngss|common core|estandar(?:es)? (?:curricular(?:es)?|oficial(?:es)?|nacional(?:es)?)|standard)\b/.test(text)
+  if (!mencionaEstandar) return false
+  return /(?:esta|est[aá]n)\s+alineado|alinead[oa]\s+con|cumple\s+con|se\s+alinea|is\s+(?:this\s+)?aligned|aligned\s+with|does\s+this\s+(?:course|class)\s+(?:meet|follow|align)/.test(text)
+}
+
+const NOMBRES_ESTANDAR_CONOCIDOS = ['NGSS', 'Common Core', 'CNB', 'TEKS', 'IB', 'AP']
+
+export function extractStandardQuery(value: string): string | null {
+  const texto = (value || '').trim()
+  for (const nombre of NOMBRES_ESTANDAR_CONOCIDOS) {
+    if (new RegExp(`\\b${nombre.replace(/\s+/g, '\\s+')}\\b`, 'i').test(texto)) return nombre
+  }
+  const match = /(?:con|with)\s+(?:los\s+est[aá]ndares\s+de\s+|el\s+est[aá]ndar\s+de\s+)?([a-z0-9 .-]{2,40}?)[?¿.]?$/i.exec(texto)
+  if (!match) return null
+  const estandar = match[1].trim()
+  return estandar.length >= 2 ? estandar : null
+}
+
+export function buildStandardsAlignmentResponse(input: {
+  content: string
+  standard: string | null
+  idiomaIngles?: boolean
+}): string {
+  const { content, standard, idiomaIngles } = input
+  if (!standard) {
+    return idiomaIngles
+      ? 'I cannot confirm alignment with an official standard unless it is explicitly stated in the official course material — I do not have enough information to answer that with certainty.'
+      : 'No puedo confirmar una alineación con un estándar oficial a menos que esté indicada explícitamente en el material oficial del curso — no tengo suficiente información para responder eso con seguridad.'
+  }
+  const contenidoNormalizado = normalizeText(content || '')
+  const estandarNormalizado = normalizeText(standard)
+  const mencionado = !!contenidoNormalizado && contenidoNormalizado.includes(estandarNormalizado)
+  if (mencionado) {
+    return idiomaIngles
+      ? `The official material for this course explicitly mentions "${standard}" — but I can only confirm what is literally stated there, not interpret how each topic maps to it.`
+      : `El material oficial de este curso menciona explícitamente "${standard}" — pero solo puedo confirmar lo que está indicado ahí literalmente, no interpretar cómo se relaciona cada tema con ese estándar.`
+  }
+  return idiomaIngles
+    ? `I do not see "${standard}" mentioned anywhere in the official material available for this course, so I cannot confirm that alignment — I will not invent a mapping to a standard that is not explicitly stated in the source.`
+    : `No veo "${standard}" mencionado en ninguna parte del material oficial disponible para este curso, así que no puedo confirmar esa alineación — no voy a inventar una relación con un estándar que no esté indicado explícitamente en la fuente.`
 }

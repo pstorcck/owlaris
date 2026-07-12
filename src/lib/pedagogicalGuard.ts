@@ -14,6 +14,16 @@ const SOLICITUD_RESPUESTA_DIRECTA = [
   /no\s+me\s+expliques/i,
   /just\s+(?:give|tell)\s+me\s+the\s+answer/i,
   /give\s+me\s+the\s+answer/i,
+  // Hallazgo real (verificación posterior, 2026-07-12): "dame algo para
+  // copiar" es una petición directa y explícita de contenido listo para
+  // entregar como propio — no activaba el guard en absoluto porque no
+  // coincidía con ninguna de las frases más específicas de arriba
+  // (resumen/lista + "listo para entregar"), así que la respuesta pasaba
+  // sin ningún filtro incluso cuando el modelo decía "no lo haré" y luego
+  // lo hacía de todas formas.
+  /algo\s+para\s+copiar/i,
+  /(?:dame|damelo|escr[ií]belo|p[oó]nmelo)\s+.*(?:para\s+copiar|list[oa]\s+para\s+copiar)/i,
+  /something\s+(?:to|i\s+can|that\s+i\s+can)\s+copy/i,
 ]
 
 const CONTEXTO_PRACTICA = [
@@ -171,6 +181,17 @@ function elegirGuiaEstable(seed: string, idiomaIngles: boolean): string {
   return lista[hash % lista.length]
 }
 
+// Hallazgo real (verificación posterior, 2026-07-12): el modelo a veces
+// dice explícitamente "no puedo darte algo para copiar" o "ahora inténtalo
+// tú" y ACTO SEGUIDO entrega el texto completo entre comillas de todas
+// formas — ninguna de las frases de FRASES_RESPUESTA_FINAL_CONCEPTUAL
+// coincide porque el modelo no usa un anuncio como "aquí tienes la
+// conclusión completa", solo lo escribe directamente citado. Un bloque
+// citado largo (80+ caracteres) mientras el guard está activo es en sí
+// mismo la señal de fuga — casi nunca hace falta citar un párrafo tan
+// largo para guiar, así que se recorta y se reemplaza por una nota.
+const BLOQUE_CITADO_LARGO = /["“”']([^"“”']{80,})["“”']/g
+
 export function guardNoFinalAnswer(text: string, options: GuardOptions): { text: string; guardActivado: boolean } {
   if (!text || !shouldGuideWithoutFinalAnswer(options)) {
     return { text, guardActivado: false }
@@ -183,6 +204,9 @@ export function guardNoFinalAnswer(text: string, options: GuardOptions): { text:
   for (const pattern of FRASES_RESPUESTA_FINAL_CONCEPTUAL) {
     cleaned = cleaned.replace(pattern, '')
   }
+  cleaned = cleaned.replace(BLOQUE_CITADO_LARGO, options.idiomaIngles
+    ? '[a ready-to-copy passage was removed here — let\'s build it together instead]'
+    : '[aquí se quitó un texto listo para copiar — construyámoslo juntos en su lugar]')
 
   cleaned = cleaned
     .replace(/\n{3,}/g, '\n\n')

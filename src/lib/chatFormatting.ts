@@ -41,15 +41,24 @@ function stripCodeFences(text: string): string {
 // negritas con **, tablas con pipes, bloques de código). El prompt ya le
 // pide al modelo que no lo use, pero esta limpieza es la red de seguridad
 // determinística cuando el modelo lo genera de todas formas.
-export function sanitizeChatFormatting(text: string): string {
+// Hallazgo real (verificación posterior al instructivo, 2026-07-12): el
+// PROMPT_BASE ya permite una tabla con pipes cuando el alumno la pide
+// explícitamente (ítem 17), pero esta función seguía convirtiendo CUALQUIER
+// tabla a formato "Etiqueta: valor" en línea sin excepción — el modelo
+// obedecía la petición y esta limpieza la deshacía de todas formas. Se
+// agrega el parámetro preserveTables para saltar esa conversión cuando el
+// alumno pidió la tabla explícitamente.
+export function sanitizeChatFormatting(text: string, preserveTables = false): string {
   if (!text) return text
 
   let out = text
   out = stripCodeFences(out)
   out = out.replace(/^\s{0,3}#{1,6}\s+(.+?)\s*#*\s*$/gm, '$1')
   out = out.replace(/\*\*(.+?)\*\*/g, '$1')
-  out = convertMarkdownTables(out)
-  out = out.replace(new RegExp(SEPARATOR_ROW.source, 'gm'), '')
+  if (!preserveTables) {
+    out = convertMarkdownTables(out)
+    out = out.replace(new RegExp(SEPARATOR_ROW.source, 'gm'), '')
+  }
   out = out
     .replace(/\n{3,}/g, '\n\n')
     .replace(/[ \t]{2,}/g, ' ')
@@ -73,15 +82,30 @@ function normalizeText(value: string) {
     .trim()
 }
 
+// Subconjunto específico de isFormatRequest: SOLO frases que piden una
+// tabla explícitamente. Se usa para decidir si sanitizeChatFormatting debe
+// preservar la tabla en vez de convertirla a "Etiqueta: valor" en línea —
+// las demás peticiones de formato (lista, viñetas, "más bonito") no deben
+// activar esa excepción, solo la de tabla.
+const FRASES_TABLA_EXPLICITA = [
+  'ponme esto en una tabla', 'en una tabla', 'en formato de tabla', 'hazlo en tabla',
+  'put this in a table', 'in a table', 'in table format', 'make it a table',
+]
+
+export function isExplicitTableRequest(value: string): boolean {
+  const text = normalizeText(value)
+  if (!text) return false
+  return FRASES_TABLA_EXPLICITA.some((needle) => text.includes(needle))
+}
+
 export function isFormatRequest(value: string): boolean {
   const text = normalizeText(value)
   if (!text) return false
   return [
-    'ponme esto en una tabla', 'en una tabla', 'en formato de tabla', 'hazlo en tabla',
+    ...FRASES_TABLA_EXPLICITA,
     'organiza esto bonito', 'organizalo mejor', 'organiza esto mejor', 'ordenalo mejor',
     'hazlo en lista', 'ponlo en una lista', 'en viñetas', 'en bullets',
     'hazlo mas bonito', 'hazlo mas ordenado', 'ponlo mas claro',
-    'put this in a table', 'in a table', 'in table format', 'make it a table',
     'organize this nicely', 'make it more organized', 'put it in a list',
     'in bullet points', 'make it clearer', 'make it neater',
   ].some((needle) => text.includes(needle))

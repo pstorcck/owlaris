@@ -253,6 +253,43 @@ Mapa del curso
   assert.equal(resumenListo.guardActivado, true)
   assert.doesNotMatch(resumenListo.text, /resumen completo.*listo para entregar/i)
 
+  // Hallazgo real CRÍTICO (verificación posterior, 2026-07-12): "dame algo
+  // para copiar" no activaba el guard en absoluto (no coincidía con
+  // ninguna frase específica de resumen/lista/ensayo), así que la
+  // respuesta del modelo pasaba sin ningún filtro incluso diciendo "no lo
+  // haré" y entregándolo de todas formas.
+  assert.equal(
+    shouldGuideWithoutFinalAnswer({ pregunta: 'dame algo para copiar sobre la revolución francesa', tipoPregunta: 'academica', materiaNumerica: false }),
+    true
+  )
+  const algoParaCopiar = guardNoFinalAnswer(
+    'No puedo darte algo para copiar directamente, pero aquí tienes: "La Revolución Francesa fue un evento histórico que transformó la sociedad europea al derrocar la monarquía absoluta y establecer principios de libertad, igualdad y fraternidad que influyeron en movimientos posteriores." Espero que te sirva.',
+    { pregunta: 'dame algo para copiar sobre la revolución francesa', tipoPregunta: 'academica', materiaNumerica: false }
+  )
+  assert.equal(algoParaCopiar.guardActivado, true)
+  assert.doesNotMatch(algoParaCopiar.text, /monarqu[ií]a absoluta/i)
+
+  // Hallazgo real CRÍTICO (verificación posterior, 2026-07-12): las
+  // conclusiones se entregaban completas entre comillas pese a decir
+  // "ahora inténtalo tú" — el guard no cubría este patrón porque no hay
+  // un anuncio explícito tipo "aquí está la conclusión completa", solo un
+  // bloque citado largo.
+  const conclusionEntreComillas = guardNoFinalAnswer(
+    'Ahora inténtalo tú: "En conclusión, el cambio climático representa uno de los mayores desafíos de nuestra generación y requiere acción inmediata de gobiernos, empresas e individuos para mitigar sus efectos devastadores en el planeta."',
+    { pregunta: 'escribe la conclusión de mi ensayo sobre el cambio climático', tipoPregunta: 'academica', materiaNumerica: false }
+  )
+  assert.equal(conclusionEntreComillas.guardActivado, true)
+  assert.doesNotMatch(conclusionEntreComillas.text, /mayores desaf[ií]os de nuestra generaci[oó]n/i)
+
+  // Una cita corta e ilustrativa (menos de 80 caracteres) dentro de una
+  // respuesta CON el guard activo no debe recortarse — solo los bloques
+  // largos son sospechosos de ser contenido listo para copiar.
+  const citaCorta = guardNoFinalAnswer(
+    'Recuerda la frase célebre "Libertad, igualdad, fraternidad" del lema revolucionario. ¿Qué te parece que significa cada palabra?',
+    { pregunta: 'escribe la conclusión de mi ensayo sobre la revolución francesa', tipoPregunta: 'academica', materiaNumerica: false }
+  )
+  assert.match(citaCorta.text, /Libertad, igualdad, fraternidad/)
+
   // Una explicación legítima que naturalmente cierra con "en conclusión..."
   // como parte de guiar (no de entregar un ensayo terminado) no debe
   // dispararse, porque el patrón exige "la conclusión de TU ensayo/trabajo",

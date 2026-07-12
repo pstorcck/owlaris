@@ -762,6 +762,41 @@ function selectRelevantMathText(text: string): string {
   return text
 }
 
+// Hallazgo real CRÍTICO (reportado en rondas anteriores, sin corregir
+// hasta esta verificación): un problema de aplicación en prosa ("tenía
+// 150 quetzales y gastó 40, ¿cuánto le queda?") no contiene una expresión
+// matemática literal ("150-40") en ningún punto del texto, así que
+// inferCanonicalOperationFromText (que exige los números juntos con un
+// operador entre ellos) siempre devolvía null para este tipo de problema
+// — dejando sin ningún respaldo determinístico la calificación del patrón
+// de resta con cambio (inicio - cambio = final), el más común en
+// primaria. Cuando el modelo se equivocaba y calificaba mal una respuesta
+// numéricamente correcta, no había forma de detectarlo ni corregirlo.
+// Esta heurística es deliberadamente MUY conservadora: solo se activa con
+// EXACTAMENTE dos números en el texto, un verbo de resta claro, y una
+// pregunta de "cuánto queda" — en cualquier otro caso devuelve null (nunca
+// adivina una operación que no está claramente indicada).
+const VERBOS_RESTA_CAMBIO = [
+  'gasto', 'gasta', 'gastaron', 'perdio', 'pierde', 'perdieron', 'quito', 'quita', 'quitaron',
+  'regalo', 'regala', 'regalaron', 'vendio', 'vende', 'vendieron', 'uso', 'usa', 'usaron',
+  'como', 'come', 'comieron', 'dio', 'da', 'dieron', 'entrego', 'entrega', 'entregaron',
+  'presto', 'presta', 'prestaron', 'spent', 'lost', 'gave', 'used', 'ate', 'sold',
+]
+const PREGUNTA_CUANTO_QUEDA = /cuant[oa]s?[^.?]{0,30}(?:queda|sobra)|how many[^.?]{0,30}(?:left|remain)/i
+
+export function inferSubtractionWordProblem(text: string): string | null {
+  if (!text) return null
+  const normalizado = text
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+  if (!PREGUNTA_CUANTO_QUEDA.test(normalizado)) return null
+  if (!VERBOS_RESTA_CAMBIO.some((v) => normalizado.includes(v))) return null
+  const numeros = Array.from(normalizado.matchAll(/\d+(?:[.,]\d+)?/g)).map((m) => m[0].replace(',', '.'))
+  if (numeros.length !== 2) return null
+  return `${numeros[0]}-${numeros[1]}`
+}
+
 export function inferCanonicalOperationFromText(text: string): string | null {
   if (!text) return null
 

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import {
   detectarMateriaDesdeTexto,
+  isLanguageSwitchRequest,
   materiaActualEnSistemaCNB,
   normalizarMateria,
   TEMAS_POR_MATERIA,
@@ -82,6 +83,27 @@ function main() {
     '"velocidad" por sí sola no debería activar un cambio de materia a Física'
   )
   assert.equal(detectarMateriaDesdeTexto('necesito ayuda con mi trabajo de matemática'), null, '"trabajo" no debería detectarse como Física')
+
+  // Hallazgo real CRÍTICO (verificación posterior, 2026-07-12): dos fallas
+  // distintas hacían que "responde/explícame en inglés" siguiera
+  // confundiéndose con cambiar a la clase de Inglés pese a un fix
+  // anterior: (1) el verbo "explica"/"explícame" no estaba cubierto, y
+  // (2) la función no le quitaba los acentos al texto, así que
+  // "explícame" (con acento) nunca coincidía con un patrón sin acento.
+  for (const frase of [
+    'responde en inglés',
+    'contéstame en inglés por favor',
+    '¿me lo explicas en inglés?',
+    'explícame esto en inglés',
+    'puedes explicarme en inglés',
+    '¿me lo puedes decir en inglés?',
+    'can you explain this in english?',
+    'answer in english please',
+  ]) {
+    assert.equal(isLanguageSwitchRequest(frase), true, frase)
+  }
+  assert.equal(isLanguageSwitchRequest('¿qué es la fotosíntesis?'), false)
+  assert.equal(isLanguageSwitchRequest(''), false)
 
   console.log('materia-detection smoke passed')
 }

@@ -7,15 +7,19 @@ import {
   buildAreaPresenceResponse,
   buildBlockTopicsResponse,
   buildNextTopicResponse,
+  buildStandardsAlignmentResponse,
   extractAreaQuery,
   extractBlockQuery,
   extractCourseBlocks,
   extractCourseTopicIndex,
   extractNextTopicReference,
+  extractStandardQuery,
+  findBlockByQuery,
   findNextTopic,
   isBlockGroupingQuestion,
   isBroadAreaPresenceQuestion,
   isNextTopicRequest,
+  isStandardsAlignmentQuestion,
 } from '../src/lib/courseTopics'
 
 type Failure = { name: string; message: string }
@@ -169,6 +173,62 @@ Cantidad de temas: 6
   test('sin bloques en la fuente (documento plano sin agrupar), no se inventan agrupaciones', () => {
     const sinBloques = extractCourseBlocks('## Índice de temas\n1. Fotosíntesis\n2. Respiración celular')
     assert.equal(sinBloques.length, 0)
+  })
+
+  // Hallazgo real (verificación posterior, 2026-07-12): "dame los temas de
+  // campos e interacciones" (sin decir "bloque"/"unidad") no se reconocía
+  // en absoluto — el sistema devolvía el índice completo sin filtrar.
+  for (const frase of [
+    'dame los temas de campos e interacciones',
+    'cuáles son los temas de estructura de la materia',
+    'give me the topics of fields and interactions',
+  ]) {
+    test(`block-grouping-generico-detectado: ${frase}`, () => {
+      assert.equal(isBlockGroupingQuestion(frase), true, frase)
+    })
+  }
+
+  test('petición genérica de temas de un bloque real encuentra el bloque correcto', () => {
+    const query = extractBlockQuery('dame los temas de campos e interacciones')
+    const encontrado = findBlockByQuery(bloques, query)
+    assert.equal(encontrado?.nombre, 'Campos e interacciones')
+  })
+
+  test('una petición genérica de temas SIN relación a ningún bloque real no encuentra coincidencia (debe seguir el flujo normal)', () => {
+    const query = extractBlockQuery('dame los temas de esta clase')
+    const encontrado = findBlockByQuery(bloques, query)
+    assert.equal(encontrado, null)
+  })
+
+  // Hallazgo real CRÍTICO (verificación posterior, 2026-07-12): al
+  // preguntar si el curso está alineado con NGSS, el modelo respondía con
+  // total confianza una alineación inventada, sin ninguna fuente real.
+  const contenidoConEstandar = 'Índice de temas alineado al estándar NGSS para ciencias.\n1. Fotosíntesis\n2. Genética'
+  const contenidoSinEstandar = 'Índice de temas\n1. Fotosíntesis\n2. Genética'
+
+  for (const frase of [
+    '¿está el curso alineado con NGSS?',
+    '¿cumple con los estándares de Common Core?',
+    'does this course meet NGSS standards?',
+    'is this course aligned with NGSS?',
+  ]) {
+    test(`standards-alignment-detectada: ${frase}`, () => {
+      assert.equal(isStandardsAlignmentQuestion(frase), true, frase)
+    })
+  }
+  test('no detecta alineación curricular en una pregunta normal', () => {
+    assert.equal(isStandardsAlignmentQuestion('¿qué es la fotosíntesis?'), false)
+  })
+
+  test('confirma alineación solo cuando el estándar aparece literalmente en la fuente', () => {
+    const respuesta = buildStandardsAlignmentResponse({ content: contenidoConEstandar, standard: 'NGSS', idiomaIngles: false })
+    assert.match(respuesta, /menciona expl[ií]citamente "NGSS"/)
+  })
+
+  test('responde con cautela y NO inventa una alineación cuando el estándar no está en la fuente', () => {
+    const respuesta = buildStandardsAlignmentResponse({ content: contenidoSinEstandar, standard: 'NGSS', idiomaIngles: false })
+    assert.match(respuesta, /no veo "NGSS" mencionado/i)
+    assert.doesNotMatch(respuesta, /^S[ií]/i)
   })
 
   if (failures.length > 0) {
