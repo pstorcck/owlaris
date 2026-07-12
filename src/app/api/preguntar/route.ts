@@ -4,7 +4,7 @@ import { checkContentSafety, type ContentSafetyResult } from '@/lib/contentSafet
 import { extractRelevantContentWindow } from '@/lib/relevantContentWindow'
 import { buildContradictionClarificationResponse, detectContradictoryInstruction } from '@/lib/contradictoryInstructions'
 import { guardHumanisticResponse } from '@/lib/humanisticSafety'
-import { describeFinalAnswerPolicyForPrompt, guardNoFinalAnswer } from '@/lib/pedagogicalGuard'
+import { buildReadyToCopyRedirect, describeFinalAnswerPolicyForPrompt, guardNoFinalAnswer, isReadyToCopyRequest } from '@/lib/pedagogicalGuard'
 import { buildGradeAdaptationInstruction } from '@/lib/gradeAdaptation'
 import { pareceIdiomaDistinto } from '@/lib/languageDetection'
 import { buscarStaffColegio, buscarSuperadmins, elegirFuenteDestinatariosAlerta, resolverDestinatariosAlerta, type DestinatarioAlerta } from '@/lib/alertaEmergencia'
@@ -26,6 +26,7 @@ import {
   extractCourseBlocks,
   extractCourseTopicIndex,
   extractNextTopicReference,
+  extractStandardFromPriorResponse,
   extractStandardQuery,
   findBlockByQuery,
   isBlockGroupingQuestion,
@@ -33,6 +34,7 @@ import {
   isCourseTopicListRequest,
   isNextTopicRequest,
   isStandardsAlignmentQuestion,
+  isStandardsCitationFollowUp,
   matchNumberedListSelection,
 } from '@/lib/courseTopics'
 import {
@@ -56,6 +58,7 @@ import {
   extractAndCleanOperation,
   handleMathEvaluation,
   inferCanonicalOperationFromText,
+  inferRectangleWordProblem,
   inferSubtractionWordProblem,
   isLikelyNumericSubject,
   isSafeCanonicalOperation,
@@ -97,7 +100,7 @@ import {
   isResumeTopicChipRequest,
   stripUnapprovedExternalResources,
 } from '@/lib/tutorContext'
-import { withOpenAIRetry } from '@/lib/openaiRetry'
+import { withOpenAIRetry, withRetry } from '@/lib/openaiRetry'
 import { calcularCostoUSD } from '@/lib/openaiCost'
 import { registrarAlertaTecnica } from '@/lib/technicalAlerts'
 import { clasificarErrorTecnico, construirContextoErrorTecnico, mensajeErrorTecnico } from '@/lib/technicalErrors'
@@ -370,12 +373,20 @@ function ultimoMensajeAsistente(historial: { rol: string; contenido: string }[] 
   return ''
 }
 
+// Hallazgo real (segunda verificación, 2026-07-12): tres errores de
+// servidor consecutivos antes de que una práctica de Geometría tuviera
+// éxito — patrón típico de una falla transitoria de red al llamar a
+// Microsoft Graph (SharePoint). A diferencia de la llamada a OpenAI (que
+// ya tenía reintento con withOpenAIRetry), ninguna de estas llamadas de
+// red tenía ningún reintento — una sola falla de conexión bastaba para
+// obligar al alumno a reenviar el mensaje manualmente. Se envuelven las
+// llamadas de red a Graph con la misma lógica de reintento genérica.
 async function getToken(): Promise<string | null> {
   try {
-    const res = await fetch(`https://login.microsoftonline.com/${process.env.AZURE_TENANT_ID}/oauth2/v2.0/token`, {
+    const res = await withRetry(() => fetch(`https://login.microsoftonline.com/${process.env.AZURE_TENANT_ID}/oauth2/v2.0/token`, {
       method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({ client_id: process.env.AZURE_CLIENT_ID!, client_secret: process.env.AZURE_CLIENT_SECRET!, scope: 'https://graph.microsoft.com/.default', grant_type: 'client_credentials' }),
-    })
+    }), { maxRetries: 1, baseDelayMs: 300 })
     const data = await res.json()
     return data.access_token || null
   } catch { return null }
@@ -392,7 +403,10 @@ type ArchivoSharePoint = {
 async function listarHijos(driveId: string, token: string, ...segs: string[]): Promise<ArchivoSharePoint[]> {
   const ruta = segs.map(s => encodeURIComponent(s)).join('/')
   const url = `https://graph.microsoft.com/v1.0/drives/${driveId}/root:/${ruta}:/children`
-  const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } })
+  let res: Response
+  try {
+    res = await withRetry(() => fetch(url, { headers: { Authorization: `Bearer ${token}` } }), { maxRetries: 1, baseDelayMs: 300 })
+  } catch { return [] }
   if (!res.ok) return []
   const data = await res.json()
   return data.value || []
@@ -407,14 +421,17 @@ async function buscarArchivosPorBusqueda(driveId: string, token: string, query: 
   const ruta = segs.map(s => encodeURIComponent(s)).join('/')
   const safeQuery = encodeURIComponent(query.replace(/'/g, "''"))
   const url = `https://graph.microsoft.com/v1.0/drives/${driveId}/root:/${ruta}:/search(q='${safeQuery}')`
-  const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } })
+  let res: Response
+  try {
+    res = await withRetry(() => fetch(url, { headers: { Authorization: `Bearer ${token}` } }), { maxRetries: 1, baseDelayMs: 300 })
+  } catch { return [] }
   if (!res.ok) return []
   const data = await res.json()
   return (data.value || []).filter((a: ArchivoSharePoint) => a.file && isSupportedSharePointContentFile(a.name))
 }
 
 async function extraerTexto(url: string, nombreArchivo = ''): Promise<string> {
-  const r = await fetch(url)
+  const r = await withRetry(() => fetch(url), { maxRetries: 1, baseDelayMs: 300 })
   if (!r.ok) return ''
   if (isSharePointPlainTextContent(nombreArchivo)) {
     return (await r.text()).replace(/\r\n/g, '\n').trim()
@@ -569,7 +586,7 @@ async function leerConfig(): Promise<string> {
       const rutaDoc = `Owlaris/_Configuracion/${doc}`
       const urlEncoded = rutaDoc.split('/').map((s: string) => encodeURIComponent(s)).join('/')
       const url = `https://graph.microsoft.com/v1.0/drives/${driveId}/root:/${urlEncoded}`
-      const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } })
+      const res = await withRetry(() => fetch(url, { headers: { Authorization: `Bearer ${token}` } }), { maxRetries: 1, baseDelayMs: 300 })
       if (!res.ok) { console.log(`Config no encontrada: ${doc}`); continue }
       const data = await res.json()
       if (!data['@microsoft.graph.downloadUrl']) continue
@@ -610,7 +627,7 @@ async function leerCarpetasGrado(
       try {
         const ruta = encodeURIComponent('Owlaris') + '/' + encodeURIComponent(carpetaColegio) + '/' + encodeURIComponent(gradoCarpeta)
         const url = 'https://graph.microsoft.com/v1.0/drives/' + driveId + '/root:/' + ruta + ':/children'
-        const res = await fetch(url, { headers: { Authorization: 'Bearer ' + token } })
+        const res = await withRetry(() => fetch(url, { headers: { Authorization: 'Bearer ' + token } }), { maxRetries: 1, baseDelayMs: 300 })
         if (res.ok) {
           const data = await res.json()
           const value = data.value || []
@@ -693,14 +710,14 @@ async function leerDocumentosPadres(): Promise<string> {
   try {
     const ruta = encodeURIComponent('Owlaris') + '/' + encodeURIComponent('Owlaris padres')
     const url = `https://graph.microsoft.com/v1.0/drives/${driveId}/root:/${ruta}:/children`
-    const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } })
+    const res = await withRetry(() => fetch(url, { headers: { Authorization: `Bearer ${token}` } }), { maxRetries: 1, baseDelayMs: 300 })
     if (!res.ok) return ''
     const data = await res.json()
     const docs = (data.value || []).filter((i: {file?:unknown}) => i.file)
     for (const doc of docs) {
       try {
         const dlUrl = `https://graph.microsoft.com/v1.0/drives/${driveId}/items/${doc.id}/content`
-        const dlRes = await fetch(dlUrl, { headers: { Authorization: `Bearer ${token}` } })
+        const dlRes = await withRetry(() => fetch(dlUrl, { headers: { Authorization: `Bearer ${token}` } }), { maxRetries: 1, baseDelayMs: 300 })
         if (dlRes.ok) {
           const texto = await dlRes.text()
           const mid = Math.floor(texto.length / 2)
@@ -1992,7 +2009,7 @@ export async function POST(req: NextRequest) {
       // exige números juntos con un operador y nunca los encuentra en
       // prosa. inferSubtractionWordProblem cubre el patrón más común
       // (inicio - cambio = final) de forma muy conservadora.
-      const opInferida = inferCanonicalOperationFromText(ultimaPregunta) || inferSubtractionWordProblem(ultimaPregunta)
+      const opInferida = inferRectangleWordProblem(ultimaPregunta) || inferCanonicalOperationFromText(ultimaPregunta) || inferSubtractionWordProblem(ultimaPregunta)
       if (opInferida && isSafeCanonicalOperation(opInferida) && solveOperation(opInferida) !== null) {
         evaluacionProtocolo = await handleMathEvaluation(
           ultimaPregunta + '\n[OP: ' + opInferida + ']',
@@ -2327,6 +2344,79 @@ export async function POST(req: NextRequest) {
       })
     }
 
+    // Hallazgo real CRÍTICO (segunda verificación, 2026-07-12): la pregunta
+    // directa de alineación curricular ya se interceptaba arriba, pero el
+    // seguimiento natural ("cítame textualmente dónde dice eso") no repite
+    // el nombre del estándar ni la frase de alineación, así que caía a
+    // generación libre del modelo — que inventó una justificación elaborada
+    // y falsa al sentirse presionado. Se reutiliza el mismo resultado
+    // determinístico si el turno anterior fue una respuesta de este guard.
+    if (tipoPregunta === 'academica' && !esBienvenida && isStandardsCitationFollowUp(pregunta)) {
+      const estandarPrevio = extractStandardFromPriorResponse(ultimoMensajeAsistente(historial))
+      if (estandarPrevio) {
+        const respuesta = buildStandardsAlignmentResponse({ content: contenidoCurricular, standard: estandarPrevio, idiomaIngles })
+        const { data: insertedRow } = await supabase.from('interacciones').insert({
+          usuario_id: user.id,
+          colegio_id: perfil.colegio_id,
+          materia_id: materia_uuid, materia_nombre_snapshot: materiaConsultaSharePoint || null,
+          grado: gradoEfectivo,
+          tema_detectado: 'Consulta de alineación curricular (seguimiento)',
+          pregunta,
+          respuesta,
+          tokens_usados: 0,
+          costo_usd: 0,
+          modelo_usado: 'course_index_guard',
+          documento_fuente: documentoFuente,
+          sospecha_copia: false,
+          guard_activado: true,
+        }).select('id').single()
+        return NextResponse.json({
+          respuesta,
+          source: 'course_index_guard',
+          tokens: 0,
+          documento_fuente: documentoFuente,
+          interaction_id: insertedRow?.id || null,
+          pending_math_interaction_id: null,
+        })
+      }
+    }
+
+    // Hallazgo real (segunda verificación, 2026-07-12): el modelo a veces
+    // decía explícitamente "no puedo darte algo para copiar" y ACTO SEGUIDO
+    // entregaba el texto completo de todas formas — sin comillas en varios
+    // casos, así que ninguna limpieza posterior del texto (BLOQUE_CITADO_
+    // LARGO) lo detectaba. Confiar en que el modelo cumpla la regla y luego
+    // limpiar el resultado es frágil; para esta petición específica (no hay
+    // ambigüedad: pide textualmente contenido listo para entregar como
+    // propio) se corta antes de invocar al modelo con una respuesta
+    // determinística que redirige a construirlo juntos.
+    if (tipoPregunta === 'academica' && !esBienvenida && isReadyToCopyRequest(pregunta)) {
+      const respuesta = buildReadyToCopyRedirect(idiomaIngles)
+      const { data: insertedRow } = await supabase.from('interacciones').insert({
+        usuario_id: user.id,
+        colegio_id: perfil.colegio_id,
+        materia_id: materia_uuid, materia_nombre_snapshot: materiaConsultaSharePoint || null,
+        grado: gradoEfectivo,
+        tema_detectado: 'Solicitud de texto listo para copiar',
+        pregunta,
+        respuesta,
+        tokens_usados: 0,
+        costo_usd: 0,
+        modelo_usado: 'course_index_guard',
+        documento_fuente: documentoFuente,
+        sospecha_copia: true,
+        guard_activado: true,
+      }).select('id').single()
+      return NextResponse.json({
+        respuesta,
+        source: 'course_index_guard',
+        tokens: 0,
+        documento_fuente: documentoFuente,
+        interaction_id: insertedRow?.id || null,
+        pending_math_interaction_id: null,
+      })
+    }
+
     const operacionDirecta = inferCanonicalOperationFromText(pregunta)
     const tieneOperacionDirectaSegura = !!operacionDirecta && isSafeCanonicalOperation(operacionDirecta) && solveOperation(operacionDirecta) !== null
 
@@ -2496,7 +2586,8 @@ ${contextoContenido}`
       const respuestaLow = respuesta.toLowerCase()
       const dijoIncorrecto = respuestaLow.includes('incorrecto') || respuestaLow.includes('incorrect')
       const ultimoMensajeParaOp = ultimoMensajeAsistente(historial)
-      const opDeContexto = inferCanonicalOperationFromText(ultimoMensajeParaOp) ||
+      const opDeContexto = inferRectangleWordProblem(ultimoMensajeParaOp) ||
+        inferCanonicalOperationFromText(ultimoMensajeParaOp) ||
         inferCanonicalOperationFromText(respuesta) ||
         inferSubtractionWordProblem(ultimoMensajeParaOp)
       const respuestaCorrectaCalculada = opDeContexto ? solveOperation(opDeContexto) : null
@@ -2593,6 +2684,15 @@ ${contextoContenido}`
     const opInferida = !_opExtraidaValida && looksLikeMathPracticePrompt(respuesta)
       ? inferCanonicalOperationFromText(respuesta)
       : null
+    // Hallazgo real CRÍTICO (segunda verificación, 2026-07-12): opCoincideConTexto
+    // solo verifica que los números de la etiqueta [OP:] aparezcan en el texto
+    // visible, no que la OPERACIÓN sea la correcta para el problema — un
+    // perímetro/área de rectángulo puede quedar mal etiquetado (ej. una resta)
+    // y aun así "coincidir" porque ambos números están presentes. Cuando el
+    // patrón de rectángulo se detecta con certeza (ver inferRectangleWordProblem),
+    // su cálculo tiene prioridad sobre cualquier etiqueta del modelo, correcta
+    // o no, porque se deriva directamente de la estructura del problema.
+    const opGeometriaEnRespuesta = looksLikeMathPracticePrompt(respuesta) ? inferRectangleWordProblem(respuesta) : null
     const opAlumno = inferCanonicalOperationFromText(pregunta)
     const respuestaGuiaEcuacion = /(?:suma|sumar|resta|restar|divide|dividir|multiplica|multiplicar|ambos lados|despej|aisla|a[ií]sla|both sides|isolate|add|subtract|divide|multiply)/i.test(respuesta)
     const opDesdeAlumno = opAlumno &&
@@ -2603,7 +2703,7 @@ ${contextoContenido}`
       respuestaGuiaEcuacion
       ? opAlumno
       : null
-    let opFinalRespuesta = _opExtraidaValida || opInferida || opDesdeAlumno
+    let opFinalRespuesta = opGeometriaEnRespuesta || _opExtraidaValida || opInferida || opDesdeAlumno
     let opValidaEnRespuesta = isSafeCanonicalOperation(opFinalRespuesta) ? opFinalRespuesta : null
     // Antes esta rama (la que responde cuando el alumno recién elige un
     // tema, ej. "multiplicaciones") nunca llamaba a resolveMathPracticeFocus

@@ -13,6 +13,7 @@ import {
   extractCourseBlocks,
   extractCourseTopicIndex,
   extractNextTopicReference,
+  extractStandardFromPriorResponse,
   extractStandardQuery,
   findBlockByQuery,
   findNextTopic,
@@ -20,6 +21,7 @@ import {
   isBroadAreaPresenceQuestion,
   isNextTopicRequest,
   isStandardsAlignmentQuestion,
+  isStandardsCitationFollowUp,
 } from '../src/lib/courseTopics'
 
 type Failure = { name: string; message: string }
@@ -188,6 +190,20 @@ Cantidad de temas: 6
     })
   }
 
+  // Hallazgo real (segunda verificación, 2026-07-12): "dame TODOS los temas
+  // de X" no se detectaba porque la lista anterior usaba coincidencia de
+  // substring exacto — la palabra "todos" insertada rompía la substring
+  // literal "dame los temas de".
+  for (const frase of [
+    'dame todos los temas de campos e interacciones',
+    'dame todas los temas de estructura de la materia',
+    'cuales son todos los temas de campos e interacciones',
+  ]) {
+    test(`block-grouping-con-palabra-insertada-detectado: ${frase}`, () => {
+      assert.equal(isBlockGroupingQuestion(frase), true, frase)
+    })
+  }
+
   test('petición genérica de temas de un bloque real encuentra el bloque correcto', () => {
     const query = extractBlockQuery('dame los temas de campos e interacciones')
     const encontrado = findBlockByQuery(bloques, query)
@@ -229,6 +245,46 @@ Cantidad de temas: 6
     const respuesta = buildStandardsAlignmentResponse({ content: contenidoSinEstandar, standard: 'NGSS', idiomaIngles: false })
     assert.match(respuesta, /no veo "NGSS" mencionado/i)
     assert.doesNotMatch(respuesta, /^S[ií]/i)
+  })
+
+  // Hallazgo real CRÍTICO (segunda verificación, 2026-07-12): la pregunta
+  // directa de alineación se interceptaba, pero el seguimiento natural
+  // ("cítame textualmente dónde dice eso") no repite el nombre del
+  // estándar ni la frase de alineación, y caía a generación libre del
+  // modelo — que inventó una justificación elaborada y falsa. La respuesta
+  // inicial ahora incluye la línea literal donde aparece el estándar, y un
+  // guard aparte reconoce el seguimiento para reutilizar el mismo
+  // resultado determinístico.
+  test('la respuesta de alineación incluye la línea literal donde aparece el estándar', () => {
+    const respuesta = buildStandardsAlignmentResponse({ content: contenidoConEstandar, standard: 'NGSS', idiomaIngles: false })
+    assert.match(respuesta, /línea literal en la fuente es/i)
+    assert.match(respuesta, /alineado al est[aá]ndar NGSS/i)
+  })
+
+  for (const frase of [
+    'cítame textualmente dónde dice eso',
+    '¿en qué parte exacta dice eso?',
+    'muéstrame textualmente donde',
+    'show me exactly where it says that',
+  ]) {
+    test(`standards-citation-follow-up-detectado: ${frase}`, () => {
+      assert.equal(isStandardsCitationFollowUp(frase), true, frase)
+    })
+  }
+  test('no confunde una pregunta normal con un seguimiento de cita textual', () => {
+    assert.equal(isStandardsCitationFollowUp('¿qué es la fotosíntesis?'), false)
+  })
+
+  test('recupera el estándar consultado de la respuesta anterior del guard (caso confirmado)', () => {
+    const respuestaPrevia = buildStandardsAlignmentResponse({ content: contenidoConEstandar, standard: 'NGSS', idiomaIngles: false })
+    assert.equal(extractStandardFromPriorResponse(respuestaPrevia), 'NGSS')
+  })
+  test('recupera el estándar consultado de la respuesta anterior del guard (caso no encontrado)', () => {
+    const respuestaPrevia = buildStandardsAlignmentResponse({ content: contenidoSinEstandar, standard: 'NGSS', idiomaIngles: false })
+    assert.equal(extractStandardFromPriorResponse(respuestaPrevia), 'NGSS')
+  })
+  test('no confunde un mensaje normal del asistente con una respuesta previa del guard', () => {
+    assert.equal(extractStandardFromPriorResponse('Claro, la fotosíntesis es el proceso por el cual las plantas producen energía.'), null)
   })
 
   if (failures.length > 0) {

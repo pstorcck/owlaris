@@ -28,3 +28,13 @@ export async function withOpenAIRetry<T>(
   }
   throw lastError
 }
+
+// Hallazgo real (segunda verificación, 2026-07-12): el alumno reportó tres
+// errores de servidor consecutivos antes de que una práctica de Geometría
+// tuviera éxito — un patrón típico de una falla transitoria de red al
+// llamar a Microsoft Graph (SharePoint), donde el flujo de búsqueda de
+// contenido hace muchas llamadas de red secuenciales antes de responder, y
+// ninguna tenía reintento (a diferencia de la llamada a OpenAI, que sí lo
+// tenía desde antes). Se reutiliza la misma lógica de reintento genérica
+// para envolver esas llamadas de red también, en vez de duplicarla.
+export const withRetry = withOpenAIRetry

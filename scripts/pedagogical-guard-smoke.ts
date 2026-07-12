@@ -1,5 +1,12 @@
 import assert from 'node:assert/strict'
-import { describeFinalAnswerPolicyForPrompt, guardNoFinalAnswer, isDisguiseAiAuthorshipRequest, shouldGuideWithoutFinalAnswer } from '../src/lib/pedagogicalGuard'
+import {
+  buildReadyToCopyRedirect,
+  describeFinalAnswerPolicyForPrompt,
+  guardNoFinalAnswer,
+  isDisguiseAiAuthorshipRequest,
+  isReadyToCopyRequest,
+  shouldGuideWithoutFinalAnswer,
+} from '../src/lib/pedagogicalGuard'
 import {
   buildExerciseRecallResponse,
   buildPendingContextResponse,
@@ -347,6 +354,55 @@ Mapa del curso
   // comparación, secuencia), no solo en matemáticas.
   assert.match(politica, /ajusta el TIPO de pista al tipo de error/i)
   assert.match(politica, /causa-efecto/i)
+
+  // Hallazgo real CRÍTICO (segunda verificación, 2026-07-12): BLOQUE_CITADO_
+  // LARGO se aplicaba SIEMPRE que el guard estaba activo por CUALQUIER
+  // motivo — y materiaNumerica se activa en bloque para cualquier materia
+  // numérica (incluida Biología). Una cita larga totalmente incidental
+  // (ej. una definición extensa en una respuesta de Biología, sin ningún
+  // riesgo real de trabajo listo para copiar) se recortaba igual, y se le
+  // pegaba encima la frase-guía genérica — el síntoma reportado como
+  // "contexto/frase pegada al inicio de la respuesta", reproducible incluso
+  // en el primer mensaje de una sesión nueva. Ahora el recorte de cita
+  // larga solo debe aplicar cuando el motivo específico es un riesgo real
+  // de trabajo listo para copiar (ensayo/resumen terminado, disfrazar
+  // autoría de IA, o pedir la respuesta/algo para copiar) — no por el mero
+  // hecho de ser materia numérica.
+  const citaLargaIncidentalBiologia = guardNoFinalAnswer(
+    'Aquí tienes la comparación: célula procariota carece de núcleo definido y sus organelos no están rodeados de membrana, mientras que la célula eucariota sí tiene núcleo delimitado por membrana nuclear y organelos membranosos especializados. ¿Qué diferencia te parece más importante?',
+    { pregunta: 'ponme esto en una tabla comparando célula procariota y eucariota', tipoPregunta: 'academica', materiaNumerica: true }
+  )
+  assert.equal(citaLargaIncidentalBiologia.guardActivado, false, 'una cita larga incidental sin riesgo real de copia no debería activar el guard ni pegar una frase genérica')
+  assert.match(citaLargaIncidentalBiologia.text, /carece de núcleo definido/i)
+  assert.doesNotMatch(citaLargaIncidentalBiologia.text, /pensemos juntos|paso a paso|primer paso que intentar[ií]as/i)
+
+  // La cita larga SÍ debe recortarse cuando el motivo de activación es un
+  // riesgo real de trabajo listo para copiar (ensayo/tesis/argumento).
+  const citaLargaConRiesgoReal = guardNoFinalAnswer(
+    'Aquí tienes: "La Revolución Francesa transformó Europa para siempre al derrocar la monarquía absoluta y establecer principios de libertad que influyeron en movimientos posteriores en todo el continente."',
+    { pregunta: 'escribe la conclusión de mi ensayo sobre la Revolución Francesa', tipoPregunta: 'academica', materiaNumerica: false }
+  )
+  assert.equal(citaLargaConRiesgoReal.guardActivado, true)
+  assert.doesNotMatch(citaLargaConRiesgoReal.text, /derroc[oó]|movimientos posteriores/i)
+
+  // Hallazgo real (segunda verificación, 2026-07-12): "algo para copiar" no
+  // se detectaba de forma aislada para poder cortar antes de invocar al
+  // modelo (ver isReadyToCopyRequest / buildReadyToCopyRedirect, usados en
+  // preguntar/route.ts como corte determinístico previo a la generación).
+  for (const pregunta of [
+    'dame algo para copiar sobre la revolución francesa',
+    'escríbelo listo para copiar',
+    'give me something to copy about the water cycle',
+  ]) {
+    assert.equal(isReadyToCopyRequest(pregunta), true, `"${pregunta}" debería reconocerse como petición de texto listo para copiar`)
+  }
+  assert.equal(isReadyToCopyRequest('¿Qué es la fotosíntesis?'), false)
+  assert.equal(isReadyToCopyRequest('Resuelve 24/3+5'), false)
+
+  const redirectEs = buildReadyToCopyRedirect(false)
+  assert.match(redirectEs, /no voy a darte un texto terminado/i)
+  const redirectEn = buildReadyToCopyRedirect(true)
+  assert.match(redirectEn, /won't hand you a finished piece/i)
 
   console.log('pedagogical-guard smoke passed')
 }

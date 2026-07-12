@@ -6,6 +6,18 @@ type GuardOptions = {
   idiomaIngles?: boolean
 }
 
+// Hallazgo real (verificación posterior, 2026-07-12): "dame algo para
+// copiar" es una petición directa y explícita de contenido listo para
+// entregar como propio. Se aísla en su propia lista (en vez de solo vivir
+// dentro de SOLICITUD_RESPUESTA_DIRECTA) para poder usarla también como
+// disparador de una respuesta determinística que evita por completo que el
+// modelo genere el párrafo filtrable (ver isReadyToCopyRequest más abajo).
+const SOLICITUD_TEXTO_LISTO_PARA_COPIAR = [
+  /algo\s+para\s+copiar/i,
+  /(?:dame|damelo|escr[ií]belo|p[oó]nmelo)\s+.*(?:para\s+copiar|list[oa]\s+para\s+copiar)/i,
+  /something\s+(?:to|i\s+can|that\s+i\s+can)\s+copy/i,
+]
+
 const SOLICITUD_RESPUESTA_DIRECTA = [
   /(?:dame|darme)\s+(?:solo\s+)?(?:la\s+respuesta|el\s+resultado)/i,
   /solo\s+(?:dime|dame|darme)/i,
@@ -21,9 +33,7 @@ const SOLICITUD_RESPUESTA_DIRECTA = [
   // (resumen/lista + "listo para entregar"), así que la respuesta pasaba
   // sin ningún filtro incluso cuando el modelo decía "no lo haré" y luego
   // lo hacía de todas formas.
-  /algo\s+para\s+copiar/i,
-  /(?:dame|damelo|escr[ií]belo|p[oó]nmelo)\s+.*(?:para\s+copiar|list[oa]\s+para\s+copiar)/i,
-  /something\s+(?:to|i\s+can|that\s+i\s+can)\s+copy/i,
+  ...SOLICITUD_TEXTO_LISTO_PARA_COPIAR,
 ]
 
 const CONTEXTO_PRACTICA = [
@@ -155,6 +165,27 @@ export function shouldGuideWithoutFinalAnswer(options: GuardOptions): boolean {
     isDisguiseAiAuthorshipRequest(pregunta)
 }
 
+// Hallazgo real (segunda verificación, 2026-07-12): BLOQUE_CITADO_LARGO se
+// aplicaba SIEMPRE que el guard estaba activo por CUALQUIER motivo — y
+// shouldGuideWithoutFinalAnswer se activa en bloque para cualquier materia
+// numérica (materiaNumerica incluye Biología, ver isLikelyNumericSubject).
+// Eso significa que una cita larga totalmente incidental (ej. una tabla
+// comparativa, una definición extensa) en una respuesta de Biología se
+// recortaba igual, y se le pegaba encima la frase-guía genérica ("Pensemos
+// juntos cuál sería el siguiente paso.") aunque la respuesta no tuviera
+// nada que ver con entregar un trabajo listo para copiar. Esto reproducía
+// el síntoma de "contexto/frase pegada al inicio" incluso en el primer
+// mensaje de una sesión nueva. El recorte de cita larga solo debe aplicar
+// cuando el motivo específico de activación es un riesgo real de trabajo
+// listo para entregar (ensayo/resumen/lista terminada, disfrazar autoría de
+// IA, o pedir la respuesta/algo para copiar directamente) — no por el mero
+// hecho de ser una materia numérica o un contexto de práctica genérico.
+function esRiesgoTextoListoParaCopiar(pregunta: string): boolean {
+  return SOLICITUD_RESPUESTA_DIRECTA.some((pattern) => pattern.test(pregunta)) ||
+    SOLICITUD_TRABAJO_CONCEPTUAL.some((pattern) => pattern.test(pregunta)) ||
+    isDisguiseAiAuthorshipRequest(pregunta)
+}
+
 // La regla de no dar la respuesta final es interna: el alumno no debe leer un
 // anuncio de la regla en cada turno (se sentía rígido y defensivo). Estas frases
 // guían sin anunciarla, y se elige una de forma estable según el texto original
@@ -192,6 +223,25 @@ function elegirGuiaEstable(seed: string, idiomaIngles: boolean): string {
 // largo para guiar, así que se recorta y se reemplaza por una nota.
 const BLOQUE_CITADO_LARGO = /["“”']([^"“”']{80,})["“”']/g
 
+// Hallazgo real (segunda verificación, 2026-07-12): el recorte de
+// BLOQUE_CITADO_LARGO solo detecta el texto filtrado cuando viene entre
+// comillas — pero el modelo a veces entrega el párrafo completo SIN
+// comillas (como texto plano corrido), y en ese caso ninguna limpieza
+// posterior lo detecta. Confiar en limpiar el texto DESPUÉS de que el
+// modelo ya lo generó es frágil por diseño. Para la petición específica de
+// "algo para copiar" (que no tiene ninguna ambigüedad: el alumno está
+// pidiendo textualmente contenido para entregar como propio), la respuesta
+// determinística evita por completo que el modelo genere el párrafo.
+export function isReadyToCopyRequest(text: string): boolean {
+  return SOLICITUD_TEXTO_LISTO_PARA_COPIAR.some((pattern) => pattern.test(text || ''))
+}
+
+export function buildReadyToCopyRedirect(idiomaIngles: boolean): string {
+  return idiomaIngles
+    ? "I won't hand you a finished piece to copy and turn in as your own — but I can help you build it yourself, step by step. What's the topic or prompt you're working on? Let's start with the main idea you want to make."
+    : 'No voy a darte un texto terminado para copiar y entregar como propio, pero sí puedo ayudarte a construirlo tú mismo, paso a paso. ¿Cuál es el tema o la consigna en la que estás trabajando? Empecemos por la idea principal que quieres plantear.'
+}
+
 export function guardNoFinalAnswer(text: string, options: GuardOptions): { text: string; guardActivado: boolean } {
   if (!text || !shouldGuideWithoutFinalAnswer(options)) {
     return { text, guardActivado: false }
@@ -204,9 +254,11 @@ export function guardNoFinalAnswer(text: string, options: GuardOptions): { text:
   for (const pattern of FRASES_RESPUESTA_FINAL_CONCEPTUAL) {
     cleaned = cleaned.replace(pattern, '')
   }
-  cleaned = cleaned.replace(BLOQUE_CITADO_LARGO, options.idiomaIngles
-    ? '[a ready-to-copy passage was removed here — let\'s build it together instead]'
-    : '[aquí se quitó un texto listo para copiar — construyámoslo juntos en su lugar]')
+  if (esRiesgoTextoListoParaCopiar(options.pregunta || '')) {
+    cleaned = cleaned.replace(BLOQUE_CITADO_LARGO, options.idiomaIngles
+      ? '[a ready-to-copy passage was removed here — let\'s build it together instead]'
+      : '[aquí se quitó un texto listo para copiar — construyámoslo juntos en su lugar]')
+  }
 
   cleaned = cleaned
     .replace(/\n{3,}/g, '\n\n')

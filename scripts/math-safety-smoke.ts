@@ -3,6 +3,7 @@ import {
   buildGuidedMathHint,
   handleMathEvaluation,
   inferCanonicalOperationFromText,
+  inferRectangleWordProblem,
   inferSubtractionWordProblem,
   isLikelyNumericSubject,
   looksLikeMathPracticePrompt,
@@ -347,6 +348,35 @@ D) 10
   assert.equal(inferSubtractionWordProblem('María tiene 150 y su hermana tiene 40 años, ¿cuántos años tiene su tío?'), null)
   assert.equal(inferSubtractionWordProblem('¿Qué es la fotosíntesis?'), null)
   assert.equal(inferSubtractionWordProblem(''), null)
+
+  // Hallazgo real CRÍTICO (segunda verificación, 2026-07-12): un problema
+  // de perímetro/área de un rectángulo con ancho=4 y largo=8 se marcaba
+  // incorrecto con una pista de "orden de operaciones" que no aplicaba —
+  // el modelo etiquetó su propio ejercicio con la operación equivocada
+  // (ej. una resta), y como ambos números aparecían en el texto,
+  // opCoincideConTexto la validaba como "coincidente" pese a ser
+  // conceptualmente incorrecta para el problema.
+  assert.equal(
+    inferRectangleWordProblem('Un rectángulo tiene un ancho de 4 y un largo de 8. ¿Cuál es su perímetro?'),
+    '2*(4+8)'
+  )
+  assert.equal(solveOperation(inferRectangleWordProblem('Un rectángulo tiene un ancho de 4 y un largo de 8. ¿Cuál es su perímetro?') || ''), 24)
+  assert.equal(
+    inferRectangleWordProblem('A rectangle has a width of 4 and a length of 8. What is its perimeter?'),
+    '2*(4+8)'
+  )
+  assert.equal(
+    inferRectangleWordProblem('Un rectángulo tiene base 4 y altura 8. ¿Cuál es su área?'),
+    '4*8'
+  )
+  assert.equal(solveOperation(inferRectangleWordProblem('Un rectángulo tiene base 4 y altura 8. ¿Cuál es su área?') || ''), 32)
+
+  // No debe activarse sin las palabras clave de perímetro/área, ni con más
+  // o menos de dos números, ni fuera del patrón de ancho/largo o base/altura.
+  assert.equal(inferRectangleWordProblem('Un rectángulo tiene un ancho de 4 y un largo de 8.'), null)
+  assert.equal(inferRectangleWordProblem('Un triángulo tiene base 4 y altura 8, ¿cuál es su área? Un lado más mide 3.'), null)
+  assert.equal(inferRectangleWordProblem('¿Qué es la fotosíntesis?'), null)
+  assert.equal(inferRectangleWordProblem(''), null)
 
   console.log('math-safety smoke passed')
 }

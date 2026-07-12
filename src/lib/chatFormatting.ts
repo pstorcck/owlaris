@@ -92,10 +92,20 @@ const FRASES_TABLA_EXPLICITA = [
   'put this in a table', 'in a table', 'in table format', 'make it a table',
 ]
 
+// Hallazgo real (segunda verificación, 2026-07-12): la lista de frases
+// fijas de arriba exige una frase completa ("en una tabla"), pero un
+// pedido natural como "una tabla comparando célula procariota vs
+// eucariota" no la contiene (falta la palabra "en" antes de "una tabla") —
+// así que la petición explícita de tabla no se detectaba. Se agrega un
+// segundo criterio: la sola palabra "tabla"/"table" con límite de palabra,
+// que cubre cualquier frase donde el alumno la nombra como el formato que
+// quiere, sin depender de una redacción exacta.
+const PALABRA_TABLA = /\btabla\b|\btable\b/i
+
 export function isExplicitTableRequest(value: string): boolean {
   const text = normalizeText(value)
   if (!text) return false
-  return FRASES_TABLA_EXPLICITA.some((needle) => text.includes(needle))
+  return FRASES_TABLA_EXPLICITA.some((needle) => text.includes(needle)) || PALABRA_TABLA.test(text)
 }
 
 export function isFormatRequest(value: string): boolean {

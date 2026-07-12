@@ -797,6 +797,50 @@ export function inferSubtractionWordProblem(text: string): string | null {
   return `${numeros[0]}-${numeros[1]}`
 }
 
+// Hallazgo real CRITICO (segunda verificacion, 2026-07-12): un problema de
+// perimetro/area de un rectangulo en prosa ("un rectangulo con ancho de 4
+// y largo de 8, cual es su perimetro?") no tiene una expresion matematica
+// literal en el texto, igual que el patron de resta con cambio de arriba --
+// pero aqui el riesgo es distinto y mas grave: cuando el modelo SI incluye
+// su propio [OP: ...] al presentar el ejercicio, esa etiqueta puede estar
+// mal (ej. etiquetar una resta 8-4 para un problema que pide el perimetro).
+// Como ambos numeros (4 y 8) SI aparecen en el texto visible,
+// opCoincideConTexto valida la etiqueta como "coincidente" aunque la
+// OPERACION en si sea conceptualmente incorrecta para el problema -- el
+// alumno respondia correctamente (24) y se lo marcaba incorrecto con una
+// pista que no aplicaba al caso. Esta heuristica reconoce el patron
+// especifico de perimetro/area de un rectangulo (ancho+largo o
+// base+altura) y calcula la operacion canonica correcta, para poder
+// CONTRASTARLA/reemplazar la etiqueta del modelo en vez de solo rellenar
+// cuando falta. Deliberadamente conservadora: exige EXACTAMENTE dos
+// numeros y las palabras clave de ancho/largo (o base/altura) junto con
+// perimetro o area explicitos -- en cualquier otro caso devuelve null.
+const PALABRAS_ANCHO = ['ancho', 'width']
+const PALABRAS_LARGO = ['largo', 'length', 'longitud']
+const PALABRAS_BASE = ['base']
+const PALABRAS_ALTURA = ['altura', 'height']
+const PALABRA_PERIMETRO = /perimetro|perimeter/
+const PALABRA_AREA = /\barea\b/
+
+export function inferRectangleWordProblem(text: string): string | null {
+  if (!text) return null
+  const normalizado = text
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+  const tienePerimetro = PALABRA_PERIMETRO.test(normalizado)
+  const tieneArea = PALABRA_AREA.test(normalizado)
+  if (!tienePerimetro && !tieneArea) return null
+  const tieneAnchoLargo =
+    (PALABRAS_ANCHO.some((w) => normalizado.includes(w)) && PALABRAS_LARGO.some((w) => normalizado.includes(w))) ||
+    (PALABRAS_BASE.some((w) => normalizado.includes(w)) && PALABRAS_ALTURA.some((w) => normalizado.includes(w)))
+  if (!tieneAnchoLargo) return null
+  const numeros = Array.from(normalizado.matchAll(/\d+(?:[.,]\d+)?/g)).map((m) => m[0].replace(',', '.'))
+  if (numeros.length !== 2) return null
+  const [a, b] = numeros
+  return tienePerimetro ? `2*(${a}+${b})` : `${a}*${b}`
+}
+
 export function inferCanonicalOperationFromText(text: string): string | null {
   if (!text) return null
 

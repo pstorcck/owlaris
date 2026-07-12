@@ -415,18 +415,40 @@ export function extractCourseBlocks(content: string): CourseTopicBlock[] {
 // filtrado si el nombre consultado coincide con un bloque real extraído
 // de la fuente (findBlockByQuery) — si no coincide con ninguno, la
 // petición sigue el flujo normal del índice completo.
+// Hallazgo real (segunda verificación, 2026-07-12): la lista de frases
+// fijas de arriba usaba coincidencia de substring exacto (.includes), que
+// se rompe con una sola palabra insertada — "dame TODOS los temas de
+// verificación de dominio" no contiene la substring literal "dame los
+// temas de" por la palabra "todos" en medio, así que la petición no se
+// interceptaba en absoluto y caía al índice completo sin filtrar. Se
+// reemplaza por expresiones regulares tolerantes a palabras insertadas
+// comunes (todos/todas, el listado de, etc.) en vez de frases fijas.
+const PATRONES_BLOQUE_O_TEMAS_DE = [
+  /que\s+temas\s+incluye\s+el\s+bloque/,
+  /que\s+temas\s+tiene\s+el\s+bloque/,
+  /cuales\s+son\s+los\s+temas\s+del\s+bloque/,
+  /que\s+abarca\s+el\s+bloque/,
+  /que\s+temas\s+incluye\s+la\s+unidad/,
+  /cuales\s+son\s+los\s+temas\s+de\s+la\s+unidad/,
+  /que\s+abarca\s+la\s+unidad/,
+  /what\s+topics\s+does\s+the\s+block\s+include/,
+  /what\s+topics\s+are\s+in\s+the\s+unit/,
+  /what\s+does\s+the\s+block\s+cover/,
+  /what\s+does\s+the\s+unit\s+cover/,
+  /dame\s+(?:todos\s+|todas\s+)?(?:el\s+listado\s+de\s+)?los\s+temas\s+de/,
+  /quiero\s+(?:todos\s+|todas\s+)?los\s+temas\s+de/,
+  /cuales\s+son\s+(?:todos\s+|todas\s+)?los\s+temas\s+de/,
+  /que\s+temas\s+tiene/,
+  /give\s+me\s+(?:all\s+(?:the\s+)?)?(?:the\s+)?topics\s+of/,
+  /what\s+are\s+(?:all\s+)?the\s+topics\s+of/,
+  /topics\s+of/,
+  /topics\s+in/,
+]
+
 export function isBlockGroupingQuestion(value: string): boolean {
   const text = normalizeText(value)
   if (!text) return false
-  return [
-    'que temas incluye el bloque', 'que temas tiene el bloque', 'cuales son los temas del bloque',
-    'que abarca el bloque', 'que temas incluye la unidad', 'cuales son los temas de la unidad',
-    'que abarca la unidad', 'what topics does the block include', 'what topics are in the unit',
-    'what does the block cover', 'what does the unit cover',
-    'dame los temas de', 'dame el listado de temas de', 'quiero los temas de',
-    'cuales son los temas de', 'que temas tiene', 'give me the topics of',
-    'what are the topics of', 'topics of', 'topics in',
-  ].some((needle) => text.includes(needle))
+  return PATRONES_BLOQUE_O_TEMAS_DE.some((pattern) => pattern.test(text))
 }
 
 export function extractBlockQuery(value: string): string | null {
@@ -493,6 +515,26 @@ export function extractStandardQuery(value: string): string | null {
   return estandar.length >= 2 ? estandar : null
 }
 
+// Hallazgo real CRÍTICO (segunda verificación, 2026-07-12): el guard de
+// arriba respondía correctamente a la pregunta directa de alineación, pero
+// el pedido natural de SEGUIMIENTO ("cítame textualmente dónde dice eso")
+// no coincidía con isStandardsAlignmentQuestion (no repite el nombre del
+// estándar ni la frase de alineación) — así que caía a generación libre
+// del modelo, que inventó una justificación elaborada y falsa al sentirse
+// presionado a dar una cita. Para prevenir esto, la respuesta inicial ya
+// incluye la línea literal donde aparece el estándar (si existe), y
+// además se agrega un guard separado (ver isStandardsCitationFollowUp)
+// para interceptar la pregunta de seguimiento y reutilizar el mismo
+// resultado determinístico en vez de dejarlo en manos del modelo.
+function extractLiteralMention(content: string, standard: string): string | null {
+  const idx = (content || '').toLowerCase().indexOf(standard.toLowerCase())
+  if (idx === -1) return null
+  const start = content.lastIndexOf('\n', idx)
+  const end = content.indexOf('\n', idx)
+  const line = content.slice(start === -1 ? 0 : start + 1, end === -1 ? content.length : end).trim()
+  return line.length > 0 ? line : null
+}
+
 export function buildStandardsAlignmentResponse(input: {
   content: string
   standard: string | null
@@ -508,11 +550,51 @@ export function buildStandardsAlignmentResponse(input: {
   const estandarNormalizado = normalizeText(standard)
   const mencionado = !!contenidoNormalizado && contenidoNormalizado.includes(estandarNormalizado)
   if (mencionado) {
+    const cita = extractLiteralMention(content, standard)
+    const citaTexto = cita
+      ? (idiomaIngles ? ` The literal line in the source is: "${cita}"` : ` La línea literal en la fuente es: "${cita}"`)
+      : (idiomaIngles
+        ? ' I cannot pinpoint the exact literal line right now, so I will not quote one — I can only confirm the name appears in the source.'
+        : ' No puedo ubicar la línea literal exacta ahora mismo, así que no voy a citar una — solo puedo confirmar que el nombre aparece en la fuente.')
     return idiomaIngles
-      ? `The official material for this course explicitly mentions "${standard}" — but I can only confirm what is literally stated there, not interpret how each topic maps to it.`
-      : `El material oficial de este curso menciona explícitamente "${standard}" — pero solo puedo confirmar lo que está indicado ahí literalmente, no interpretar cómo se relaciona cada tema con ese estándar.`
+      ? `The official material for this course explicitly mentions "${standard}" — but I can only confirm what is literally stated there, not interpret how each topic maps to it.${citaTexto}`
+      : `El material oficial de este curso menciona explícitamente "${standard}" — pero solo puedo confirmar lo que está indicado ahí literalmente, no interpretar cómo se relaciona cada tema con ese estándar.${citaTexto}`
   }
   return idiomaIngles
     ? `I do not see "${standard}" mentioned anywhere in the official material available for this course, so I cannot confirm that alignment — I will not invent a mapping to a standard that is not explicitly stated in the source.`
     : `No veo "${standard}" mencionado en ninguna parte del material oficial disponible para este curso, así que no puedo confirmar esa alineación — no voy a inventar una relación con un estándar que no esté indicado explícitamente en la fuente.`
+}
+
+const FRASES_CITA_TEXTUAL_SEGUIMIENTO = [
+  /c[ií]tame\s+textualmente/,
+  /muestrame\s+(?:textualmente\s+)?donde/,
+  /donde\s+dice\s+eso/,
+  /en\s+que\s+parte\s+(?:exacta\s+)?(?:dice|aparece)/,
+  /cita\s+textual/,
+  /texto\s+exacto\s+donde/,
+  /quote\s+it\s+exactly/,
+  /show\s+me\s+exactly\s+where/,
+  /where\s+exactly\s+does\s+it\s+say/,
+]
+
+// Detecta el pedido de seguimiento ("cítame textualmente dónde dice eso")
+// SIN exigir que repita el nombre del estándar — el alumno normalmente no
+// lo repite en un seguimiento natural. El llamador debe confirmar además
+// que el turno anterior fue una respuesta de este mismo guard antes de
+// reutilizar el resultado (ver extractStandardFromPriorResponse).
+export function isStandardsCitationFollowUp(value: string): boolean {
+  const text = normalizeText(value)
+  if (!text) return false
+  return FRASES_CITA_TEXTUAL_SEGUIMIENTO.some((pattern) => pattern.test(text))
+}
+
+// El guard siempre envuelve el nombre del estándar entre comillas dobles
+// en su propia respuesta anterior — se reutiliza ese formato para
+// recuperar el estándar consultado sin depender de que el alumno lo repita.
+export function extractStandardFromPriorResponse(previousAssistantMessage: string): string | null {
+  const text = previousAssistantMessage || ''
+  const esRespuestaDelGuard = /menciona expl[ií]citamente|no veo ".*" mencionado|explicitly mentions|do not see ".*" mentioned/i.test(text)
+  if (!esRespuestaDelGuard) return null
+  const match = /"([^"]+)"/.exec(text)
+  return match ? match[1] : null
 }

@@ -79,6 +79,21 @@ function main() {
   for (const frase of ['organiza esto bonito', 'hazlo en lista', 'organize this nicely']) {
     assert.equal(isExplicitTableRequest(frase), false, frase)
   }
+
+  // Hallazgo real (segunda verificación, 2026-07-12): la lista de frases
+  // fijas exigía una frase completa ("en una tabla"), pero un pedido
+  // natural como "una tabla comparando X vs Y" no la contiene (falta la
+  // palabra "en" antes de "una tabla") — se agrega la palabra suelta
+  // "tabla"/"table" con límite de palabra como criterio adicional.
+  for (const frase of [
+    'una tabla comparando célula procariota vs eucariota',
+    'ponme la información en tabla',
+    'quiero un table con los datos',
+    'me lo puedes poner en forma de tabla',
+  ]) {
+    assert.equal(isExplicitTableRequest(frase), true, frase)
+  }
+
   const tablaPreservada = sanitizeChatFormatting(tabla, true)
   assert.match(tablaPreservada, /\|/)
   assert.doesNotMatch(tablaPreservada, /Horas estudiadas \(x\): 1 — Calificación \(y\): 50/)
