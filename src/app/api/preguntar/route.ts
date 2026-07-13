@@ -1787,7 +1787,7 @@ export async function POST(req: NextRequest) {
         const hace2h = new Date(Date.now() - 2 * 3600000).toISOString()
         let pendingQuery = supabase
           .from('interacciones')
-          .select('id')
+          .select('id, creado_en')
           .eq('usuario_id', user.id)
           .eq('op_estado', 'pendiente')
           .is('op_evaluada_en', null)
@@ -1798,7 +1798,30 @@ export async function POST(req: NextRequest) {
         if (materia_uuid) pendingQuery = pendingQuery.eq('materia_id', materia_uuid)
         if (gradoEfectivo) pendingQuery = pendingQuery.eq('grado', gradoEfectivo)
         const { data: latestPendingMath } = await pendingQuery.maybeSingle()
-        if (latestPendingMath?.id) pendingMathId = latestPendingMath.id
+        // Hallazgo real CRÍTICO (QA en vivo, 2026-07-13): esta búsqueda de
+        // respaldo (cuando el frontend no manda pending_math_interaction_id)
+        // solo filtraba por materia y grado, no por continuidad de tema —
+        // así que una respuesta corta tipo "4" en un ejercicio de tasas
+        // unitarias completamente nuevo resucitaba un ejercicio de
+        // descuento/impuesto ya abandonado (de hasta 2 horas atrás, misma
+        // materia) y lo calificaba contra esa operación vieja, dando una
+        // pista fija sin relación (la de decimales) para el ejercicio real.
+        // Se verifica que no haya ninguna interacción MÁS RECIENTE que este
+        // pendiente (de cualquier tipo, no solo matemática) — si la hay,
+        // significa que la conversación ya avanzó a otra cosa desde
+        // entonces, y el ejercicio pendiente debe tratarse como abandonado
+        // en vez de resucitarse.
+        if (latestPendingMath?.id && latestPendingMath.creado_en) {
+          let actividadPosteriorQuery = supabase
+            .from('interacciones')
+            .select('id')
+            .eq('usuario_id', user.id)
+            .gt('creado_en', latestPendingMath.creado_en)
+            .limit(1)
+          if (materia_uuid) actividadPosteriorQuery = actividadPosteriorQuery.eq('materia_id', materia_uuid)
+          const { data: actividadPosterior } = await actividadPosteriorQuery.maybeSingle()
+          if (!actividadPosterior) pendingMathId = latestPendingMath.id
+        }
       } catch (error) {
         console.error('No se pudo recuperar OP pendiente reciente:', error)
       }
