@@ -14,6 +14,7 @@ import { detectarMateriaDesdeTexto, isLanguageSwitchRequest, materiaActualEnSist
 import { isExplicitCourseSwitchRequest } from '@/lib/courseSwitchDetection'
 import { isReviewMistakesRequest, primeraOperacionValida, temaMasFrecuente } from '@/lib/mistakeReview'
 import { limpiarTemaGeneral } from '@/lib/temaGeneral'
+import { buildTemaActivoInstruction, detectActiveTopic, detectExplicitTopicSwitch } from '@/lib/activeTopicGuard'
 import { ventanaHoyGuatemala } from '@/lib/fechaGuatemala'
 import {
   buildAreaPresenceResponse,
@@ -2598,6 +2599,26 @@ export async function POST(req: NextRequest) {
       contextoContenido = `CONTENIDO ACADEMICO (fuente principal):\n---\n${extractRelevantContentWindow(contenidoCurricular, pregunta, 3000)}\n---`
     } else {
       contextoContenido = `No se encontro documento especifico en SharePoint. No inventes contenido academico. Indica que no hay suficiente informacion en el material disponible de la materia.`
+    }
+
+    // Hallazgo real (QA en vivo, 2026-07-13): sin un tema activo explícito,
+    // el modelo podía derivar de un tema a otro de la misma materia dentro
+    // de la misma conversación (ej. de fracciones a sumas, o de adjetivos a
+    // verbos) sin que el alumno lo pidiera. Cuando el índice oficial de
+    // temas ya se pudo extraer de forma determinística (no vía el respaldo
+    // con el modelo, para no sumar una llamada extra en cada turno), se
+    // detecta el tema activo a partir del historial reciente y se refuerza
+    // con una instrucción puntual — a menos que el alumno pida
+    // explícitamente cambiar a otro tema de la lista, en cuyo caso se
+    // permite el cambio en vez de forzarlo a quedarse.
+    if (tipoPregunta === 'academica' && !esBienvenida && contenidoCurricular) {
+      const indiceParaTemaActivo = extractCourseTopicIndex(contenidoCurricular)
+      if (indiceParaTemaActivo.topics.length > 1) {
+        const temaActivoDetectado = detectActiveTopic(historial, indiceParaTemaActivo.topics)
+        const cambioDeTema = detectExplicitTopicSwitch(pregunta, indiceParaTemaActivo.topics, temaActivoDetectado)
+        const temaParaInstruccion = cambioDeTema.detectado ? cambioDeTema.temaMencionado : temaActivoDetectado
+        contextoContenido += buildTemaActivoInstruction({ temaActivo: temaParaInstruccion, cambioExplicito: cambioDeTema.detectado, idiomaIngles })
+      }
     }
 
     // Hallazgo real (auditoría QA 2026-07-07): tras un mensaje tangencial
