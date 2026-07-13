@@ -2239,6 +2239,29 @@ export async function POST(req: NextRequest) {
       }
 
       const index = extractCourseTopicIndex(contenidoCurricular)
+      // DIAGNOSTICO TEMPORAL (2026-07-13, segunda ronda post-fix de tabla):
+      // el fix de extractTemaTutorTable resolvió Matemática 3ero Básico,
+      // pero Estadística Descriptiva y Lenguaje 5to Bachillerato siguen
+      // vacíos en producción — evidencia real de que esos documentos usan
+      // una estructura distinta a la ya diagnosticada. Se debe quitar una
+      // vez diagnosticado y corregido de forma definitiva.
+      if (index.topics.length === 0) {
+        const lineas = contenidoCurricular.split(/\r?\n/).map((l) => l.trim()).filter(Boolean)
+        console.log('DIAGNOSTICO_INDICE_VACIO_V2', {
+          materia: materiaConsultaSharePoint,
+          archivo: documentoFuente,
+          longitud: contenidoCurricular.length,
+          totalLineas: lineas.length,
+        })
+        const idxMapa = lineas.findIndex((l) => /mapa\s+de\s+contenidos/i.test(l))
+        const idxTema = lineas.findIndex((l) => /\btema\b/i.test(l))
+        const idxIndicador = lineas.findIndex((l) => /\bindicador\b/i.test(l))
+        console.log('DIAGNOSTICO_IDX_V2', { idxMapa, idxTema, idxIndicador })
+        const centro = idxMapa !== -1 ? idxMapa : (idxTema !== -1 ? idxTema : (idxIndicador !== -1 ? idxIndicador : 0))
+        for (let i = Math.max(0, centro - 8); i < Math.min(lineas.length, centro + 48); i += 8) {
+          console.log(`DIAGNOSTICO_VENTANA_V2_${i}`, lineas.slice(i, i + 8))
+        }
+      }
       const respuesta = buildCourseTopicListResponse({
         index,
         subject: materiaConsultaSharePoint || materia_id || 'esta clase',
