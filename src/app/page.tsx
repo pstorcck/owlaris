@@ -19,13 +19,12 @@ export default async function Home() {
     case 'alumno':     redirect('/chat')
     case 'padre':      redirect('/padres')
     case 'director':   redirect('/director')
-    case 'maestro': {
-      // Si tiene asignaciones de guía, ir al panel del guía
-      const { data: asig } = await supabase.from('guia_asignaciones').select('id').eq('guia_id', user.id).eq('activo', true).limit(1)
-      if (asig && asig.length > 0) redirect('/guia')
-      else redirect('/docente')
-      break
-    }
+    // Hallazgo real (unificación de paneles, 2026-07-13): antes un maestro
+    // sin alumnos asignados iba a /docente (un tercer dashboard aparte) y
+    // solo iba a /guia si ya tenía asignaciones — /docente se eliminó, y el
+    // panel de /guia ya maneja bien el estado "sin alumnos asignados", así
+    // que todo maestro va siempre al mismo panel.
+    case 'maestro':    redirect('/guia')
     case 'admin':
     case 'superadmin': redirect('/admin')
     default:           redirect('/login')

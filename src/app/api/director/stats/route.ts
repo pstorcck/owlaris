@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createAdminClient, createClient } from '@/lib/supabase/server'
 import { detectarSedePorEmail } from '@/lib/sedes'
+import { getAssignedStudents } from '@/lib/guideAccess'
 
 export const dynamic = 'force-dynamic'
 
@@ -67,25 +68,45 @@ export async function GET() {
       .eq('id', user.id)
       .single()
 
-    if (!perfil || !['director', 'admin', 'superadmin'].includes(perfil.rol)) {
+    if (!perfil || !['director', 'maestro', 'admin', 'superadmin'].includes(perfil.rol)) {
       return NextResponse.json({ error: 'Sin acceso' }, { status: 403 })
     }
     if (!perfil.colegio_id) {
-      return NextResponse.json({ error: 'Director sin colegio asignado' }, { status: 400 })
+      return NextResponse.json({ error: 'Sin colegio asignado' }, { status: 400 })
     }
 
+    const esGuia = perfil.rol === 'maestro'
     const sedeDirector = detectarSedePorEmail(perfil.email)
     const filtrarPorSede = perfil.rol === 'director'
 
-    const { data: alumnosRaw } = await admin
-      .from('usuarios')
-      .select('id, nombre_completo, email, grado, activo, ultimo_acceso')
-      .eq('colegio_id', perfil.colegio_id)
-      .eq('rol', 'alumno')
-      .order('nombre_completo')
+    // Hallazgo real (unificación de paneles, 2026-07-13): director y guía
+    // comparten exactamente el mismo panel — la única diferencia es el
+    // alcance de alumnos visibles. Un director ve todo el colegio (filtrado
+    // por sede si aplica); un guía (rol "maestro") solo ve a sus alumnos
+    // asignados vía guia_asignaciones (getAssignedStudents, ya usado en
+    // /guia y en canStaffAccessStudent para las mismas reglas de acceso).
+    let alumnos: StudentRow[]
+    if (esGuia) {
+      const asignados = await getAssignedStudents(admin, user.id)
+      alumnos = asignados.map((alumno) => ({
+        id: alumno.id,
+        nombre_completo: alumno.nombre_completo,
+        email: alumno.email,
+        grado: alumno.grado,
+        activo: true,
+        ultimo_acceso: alumno.ultimo_acceso,
+      }))
+    } else {
+      const { data: alumnosRaw } = await admin
+        .from('usuarios')
+        .select('id, nombre_completo, email, grado, activo, ultimo_acceso')
+        .eq('colegio_id', perfil.colegio_id)
+        .eq('rol', 'alumno')
+        .order('nombre_completo')
 
-    const alumnos = ((alumnosRaw || []) as StudentRow[])
-      .filter((alumno) => !filtrarPorSede || detectarSedePorEmail(alumno.email) === sedeDirector)
+      alumnos = ((alumnosRaw || []) as StudentRow[])
+        .filter((alumno) => !filtrarPorSede || detectarSedePorEmail(alumno.email) === sedeDirector)
+    }
     const alumnoIds = alumnos.map((alumno) => alumno.id)
 
     const hoy = new Date()
@@ -202,7 +223,8 @@ export async function GET() {
       perfil: {
         nombre: perfil.nombre_completo,
         colegio: (perfil.colegio as { nombre?: string } | null)?.nombre || '',
-        sede: filtrarPorSede ? sedeDirector : 'Todas las sedes',
+        sede: esGuia ? 'Alumnos designados' : (filtrarPorSede ? sedeDirector : 'Todas las sedes'),
+        rol: esGuia ? 'guia' : 'director',
       },
       resumen: {
         totalAlumnos: alumnos.length,

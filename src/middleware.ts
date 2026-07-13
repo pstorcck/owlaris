@@ -7,9 +7,17 @@ export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
 
   // Rutas completamente públicas — sin verificar sesión
-  if (pathname === '/signup' || 
-      pathname === '/login' || 
-      pathname === '/padres/login' || 
+  // Hallazgo real (funcionalidad solicitada, 2026-07-13): recuperar
+  // contraseña necesita /auth/callback (recibe el código del enlace del
+  // correo ANTES de que exista sesión) y /reset-password (la página donde
+  // se establece la nueva contraseña, ya con sesión de recuperación) como
+  // rutas públicas — sin esto, el middleware redirige a /login antes de
+  // que el código pueda intercambiarse por una sesión.
+  if (pathname === '/signup' ||
+      pathname === '/login' ||
+      pathname === '/padres/login' ||
+      pathname === '/reset-password' ||
+      pathname.startsWith('/auth/callback') ||
       pathname.startsWith('/api/signup')) {
     return supabaseResponse
   }

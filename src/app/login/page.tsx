@@ -11,6 +11,12 @@ export default function LoginPage() {
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  // Hallazgo real (funcionalidad solicitada, 2026-07-13): "recuperar
+  // contraseña" no existía para alumnos ni personal — sin ningún camino de
+  // autoservicio para un correo/contraseña olvidados.
+  const [modo, setModo] = useState<'login' | 'recuperar'>('login')
+  const [recuperando, setRecuperando] = useState(false)
+  const [recuperado, setRecuperado] = useState(false)
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault()
@@ -28,6 +34,20 @@ export default function LoginPage() {
       return
     }
     window.location.href = '/'
+  }
+
+  async function handleRecuperar(e: React.FormEvent) {
+    e.preventDefault()
+    setRecuperando(true)
+    setError('')
+    const supabase = createClient()
+    await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/auth/callback?next=/reset-password`,
+    })
+    // No se distingue si el correo existe o no (evita filtrar qué correos
+    // están registrados) — siempre se muestra el mismo mensaje de éxito.
+    setRecuperando(false)
+    setRecuperado(true)
   }
 
   return (
@@ -237,6 +257,28 @@ export default function LoginPage() {
           font-size: 13px;
           font-weight: 700;
         }
+        .ow-success {
+          border: 1.5px solid #BBF7D0;
+          background: #F0FDF4;
+          color: #166534;
+          border-radius: 12px;
+          padding: 14px 16px;
+          font-size: 13.5px;
+          font-weight: 700;
+          text-align: center;
+        }
+        .ow-forgot-link {
+          background: none;
+          border: none;
+          padding: 0;
+          font-size: 13px;
+          font-weight: 700;
+          color: #7C3AED;
+          cursor: pointer;
+          text-align: right;
+          font-family: inherit;
+        }
+        .ow-forgot-link:hover { text-decoration: underline; }
         .ow-btn {
           -webkit-appearance: none;
           appearance: none;
@@ -393,59 +435,105 @@ export default function LoginPage() {
         <section className="ow-formside">
           <div className="ow-card">
             <div className="ow-card-panel">
-              <div className="ow-card-head">
-                <h2>Bienvenido a <span className="ow-accent">Owlaris</span></h2>
-                <p>Continúa tu aprendizaje donde lo dejaste.</p>
-              </div>
+              {modo === 'login' ? (
+                <>
+                  <div className="ow-card-head">
+                    <h2>Bienvenido a <span className="ow-accent">Owlaris</span></h2>
+                    <p>Continúa tu aprendizaje donde lo dejaste.</p>
+                  </div>
 
-              <form onSubmit={handleLogin} className="ow-form">
-                <div className="ow-field">
-                  <label htmlFor="email">Correo electrónico</label>
-                  <input
-                    id="email"
-                    type="email"
-                    value={email}
-                    onChange={e => setEmail(e.target.value)}
-                    placeholder="tu@colegio.edu.gt"
-                    required
-                    className="ow-input"
-                    autoComplete="email"
-                  />
-                </div>
-                <div className="ow-field">
-                  <label htmlFor="password">Contraseña</label>
-                  <input
-                    id="password"
-                    type="password"
-                    value={password}
-                    onChange={e => setPassword(e.target.value)}
-                    placeholder="••••••••"
-                    required
-                    className="ow-input"
-                    autoComplete="current-password"
-                  />
-                </div>
+                  <form onSubmit={handleLogin} className="ow-form">
+                    <div className="ow-field">
+                      <label htmlFor="email">Correo electrónico</label>
+                      <input
+                        id="email"
+                        type="email"
+                        value={email}
+                        onChange={e => setEmail(e.target.value)}
+                        placeholder="tu@colegio.edu.gt"
+                        required
+                        className="ow-input"
+                        autoComplete="email"
+                      />
+                    </div>
+                    <div className="ow-field">
+                      <label htmlFor="password">Contraseña</label>
+                      <input
+                        id="password"
+                        type="password"
+                        value={password}
+                        onChange={e => setPassword(e.target.value)}
+                        placeholder="••••••••"
+                        required
+                        className="ow-input"
+                        autoComplete="current-password"
+                      />
+                    </div>
 
-                {error && <div className="ow-error">{error}</div>}
+                    <button type="button" className="ow-forgot-link" onClick={() => { setModo('recuperar'); setError(''); setRecuperado(false) }}>
+                      ¿Olvidaste tu contraseña?
+                    </button>
 
-                <button type="submit" disabled={loading} className="ow-btn ow-btn-primary">
-                  {loading ? 'Entrando...' : 'Entrar a Owlaris'}
-                </button>
-              </form>
+                    {error && <div className="ow-error">{error}</div>}
 
-              <div className="ow-divider">o</div>
+                    <button type="submit" disabled={loading} className="ow-btn ow-btn-primary">
+                      {loading ? 'Entrando...' : 'Entrar a Owlaris'}
+                    </button>
+                  </form>
 
-              <Link href="/padres/login" className="ow-btn ow-btn-secondary">
-                <Users size={18} /> Portal para padres de familia
-              </Link>
+                  <div className="ow-divider">o</div>
 
-              <p className="ow-trust-line">
-                <ShieldCheck size={14} /> Plataforma segura para colegios, alumnos y familias.
-              </p>
+                  <Link href="/padres/login" className="ow-btn ow-btn-secondary">
+                    <Users size={18} /> Portal para padres de familia
+                  </Link>
 
-              <p className="ow-signup-line">
-                ¿No tienes cuenta? <Link href="/signup">Regístrate aquí</Link>
-              </p>
+                  <p className="ow-trust-line">
+                    <ShieldCheck size={14} /> Plataforma segura para colegios, alumnos y familias.
+                  </p>
+
+                  <p className="ow-signup-line">
+                    ¿No tienes cuenta? <Link href="/signup">Regístrate aquí</Link>
+                  </p>
+                </>
+              ) : (
+                <>
+                  <div className="ow-card-head">
+                    <h2>Recuperar contraseña</h2>
+                    <p>Te enviaremos un enlace a tu correo para crear una nueva.</p>
+                  </div>
+
+                  {recuperado ? (
+                    <div className="ow-success">
+                      ✓ Si el correo está registrado, te enviamos un enlace para restablecer tu contraseña. Revisa tu bandeja de entrada (y spam).
+                    </div>
+                  ) : (
+                    <form onSubmit={handleRecuperar} className="ow-form">
+                      <div className="ow-field">
+                        <label htmlFor="email-recuperar">Correo electrónico</label>
+                        <input
+                          id="email-recuperar"
+                          type="email"
+                          value={email}
+                          onChange={e => setEmail(e.target.value)}
+                          placeholder="tu@colegio.edu.gt"
+                          required
+                          className="ow-input"
+                          autoComplete="email"
+                        />
+                      </div>
+                      <button type="submit" disabled={recuperando} className="ow-btn ow-btn-primary">
+                        {recuperando ? 'Enviando...' : 'Enviar enlace de recuperación'}
+                      </button>
+                    </form>
+                  )}
+
+                  <p className="ow-signup-line">
+                    <button type="button" className="ow-forgot-link" style={{ textAlign: 'center', width: '100%' }} onClick={() => { setModo('login'); setError(''); setRecuperado(false) }}>
+                      ← Volver a iniciar sesión
+                    </button>
+                  </p>
+                </>
+              )}
             </div>
           </div>
         </section>

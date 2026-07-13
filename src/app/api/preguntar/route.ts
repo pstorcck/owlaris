@@ -9,7 +9,7 @@ import { buildGradeAdaptationInstruction } from '@/lib/gradeAdaptation'
 import { pareceIdiomaDistinto } from '@/lib/languageDetection'
 import { buscarStaffColegio, buscarSuperadmins, elegirFuenteDestinatariosAlerta, resolverDestinatariosAlerta, type DestinatarioAlerta } from '@/lib/alertaEmergencia'
 import { verificarLimiteFrecuencia } from '@/lib/rateLimit'
-import { isExplicitTableRequest, sanitizeChatFormatting } from '@/lib/chatFormatting'
+import { isExplicitTableRequest, looksLikeMarkdownTable, looksLikeTableRefusal, sanitizeChatFormatting } from '@/lib/chatFormatting'
 import { detectarMateriaDesdeTexto, isLanguageSwitchRequest, materiaActualEnSistemaCNB, normalizarMateria } from '@/lib/materiaDetection'
 import { isExplicitCourseSwitchRequest } from '@/lib/courseSwitchDetection'
 import { isReviewMistakesRequest, primeraOperacionValida, temaMasFrecuente } from '@/lib/mistakeReview'
@@ -18,6 +18,7 @@ import { ventanaHoyGuatemala } from '@/lib/fechaGuatemala'
 import {
   buildAreaPresenceResponse,
   buildBlockTopicsResponse,
+  buildCategoryTopicsResponse,
   buildCourseTopicListResponse,
   buildNextTopicResponse,
   buildStandardsAlignmentResponse,
@@ -2281,8 +2282,23 @@ export async function POST(req: NextRequest) {
     if (tipoPregunta === 'academica' && !esBienvenida && isBlockGroupingQuestion(pregunta) && consultaBloque && contenidoCurricular) {
       const bloques = extractCourseBlocks(contenidoCurricular)
       const bloqueEncontrado = findBlockByQuery(bloques, consultaBloque)
-      if (bloqueEncontrado) {
-        const respuesta = buildBlockTopicsResponse({ blocks: bloques, query: consultaBloque, idiomaIngles })
+      // Hallazgo real CRÍTICO (cuarta verificación, 2026-07-13): "dame
+      // todos los temas de verificación de dominio" no es un bloque con
+      // encabezado propio ("## Bloque N: X") — es una CATEGORÍA que se
+      // repite como parte del título de temas individuales dispersos en el
+      // índice (ej. "6. Verificación de dominio: células y evidencia").
+      // extractCourseBlocks nunca encuentra esto, así que bloqueEncontrado
+      // siempre era null y el flujo caía al índice COMPLETO sin filtrar —
+      // el bug real no era de tolerancia a palabras insertadas (ya
+      // corregido), sino que faltaba este segundo mecanismo de filtrado
+      // por palabra clave dentro de los títulos de los temas.
+      const respuestaCategoria = !bloqueEncontrado
+        ? buildCategoryTopicsResponse({ topics: extractCourseTopicIndex(contenidoCurricular).topics, query: consultaBloque, idiomaIngles })
+        : null
+      if (bloqueEncontrado || respuestaCategoria) {
+        const respuesta = bloqueEncontrado
+          ? buildBlockTopicsResponse({ blocks: bloques, query: consultaBloque, idiomaIngles })
+          : (respuestaCategoria as string)
         const { data: insertedRow } = await supabase.from('interacciones').insert({
           usuario_id: user.id,
           colegio_id: perfil.colegio_id,
@@ -2569,7 +2585,23 @@ export async function POST(req: NextRequest) {
       contextoContenido += `\n\nEJERCICIO ACTIVO PENDIENTE: ${pendingMathOperation}. Si el mensaje del alumno no resuelve este ejercicio, respóndele brevemente lo que preguntó y luego regresa a este mismo ejercicio. NO le preguntes de nuevo qué tema quiere trabajar ni le muestres una lista de temas — el tema ya está activo. Si en cambio decides presentar un ejercicio o problema NUEVO y distinto a este, la etiqueta [OP: ...] debe reflejar exactamente los números de ESE ejercicio nuevo — nunca reutilices el operando pendiente de arriba en la etiqueta de un problema distinto.`
     }
 
-    const systemPrompt = `${promptBase}${promptPadre}${contextoIdioma}${contextoIdiomaDistinto}${contextoMensajeCompuesto}${contextoResumenTema}${contextoMateriasDisponibles}${contextoGrado}
+    // Hallazgo real (cuarta verificación, 2026-07-13): pedir una tabla ya
+    // no se convertía a "Etiqueta: valor" en línea (la excepción de
+    // PROMPT_BASE existe desde antes), pero el modelo a veces igual
+    // RECHAZABA la petición con frases como "no puedo hacer una tabla en
+    // formato visual" y entregaba viñetas en su lugar — una instrucción
+    // estática entre muchas otras en un prompt largo no basta para que el
+    // modelo la seleccione de forma confiable cuando SÍ aplica. Cuando el
+    // mensaje de ESTE turno específico pide explícitamente una tabla, se
+    // agrega una instrucción puntual y muy visible (no una regla genérica
+    // más) reforzando que sí debe generarla en este caso concreto.
+    const instruccionTablaExplicita = isExplicitTableRequest(pregunta)
+      ? idiomaIngles
+        ? '\n\nINSTRUCTION FOR THIS SPECIFIC REPLY: the student explicitly asked for a table in this message. You must answer using real markdown table syntax (pipes | and a dash separator row ---), with clear column headers. You CAN generate tables in this case — do not say you cannot make a table and do not replace it with a bullet list.'
+        : '\n\nINSTRUCCIÓN PARA ESTA RESPUESTA PUNTUAL: el alumno pidió explícitamente una tabla en este mensaje. Debes responder usando sintaxis real de tabla markdown (con pipes | y una fila separadora de guiones ---), con encabezados de columna claros. SÍ puedes generar tablas en este caso — no digas que no puedes hacer una tabla ni la reemplaces por una lista de viñetas.'
+      : ''
+
+    const systemPrompt = `${promptBase}${promptPadre}${contextoIdioma}${contextoIdiomaDistinto}${contextoMensajeCompuesto}${contextoResumenTema}${contextoMateriasDisponibles}${contextoGrado}${instruccionTablaExplicita}
 
 CONTEXTO DEL ALUMNO:
 - Nombre: ${perfil.nombre_completo.split(' ')[0]}
@@ -2587,6 +2619,41 @@ ${contextoContenido}`
 
     const completion = await withOpenAIRetry(() => openai.chat.completions.create({ model: 'gpt-4o-mini', messages: mensajesOpenAI, max_tokens: 700, temperature: 0.7 }))
     let respuesta = completion.choices[0].message.content || 'No pude generar una respuesta.'
+
+    // Hallazgo real (cuarta verificación, 2026-07-13): incluso con la
+    // instrucción puntual de arriba, el modelo a veces igual RECHAZABA la
+    // tabla explícitamente pedida ("no puedo hacer una tabla en formato
+    // visual") y entregaba viñetas en su lugar — una instrucción de prompt,
+    // por más puntual que sea, no es una garantía. Se agrega un respaldo
+    // determinístico: si la petición era explícitamente de tabla, la
+    // respuesta NO contiene sintaxis de tabla real, y además contiene una
+    // frase de rechazo reconocible, se reintenta UNA vez con una
+    // instrucción de seguimiento explícita — si el reintento sí produce una
+    // tabla real, se usa esa; si no, se conserva la respuesta original (no
+    // se bloquea la respuesta del alumno por un reintento fallido).
+    if (isExplicitTableRequest(pregunta) && !looksLikeMarkdownTable(respuesta) && looksLikeTableRefusal(respuesta)) {
+      try {
+        const reintentoTabla = await withOpenAIRetry(() => openai.chat.completions.create({
+          model: 'gpt-4o-mini',
+          max_tokens: 700,
+          temperature: 0.5,
+          messages: [
+            ...mensajesOpenAI,
+            { role: 'assistant', content: respuesta },
+            {
+              role: 'user',
+              content: idiomaIngles
+                ? 'Yes, you can and must generate a real markdown table with pipes (|) and a dash separator row for this — please do it now, do not use a bullet list instead.'
+                : 'Sí puedes y debes generar una tabla real en markdown con pipes (|) y una fila separadora de guiones para esto — hazlo ahora, no uses una lista de viñetas en su lugar.',
+            },
+          ],
+        }))
+        const textoReintento = reintentoTabla.choices[0].message.content
+        if (textoReintento && looksLikeMarkdownTable(textoReintento)) respuesta = textoReintento
+      } catch (error) {
+        console.error('Reintento de tabla explícita falló:', error)
+      }
+    }
 
     // CONTRADICTION GUARD FINAL — última línea de defensa
     // Aunque el modelo no usó [OP:], si dice incorrecto=correcto, lo bloqueamos

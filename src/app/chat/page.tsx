@@ -122,7 +122,7 @@ export default async function ChatPage() {
   
 
   // Si no hay perfil redirigir al login
-  if (perfil?.rol === 'maestro') redirect('/docente')
+  if (perfil?.rol === 'maestro') redirect('/guia')
   if (perfil?.rol === 'admin') redirect('/admin')
 
   const { data: materias } = await supabase

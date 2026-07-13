@@ -249,7 +249,7 @@ export default function UsuariosPage() {
           {[
             { href: '/admin', label: '🏠 Inicio' },
             { href: '/admin/usuarios', label: '👥 Usuarios y Guías', active: true },
-            { href: '/docente', label: '📊 Dashboard' },
+            { href: '/director', label: '📊 Dashboard' },
           ].map(item => <a key={item.href} href={item.href} style={S.navItem(item.active)}>{item.label}</a>)}
         </nav>
         <div style={{ padding: '16px 20px', borderTop: '1px solid rgba(255,255,255,.1)' }}>

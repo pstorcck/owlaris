@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { isExplicitTableRequest, isFormatRequest, sanitizeChatFormatting } from '../src/lib/chatFormatting'
+import { isExplicitTableRequest, isFormatRequest, looksLikeMarkdownTable, looksLikeTableRefusal, sanitizeChatFormatting } from '../src/lib/chatFormatting'
 
 function main() {
   assert.equal(sanitizeChatFormatting('### Ejemplo:\nAlgo de texto'), 'Ejemplo:\nAlgo de texto')
@@ -97,6 +97,23 @@ function main() {
   const tablaPreservada = sanitizeChatFormatting(tabla, true)
   assert.match(tablaPreservada, /\|/)
   assert.doesNotMatch(tablaPreservada, /Horas estudiadas \(x\): 1 — Calificación \(y\): 50/)
+
+  // Hallazgo real (cuarta verificación, 2026-07-13): incluso con la
+  // instrucción del prompt, el modelo a veces igual rechazaba una tabla
+  // explícitamente pedida ("no puedo hacer una tabla en formato visual") y
+  // entregaba viñetas en su lugar. Se necesita detectar ese rechazo y la
+  // ausencia de sintaxis de tabla real de forma determinística para poder
+  // reintentar en preguntar/route.ts.
+  assert.equal(
+    looksLikeMarkdownTable('| Característica | Fotosíntesis | Respiración |\n|---|---|---|\n| Lugar | Cloroplastos | Mitocondrias |'),
+    true
+  )
+  assert.equal(looksLikeMarkdownTable('- Proceso: fotosíntesis\n- Lugar: cloroplastos'), false)
+  assert.equal(looksLikeMarkdownTable(''), false)
+
+  assert.equal(looksLikeTableRefusal('Recuerda que no puedo hacer una tabla en formato visual. Aquí tienes la información organizada en texto.'), true)
+  assert.equal(looksLikeTableRefusal("I can't make a visual table, but here is the information as a list."), true)
+  assert.equal(looksLikeTableRefusal('Aquí tienes la comparación en una tabla:'), false)
 
   console.log('chat-formatting smoke passed')
 }

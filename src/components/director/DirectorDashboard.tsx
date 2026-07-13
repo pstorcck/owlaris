@@ -3,9 +3,10 @@
 import { useEffect, useMemo, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
+import BurbujaGuia from '@/components/guia/BurbujaGuia'
 
 type DirectorStats = {
-  perfil: { nombre: string; colegio: string; sede: string }
+  perfil: { nombre: string; colegio: string; sede: string; rol: 'director' | 'guia' }
   resumen: {
     totalAlumnos: number
     activosHoy: number
@@ -78,6 +79,7 @@ export default function DirectorDashboard() {
   const [cargando, setCargando] = useState(true)
   const [tab, setTab] = useState<'resumen' | 'alertas' | 'alumnos'>('resumen')
   const [buscar, setBuscar] = useState('')
+  const [resolviendo, setResolviendo] = useState<string | null>(null)
   const router = useRouter()
 
   useEffect(() => {
@@ -87,6 +89,33 @@ export default function DirectorDashboard() {
       .catch(() => setStats(null))
       .finally(() => setCargando(false))
   }, [])
+
+  // Hallazgo real (unificación de paneles, 2026-07-13): la vista de guía
+  // tenía un botón para marcar una alerta como resuelta que este panel
+  // compartido no tenía — quitarlo sin reemplazo habría sido una pérdida
+  // real de funcionalidad, no solo un cambio de alcance de datos. El
+  // endpoint PATCH /api/alertas ya existe y valida permisos por rol
+  // (director/guía solo pueden resolver alertas de alumnos a los que
+  // tienen acceso), así que se reutiliza aquí para ambos roles por igual.
+  async function resolverAlerta(id: string) {
+    setResolviendo(id)
+    try {
+      const res = await fetch('/api/alertas', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id }),
+      })
+      if (res.ok) {
+        setStats((prev) => prev ? {
+          ...prev,
+          alertas: prev.alertas.filter((alerta) => alerta.id !== id),
+          resumen: { ...prev.resumen, alertasActivas: Math.max(0, prev.resumen.alertasActivas - 1) },
+        } : prev)
+      }
+    } finally {
+      setResolviendo(null)
+    }
+  }
 
   const maxActividad = Math.max(...(stats?.actividad.map((d) => d.count) || [1]), 1)
   const maxGrado = Math.max(...(stats?.grados.map((g) => g.count) || [1]), 1)
@@ -168,7 +197,7 @@ export default function DirectorDashboard() {
           <img src="/buho.png" alt="Owlaris" />
           <div>
             <strong>Owlaris</strong>
-            <span>Panel de dirección</span>
+            <span>{stats?.perfil.rol === 'guia' ? 'Panel del guía' : 'Panel de dirección'}</span>
           </div>
         </div>
         <nav className="director-nav">
@@ -185,17 +214,17 @@ export default function DirectorDashboard() {
         {cargando ? (
           <div className="empty">Cargando panel...</div>
         ) : !stats ? (
-          <div className="empty">No se pudo cargar el panel de dirección.</div>
+          <div className="empty">No se pudo cargar el panel.</div>
         ) : (
           <>
             <header className="director-top">
               <div>
-                <div className="director-kicker">Dirección académica</div>
+                <div className="director-kicker">{stats.perfil.rol === 'guia' ? 'Panel del guía' : 'Dirección académica'}</div>
                 <h1>{stats.perfil.colegio}</h1>
                 <p>{stats.perfil.nombre} · {new Date().toLocaleDateString('es-GT', { weekday: 'long', day: 'numeric', month: 'long' })}</p>
               </div>
               <div className="director-badges">
-                <span className="director-badge">Sede: {stats.perfil.sede}</span>
+                <span className="director-badge">{stats.perfil.rol === 'guia' ? 'Alcance' : 'Sede'}: {stats.perfil.sede}</span>
                 <span className="director-badge">Uso semanal: {stats.resumen.tasaUsoSemana}%</span>
               </div>
             </header>
@@ -204,9 +233,9 @@ export default function DirectorDashboard() {
               <>
                 <section className="director-grid">
                   <div className="director-card blue">
-                    <div className="label">Alumnos sede</div>
+                    <div className="label">{stats.perfil.rol === 'guia' ? 'Mis alumnos' : 'Alumnos sede'}</div>
                     <div className="value">{stats.resumen.totalAlumnos}</div>
-                    <div className="sub">visibles para dirección</div>
+                    <div className="sub">{stats.perfil.rol === 'guia' ? 'asignados a mí' : 'visibles para dirección'}</div>
                   </div>
                   <div className="director-card green">
                     <div className="label">Activos hoy</div>
@@ -301,10 +330,17 @@ export default function DirectorDashboard() {
                               Ver informe →
                             </a>
                           )}
+                          <button
+                            onClick={() => resolverAlerta(alerta.id)}
+                            disabled={resolviendo === alerta.id}
+                            style={{ background: '#059669', color: 'white', border: 'none', borderRadius: 999, padding: '5px 11px', fontSize: 11, fontWeight: 700, cursor: resolviendo === alerta.id ? 'default' : 'pointer', opacity: resolviendo === alerta.id ? 0.6 : 1, whiteSpace: 'nowrap' }}
+                          >
+                            {resolviendo === alerta.id ? 'Resolviendo…' : '✓ Resuelta'}
+                          </button>
                         </div>
                       </div>
                     </div>
-                  )) : <div className="empty">No hay alertas activas en esta sede.</div>}
+                  )) : <div className="empty">No hay alertas activas.</div>}
                 </div>
               </section>
             )}
@@ -345,6 +381,7 @@ export default function DirectorDashboard() {
           </>
         )}
       </main>
+      {stats?.perfil.rol === 'guia' && <BurbujaGuia colegio={stats.perfil.colegio} />}
     </div>
   )
 }

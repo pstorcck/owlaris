@@ -108,6 +108,31 @@ export function isExplicitTableRequest(value: string): boolean {
   return FRASES_TABLA_EXPLICITA.some((needle) => text.includes(needle)) || PALABRA_TABLA.test(text)
 }
 
+// Hallazgo real (cuarta verificación, 2026-07-13): incluso con la excepción
+// del prompt y una instrucción puntual por turno, el modelo a veces igual
+// RECHAZABA una tabla explícitamente pedida ("no puedo hacer una tabla en
+// formato visual") y entregaba viñetas en su lugar — se necesita poder
+// detectar ese rechazo de forma determinística para poder reintentar en
+// vez de solo confiar en que el modelo cumpla la instrucción.
+export function looksLikeMarkdownTable(text: string): boolean {
+  const lineas = (text || '').split('\n')
+  for (let i = 0; i < lineas.length - 1; i++) {
+    if (/\|/.test(lineas[i]) && SEPARATOR_ROW.test(lineas[i + 1] || '')) return true
+  }
+  return false
+}
+
+const FRASES_RECHAZO_TABLA = [
+  /no puedo (?:hacer|generar|crear|mostrar)(?:le|te)?\s+(?:una\s+)?tabla/i,
+  /no puedo\s+.*tabla.*visual/i,
+  /no puedo\s+.*formato\s+visual/i,
+  /i\s+(?:cannot|can'?t)\s+(?:make|create|do|generate)\s+(?:a\s+)?(?:visual\s+)?table/i,
+]
+
+export function looksLikeTableRefusal(text: string): boolean {
+  return FRASES_RECHAZO_TABLA.some((pattern) => pattern.test(text || ''))
+}
+
 export function isFormatRequest(value: string): boolean {
   const text = normalizeText(value)
   if (!text) return false

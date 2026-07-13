@@ -457,12 +457,28 @@ export function isBlockGroupingQuestion(value: string): boolean {
   return PATRONES_BLOQUE_O_TEMAS_DE.some((pattern) => pattern.test(text))
 }
 
+// Hallazgo real CRÍTICO (cuarta verificación, 2026-07-13): "dame
+// absolutamente todos los temas de verificación de dominio de este curso,
+// por favor" capturaba "verificación de dominio de este curso, por favor"
+// completo como consulta — el ruido final ("de este curso", "por favor")
+// nunca coincidía con ningún bloque ni con ninguna categoría real, así que
+// la búsqueda fallaba silenciosamente y el flujo caía al índice completo
+// sin filtrar. Se recorta el ruido final común de forma iterativa (puede
+// venir combinado, ej. "...de este curso, por favor").
+const RUIDO_FINAL_CONSULTA = /,?\s*(?:de\s+este\s+curso|de\s+esta\s+clase|de\s+esta\s+materia|por\s+favor|please)\s*$/i
+
 export function extractBlockQuery(value: string): string | null {
   const texto = (value || '').trim()
   const match = /(?:bloque|unidad|unit|block)\s+(?:de\s+)?(.+?)[?¿]?$/i.exec(texto) ||
     /(?:temas|topics)\s+(?:de|of|in)\s+(.+?)[?¿]?$/i.exec(texto)
   if (!match) return null
-  const query = match[1].trim()
+  let query = match[1].trim()
+  let cambio = true
+  while (cambio) {
+    const recortado = query.replace(RUIDO_FINAL_CONSULTA, '').trim()
+    cambio = recortado !== query
+    query = recortado
+  }
   return query.length >= 2 ? query : null
 }
 
@@ -488,6 +504,58 @@ export function buildBlockTopicsResponse(input: {
   return idiomaIngles
     ? `The block "${block.nombre}" covers topics ${block.desde} to ${block.hasta}:\n\n${items}`
     : `El bloque "${block.nombre}" abarca los temas ${block.desde} a ${block.hasta}:\n\n${items}`
+}
+
+// Hallazgo real CRÍTICO (cuarta verificación, 2026-07-13): "dame todos los
+// temas de verificación de dominio" NO es una pregunta sobre un bloque con
+// encabezado propio ("## Bloque N: X") — es una categoría que se repite
+// como parte del TÍTULO de temas individuales dispersos en el índice (ej.
+// "6. Verificación de dominio: células y evidencia", "24. Proyecto de
+// dominio: evolución y diversidad"). extractCourseBlocks nunca encuentra
+// esto (no hay bloques con ese nombre), así que findBlockByQuery siempre
+// devolvía null y el flujo caía al índice completo sin filtrar — el bug
+// reportado no era de tolerancia a palabras insertadas, sino que faltaba
+// por completo este segundo mecanismo de filtrado por categoría/palabra
+// clave dentro de los títulos de los temas.
+const PALABRAS_VACIAS_CATEGORIA = new Set([
+  'de', 'del', 'la', 'los', 'las', 'el', 'y', 'a', 'que', 'es', 'un', 'una',
+  'este', 'esta', 'esa', 'ese', 'curso', 'clase', 'materia', 'favor', 'por',
+  'the', 'of', 'this', 'course', 'class', 'in', 'for',
+])
+
+function extractCategoryKeywords(query: string): string[] {
+  return normalizeText(query)
+    .split(/[^a-z0-9]+/)
+    .filter((w) => w.length >= 4 && !PALABRAS_VACIAS_CATEGORIA.has(w))
+}
+
+export function filterTopicsByCategory(topics: string[], query: string): { indice: number; tema: string }[] {
+  const palabras = extractCategoryKeywords(query)
+  if (palabras.length === 0) return []
+  return topics
+    .map((tema, i) => ({ indice: i + 1, tema }))
+    .filter(({ tema }) => {
+      const normTema = normalizeText(tema)
+      return palabras.some((palabra) => normTema.includes(palabra))
+    })
+}
+
+// Devuelve null cuando el filtro no reduce nada de forma útil (ninguna
+// coincidencia, o coincide con TODOS los temas) — en ese caso el llamador
+// debe seguir el flujo normal del índice completo en vez de forzar una
+// respuesta filtrada que no aporta nada.
+export function buildCategoryTopicsResponse(input: {
+  topics: string[]
+  query: string
+  idiomaIngles?: boolean
+}): string | null {
+  const { topics, query, idiomaIngles } = input
+  const filtrados = filterTopicsByCategory(topics, query)
+  if (filtrados.length === 0 || filtrados.length === topics.length) return null
+  const items = filtrados.map((f) => `${f.indice}. ${f.tema}`).join('\n')
+  return idiomaIngles
+    ? `These are the topics related to "${query}" in this course:\n\n${items}`
+    : `Estos son los temas de ${query} en este curso:\n\n${items}`
 }
 
 // Hallazgo real CRÍTICO (verificación posterior al instructivo, 2026-07-12):

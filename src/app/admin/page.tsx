@@ -53,7 +53,7 @@ export default async function AdminPage() {
             { href: '/admin', label: '🏠 Inicio', active: true },
             { href: '/admin/usuarios', label: '👥 Usuarios y Guías' },
             { href: '/director', label: '🏫 Panel Director' },
-            { href: '/docente', label: '📊 Dashboard Docente' },
+            { href: '/guia', label: '📊 Panel Guía' },
           ].map(item => (
             <a key={item.href} href={item.href} style={{display:'block',padding:'10px 12px',borderRadius:'8px',color: item.active ? 'white' : 'rgba(255,255,255,.6)',background: item.active ? 'rgba(255,255,255,.15)' : 'transparent',textDecoration:'none',fontSize:'13px',fontWeight: item.active ? 600 : 400,marginBottom:'2px',transition:'all .15s'}}>
               {item.label}

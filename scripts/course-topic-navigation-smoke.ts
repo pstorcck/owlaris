@@ -6,6 +6,7 @@ import assert from 'node:assert/strict'
 import {
   buildAreaPresenceResponse,
   buildBlockTopicsResponse,
+  buildCategoryTopicsResponse,
   buildNextTopicResponse,
   buildStandardsAlignmentResponse,
   extractAreaQuery,
@@ -16,6 +17,7 @@ import {
   extractStandardFromPriorResponse,
   extractStandardMentionedInHistory,
   extractStandardQuery,
+  filterTopicsByCategory,
   findBlockByQuery,
   findNextTopic,
   isBlockGroupingQuestion,
@@ -230,6 +232,52 @@ Cantidad de temas: 6
     const query = extractBlockQuery('dame los temas de campos e interacciones')
     const encontrado = findBlockByQuery(bloques, query)
     assert.equal(encontrado?.nombre, 'Campos e interacciones')
+  })
+
+  // Hallazgo real CRÍTICO (cuarta verificación, 2026-07-13): "dame todos los
+  // temas de verificación de dominio" seguía devolviendo el índice COMPLETO
+  // sin filtrar — el bug real no era de tolerancia a palabras insertadas
+  // (ya se detectaba isBlockGroupingQuestion correctamente), sino que la
+  // categoría pedida no es un BLOQUE con encabezado propio, sino una
+  // palabra clave que se repite en el TÍTULO de temas individuales
+  // dispersos en el índice. extractCourseBlocks nunca encontraba esto, así
+  // que findBlockByQuery siempre fallaba y el flujo caía al índice
+  // completo. Se reproduce el índice real reportado (36 temas, con
+  // "Verificación de dominio"/"Proyecto de dominio" en las posiciones 6,
+  // 12, 18, 24 y 30) para confirmar que el filtro por categoría SÍ acota
+  // la respuesta a esos temas.
+  const indiceBiologiaCompleto = Array.from({ length: 36 }, (_, i) => {
+    const n = i + 1
+    if (n === 6) return 'Verificación de dominio: células y evidencia'
+    if (n === 12) return 'Verificación de dominio: energía, materia y células'
+    if (n === 18) return 'Verificación de dominio: genética y herencia'
+    if (n === 24) return 'Proyecto de dominio: evolución y diversidad'
+    if (n === 30) return 'Verificación de dominio: ecosistemas'
+    return `Tema genérico número ${n} sin relación`
+  })
+
+  test('extractBlockQuery recorta el ruido final ("de este curso, por favor") antes de buscar', () => {
+    const query = extractBlockQuery('dame absolutamente todos los temas de verificación de dominio de este curso, por favor')
+    assert.equal(query, 'verificación de dominio')
+  })
+
+  test('filterTopicsByCategory acota el índice completo a solo los temas de la categoría pedida', () => {
+    const filtrados = filterTopicsByCategory(indiceBiologiaCompleto, 'verificación de dominio')
+    assert.equal(filtrados.length, 5)
+    assert.deepEqual(filtrados.map((f) => f.indice), [6, 12, 18, 24, 30])
+    assert.match(filtrados[3].tema, /Proyecto de dominio/)
+  })
+
+  test('buildCategoryTopicsResponse responde SOLO con los temas de la categoría, no el índice completo de 36', () => {
+    const respuesta = buildCategoryTopicsResponse({ topics: indiceBiologiaCompleto, query: 'verificación de dominio', idiomaIngles: false })
+    assert.notEqual(respuesta, null)
+    assert.match(respuesta || '', /6\. Verificación de dominio: células y evidencia/)
+    assert.match(respuesta || '', /30\. Verificación de dominio: ecosistemas/)
+    assert.doesNotMatch(respuesta || '', /Tema genérico número/)
+  })
+
+  test('buildCategoryTopicsResponse devuelve null cuando la categoría no acota nada (sin palabras clave útiles)', () => {
+    assert.equal(buildCategoryTopicsResponse({ topics: indiceBiologiaCompleto, query: 'de la', idiomaIngles: false }), null)
   })
 
   test('una petición genérica de temas SIN relación a ningún bloque real no encuentra coincidencia (debe seguir el flujo normal)', () => {
