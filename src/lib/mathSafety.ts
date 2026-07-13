@@ -865,8 +865,23 @@ export function inferCanonicalOperationFromText(text: string): string | null {
     if (/[xX]/.test(op) && isSafeCanonicalOperation(op)) return op
   }
 
-  const parenthesizedExpressions = Array.from(normalized.matchAll(/\(-?\d+(?:\.\d+)?(?:\s*(?:[+\-*/^])\s*-?\d+(?:\.\d+)?){1,4}\)\s*(?:[*/^]\s*-?\d+(?:\.\d+)?){1,3}/g))
-  const parenthesizedExpression = parenthesizedExpressions.length > 0 ? parenthesizedExpressions[parenthesizedExpressions.length - 1] : null
+  // Hallazgo real CRÍTICO (QA en vivo, 2026-07-13): un problema de varios
+  // pasos (descuento + impuesto) generó la pista "Impuesto = 170 * (10 /
+  // 100)" — el multiplicador va ANTES del paréntesis, no después. El
+  // patrón de abajo solo reconocía "(expr) * número" (paréntesis primero),
+  // así que no encontraba ningún match para esta redacción y el código
+  // caía al patrón plano de "expressions" (sin soporte de paréntesis), que
+  // terminaba capturando solo "10 / 100" — perdiendo el 170 y dando 0.1 en
+  // vez de 17 como operación canónica. Esto hacía que la respuesta CORRECTA
+  // del alumno (17) se rechazara en un ciclo sin salida, siempre con la
+  // misma pista de división (porque la operación mal inferida contiene
+  // '/'). Se agrega el patrón simétrico "número * (expr)" para cubrir
+  // también este orden.
+  const parenthesizedExpressionsSufijo = Array.from(normalized.matchAll(/\(-?\d+(?:\.\d+)?(?:\s*(?:[+\-*/^])\s*-?\d+(?:\.\d+)?){1,4}\)\s*(?:[*/^]\s*-?\d+(?:\.\d+)?){1,3}/g))
+  const parenthesizedExpressionsPrefijo = Array.from(normalized.matchAll(/(?:-?\d+(?:\.\d+)?\s*[*/^]\s*){1,3}\(-?\d+(?:\.\d+)?(?:\s*(?:[+\-*/^])\s*-?\d+(?:\.\d+)?){1,4}\)/g))
+  const parenthesizedExpression = [...parenthesizedExpressionsSufijo, ...parenthesizedExpressionsPrefijo]
+    .sort((a, b) => (a.index ?? 0) - (b.index ?? 0))
+    .pop() || null
   if (parenthesizedExpression) {
     const op = normalizeOperation(parenthesizedExpression[0])
     if (isSafeCanonicalOperation(op)) return op

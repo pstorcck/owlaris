@@ -162,6 +162,38 @@ D) 10
   assert.match(decimalWrong?.feedback || '', /decimal|15\/100|porcentaje/i)
   assert.doesNotMatch(decimalWrong?.feedback || '', /grupos iguales/i)
 
+  // Hallazgo real CRÍTICO (QA en vivo, 2026-07-13, problema real de
+  // descuento + impuesto en varios pasos): la pista sin [OP:] explícito
+  // "Impuesto = 170 * (10 / 100)" (multiplicador ANTES del paréntesis) se
+  // inferia como "10/100" (=0.1) en vez de "170*(10/100)" (=17) — el patrón
+  // de paréntesis solo reconocía "(expr) * número", no "número * (expr)".
+  // Esto rechazaba la respuesta CORRECTA del alumno (17) en un ciclo sin
+  // salida. Se reproduce exactamente el texto real de la pista.
+  const pistaImpuestoConParentesisAntes = `Todavía no has llegado a la respuesta correcta. Recuerda que el impuesto es del 10% sobre el precio de 170 dólares.
+
+Usa la fórmula:
+
+Impuesto = Precio después del descuento * (Porcentaje de impuesto / 100)
+
+Así que calcula:
+
+Impuesto = 170 * (10 / 100)
+
+Intenta nuevamente, ¿cuánto es el impuesto?`
+  const opImpuesto = inferCanonicalOperationFromText(pistaImpuestoConParentesisAntes)
+  assert.equal(opImpuesto, '170*(10/100)')
+  assert.equal(solveOperation(opImpuesto as string), 17)
+
+  const impuestoCorrecto = await handleMathEvaluation(pistaImpuestoConParentesisAntes, '17', false)
+  assert.equal(impuestoCorrecto?.estado, 'correcto')
+  assert.equal(impuestoCorrecto?.correctAnswer, 17)
+
+  // El caso ya cubierto (paréntesis PRIMERO, multiplicador después) no debe
+  // quedar roto por el nuevo patrón simétrico.
+  const pistaConParentesisDespues = 'Calcula: (15 - 5) * 3. ¿Cuánto es?'
+  assert.equal(inferCanonicalOperationFromText(pistaConParentesisDespues), '(15-5)*3')
+  assert.equal(solveOperation(inferCanonicalOperationFromText(pistaConParentesisDespues) as string), 30)
+
   assert.equal(isPendingContextQuestion('puedo usar calculadora para esa?'), true)
   const calculatorResponse = buildPendingContextResponse({
     studentQuestion: 'puedo usar calculadora para esa?',
