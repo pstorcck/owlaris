@@ -4,7 +4,7 @@ import { checkContentSafety, type ContentSafetyResult } from '@/lib/contentSafet
 import { extractRelevantContentWindow } from '@/lib/relevantContentWindow'
 import { buildContradictionClarificationResponse, detectContradictoryInstruction } from '@/lib/contradictoryInstructions'
 import { guardHumanisticResponse } from '@/lib/humanisticSafety'
-import { buildReadyToCopyRedirect, describeFinalAnswerPolicyForPrompt, guardNoFinalAnswer, isReadyToCopyRequest } from '@/lib/pedagogicalGuard'
+import { buildReadyToCopyRedirect, buildWelcomeMessage, describeFinalAnswerPolicyForPrompt, guardNoFinalAnswer, isReadyToCopyRequest } from '@/lib/pedagogicalGuard'
 import { buildGradeAdaptationInstruction } from '@/lib/gradeAdaptation'
 import { pareceIdiomaDistinto } from '@/lib/languageDetection'
 import { buscarStaffColegio, buscarSuperadmins, elegirFuenteDestinatariosAlerta, resolverDestinatariosAlerta, type DestinatarioAlerta } from '@/lib/alertaEmergencia'
@@ -1530,6 +1530,41 @@ export async function POST(req: NextRequest) {
 
     const tipoPregunta = detectarTipoPregunta(pregunta)
     const esBienvenida = esSaludo(pregunta) && (!historial || historial.length === 0)
+
+    // Instrucciones del 13 de julio — mensaje de bienvenida exacto, mostrado
+    // una sola vez al inicio de cada sesión/chat nuevo (esBienvenida ya
+    // exige historial vacío). Antes se dejaba que el modelo improvisara un
+    // saludo "personalizado" a partir de una instrucción libre; eso no
+    // garantizaba el texto exacto pedido. Se devuelve determinísticamente,
+    // igual que el resto de los guards de esta cascada.
+    if (esBienvenida) {
+      const respuestaBienvenida = buildWelcomeMessage(idiomaIngles)
+      const { data: insertedRow } = await supabase.from('interacciones').insert({
+        usuario_id: user.id,
+        colegio_id: perfil.colegio_id,
+        materia_id: materia_uuid,
+        materia_nombre_snapshot: materiaConsultaSharePoint || null,
+        grado: gradoEfectivo,
+        tema_detectado: idiomaIngles ? 'Welcome message' : 'Mensaje de bienvenida',
+        pregunta,
+        respuesta: respuestaBienvenida,
+        tokens_usados: 0,
+        costo_usd: 0,
+        modelo_usado: 'welcome_guard',
+        documento_fuente: null,
+        sospecha_copia: false,
+        guard_activado: true,
+      }).select('id').single()
+      return NextResponse.json({
+        respuesta: respuestaBienvenida,
+        source: 'welcome_guard',
+        nuevo_estado: 'activo',
+        tokens: 0,
+        interaction_id: insertedRow?.id || null,
+        pending_math_interaction_id: null,
+      })
+    }
+
     const nivelDificultadActual = Math.min(8, Math.max(1, parseInt(String(body.nivel_dificultad || '1'), 10) || 1))
     const rachaAprendizaje = await obtenerRachaAprendizaje(admin, user.id, materia_uuid)
 
@@ -2628,10 +2663,10 @@ export async function POST(req: NextRequest) {
     // estudiante, no al adulto que consulta el asistente de padres.
     const contextoGrado = esPadre ? '' : `\n\n${buildGradeAdaptationInstruction(gradoEfectivo, idiomaIngles)}`
 
+    // esBienvenida ya se resolvió arriba con un return determinístico
+    // (buildWelcomeMessage) — nunca se llega aquí con esBienvenida true.
     let contextoContenido = ''
-    if (esBienvenida) {
-      contextoContenido = `El alumno acaba de saludar. Responde con bienvenida personalizada. NO muestres lista de temas todavía.`
-    } else if (tipoPregunta === 'crisis') {
+    if (tipoPregunta === 'crisis') {
       contextoContenido = `ALERTA: El alumno toca un tema de crisis personal. Responde con empatía breve y recomienda hablar con un adulto responsable.`
     } else if (tipoPregunta === 'formativa') {
       contextoContenido = `El alumno toca un tema formativo. Usa los documentos de configuración para orientarlo.`

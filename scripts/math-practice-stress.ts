@@ -132,6 +132,10 @@ async function main() {
     'Dame un ejemplo parecido',
     'Explain with an example',
     'show me one example',
+    // Instrucciones del 13 de julio — nuevas "opciones de ayuda" deben
+    // disparar el mismo flujo de ejemplo resuelto.
+    'Ponme un ejemplo parecido',
+    'Give me a similar example',
   ]
   for (let i = 0; i < 20; i += 1) {
     test(`worked-example-request-${i}`, () => {

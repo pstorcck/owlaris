@@ -619,7 +619,10 @@ export function isWorkedExampleRequest(text: string) {
     .toLowerCase()
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
-  return /(explicame|explica|explain|show me|muestrame|dame).*(ejemplo|example)/i.test(normalized) ||
+  // Instrucciones del 13 de julio \u2014 nueva "opci\u00f3n de ayuda" ("Ponme un
+  // ejemplo parecido" / "Give me a similar example") debe disparar el mismo
+  // flujo de ejemplo resuelto que ya exist\u00eda.
+  return /(explicame|explica|explain|show me|muestrame|dame|ponme|give me).*(ejemplo|example)/i.test(normalized) ||
     /(con|with)\s+(un\s+)?(ejemplo|example)/i.test(normalized)
 }
 

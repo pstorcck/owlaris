@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import {
   buildReadyToCopyRedirect,
+  buildWelcomeMessage,
   describeFinalAnswerPolicyForPrompt,
   guardNoFinalAnswer,
   isDisguiseAiAuthorshipRequest,
@@ -463,6 +464,18 @@ Mapa del curso
   const redirectEn = buildReadyToCopyRedirect(true)
   assert.match(redirectEn, /let's make sure you can solve this yourself/i)
   assert.doesNotMatch(redirectEn, /i won't/i)
+
+  // Posicionamiento pedagógico (instructivo 2026-07-13): el mensaje de
+  // bienvenida debe ser el texto exacto pedido, no una paráfrasis del
+  // modelo — se compara literal, no con un patrón laxo.
+  assert.equal(
+    buildWelcomeMessage(false),
+    'Owlaris está entrenado para ayudarte a aprender de verdad. Puedes pedirme explicaciones, ejemplos, pistas, práctica y ejercicios adaptados a tu nivel. No haré el trabajo por ti: te ayudaré a entenderlo hasta que puedas resolverlo con seguridad.'
+  )
+  assert.equal(
+    buildWelcomeMessage(true),
+    "Owlaris is trained to help you truly learn. You can ask me for explanations, examples, hints, practice, and exercises adapted to your level. I won't do the work for you: I'll help you understand it until you can solve it with confidence."
+  )
 
   console.log('pedagogical-guard smoke passed')
 }

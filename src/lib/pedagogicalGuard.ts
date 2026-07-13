@@ -290,6 +290,16 @@ export function buildReadyToCopyRedirect(idiomaIngles: boolean): string {
     : 'Vamos a hacer que puedas resolverla tú. Te doy una pista clara para avanzar: construyámoslo paso a paso, empezando por la idea principal. ¿Cuál es el tema o la consigna en la que estás trabajando?'
 }
 
+// Instrucciones del 13 de julio — mensaje de bienvenida exacto, mostrado
+// una sola vez al inicio de cada sesión/chat nuevo (esBienvenida). Se
+// devuelve textual y determinísticamente en vez de dejar que el modelo lo
+// parafrasee, siguiendo el mismo patrón que buildReadyToCopyRedirect.
+export function buildWelcomeMessage(idiomaIngles: boolean): string {
+  return idiomaIngles
+    ? "Owlaris is trained to help you truly learn. You can ask me for explanations, examples, hints, practice, and exercises adapted to your level. I won't do the work for you: I'll help you understand it until you can solve it with confidence."
+    : 'Owlaris está entrenado para ayudarte a aprender de verdad. Puedes pedirme explicaciones, ejemplos, pistas, práctica y ejercicios adaptados a tu nivel. No haré el trabajo por ti: te ayudaré a entenderlo hasta que puedas resolverlo con seguridad.'
+}
+
 export function guardNoFinalAnswer(text: string, options: GuardOptions): { text: string; guardActivado: boolean } {
   if (!text || !shouldGuideWithoutFinalAnswer(options)) {
     return { text, guardActivado: false }

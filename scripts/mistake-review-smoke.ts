@@ -16,6 +16,11 @@ function main() {
   assert.equal(isReviewMistakesRequest('quiero practicar'), false)
   assert.equal(isReviewMistakesRequest('resume el tema'), false)
 
+  // Instrucciones del 13 de julio — la nueva "opción de ayuda" "Revisa lo
+  // que hice" debe disparar el mismo flujo que "Revisemos mis errores".
+  assert.equal(isReviewMistakesRequest('Revisa lo que hice'), true)
+  assert.equal(isReviewMistakesRequest('Review what I did'), true)
+
   const errores = [
     { tema_detectado: 'Suma y resta', operacion_canonica: '62-13' },
     { tema_detectado: 'Suma y resta', operacion_canonica: null },

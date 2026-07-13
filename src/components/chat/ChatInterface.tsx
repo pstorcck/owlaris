@@ -65,6 +65,37 @@ type WindowWithSpeechTools = Window & {
   webkitAudioContext?: typeof AudioContext
 }
 
+// Instrucciones del 13 de julio — "Opciones de ayuda" nuevas conviven con
+// las acciones rápidas ya existentes (no las reemplazan). Se centralizan
+// aquí en vez de repetirlas en los dos lugares donde se setea sugerencias.
+const SUGERENCIAS_ES = [
+  { icon: '▤', text: 'Temas de esta materia' },
+  { icon: '✦', text: 'Explícame con un ejemplo' },
+  { icon: '◈', text: 'Quiero practicar' },
+  { icon: '◇', text: 'Resume el tema' },
+  { icon: '↺', text: 'Revisemos mis errores' },
+  { icon: '✳', text: 'Dame una pista' },
+  { icon: '‣', text: 'Explícame el primer paso' },
+  { icon: '⧉', text: 'Ponme un ejemplo parecido' },
+  { icon: '◒', text: 'Explícamelo más fácil' },
+  { icon: '✓', text: 'Revisa lo que hice' },
+  { icon: '⟲', text: 'Empieza desde cero' },
+]
+
+const SUGERENCIAS_EN = [
+  { icon: '▤', text: 'Class topics' },
+  { icon: '✦', text: 'Explain with an example' },
+  { icon: '◈', text: 'I want to practice' },
+  { icon: '◇', text: 'Summarize the topic' },
+  { icon: '↺', text: "Let's review my mistakes" },
+  { icon: '✳', text: 'Give me a hint' },
+  { icon: '‣', text: 'Explain the first step' },
+  { icon: '⧉', text: 'Give me a similar example' },
+  { icon: '◒', text: 'Explain it more simply' },
+  { icon: '✓', text: 'Review what I did' },
+  { icon: '⟲', text: 'Start from scratch' },
+]
+
 function renderSegmento(texto: string, key: number): React.ReactNode[] {
   const partes: React.ReactNode[] = []
   const boldRegex = /\*\*([^*]+)\*\*/g
@@ -414,19 +445,7 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
   useEffect(() => {
     setSugerencias(prev => {
       if (prev.length === 0) return prev
-      return idiomaIngles ? [
-        { icon: '▤', text: 'Class topics' },
-        { icon: '✦', text: 'Explain with an example' },
-        { icon: '◈', text: 'I want to practice' },
-        { icon: '◇', text: 'Summarize the topic' },
-        { icon: '↺', text: "Let's review my mistakes" },
-      ] : [
-        { icon: '▤', text: 'Temas de esta materia' },
-        { icon: '✦', text: 'Explícame con un ejemplo' },
-        { icon: '◈', text: 'Quiero practicar' },
-        { icon: '◇', text: 'Resume el tema' },
-        { icon: '↺', text: 'Revisemos mis errores' },
-      ]
+      return idiomaIngles ? SUGERENCIAS_EN : SUGERENCIAS_ES
     })
   }, [idiomaIngles])
 
@@ -665,19 +684,7 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
 
       // Sugerencias solo cuando está activo
       if (data.nuevo_estado === 'activo' || estadoChat === 'activo') {
-        setSugerencias(idiomaActivo ? [
-          { icon: '▤', text: 'Class topics' },
-          { icon: '✦', text: 'Explain with an example' },
-          { icon: '◈', text: 'I want to practice' },
-          { icon: '◇', text: 'Summarize the topic' },
-          { icon: '↺', text: "Let's review my mistakes" },
-        ] : [
-          { icon: '▤', text: 'Temas de esta materia' },
-          { icon: '✦', text: 'Explícame con un ejemplo' },
-          { icon: '◈', text: 'Quiero practicar' },
-          { icon: '◇', text: 'Resume el tema' },
-          { icon: '↺', text: 'Revisemos mis errores' },
-        ])
+        setSugerencias(idiomaActivo ? SUGERENCIAS_EN : SUGERENCIAS_ES)
       }
     } catch (e) {
       if (e instanceof DOMException && e.name === 'AbortError') {

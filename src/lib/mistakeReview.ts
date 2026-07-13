@@ -23,6 +23,10 @@ export function isReviewMistakesRequest(pregunta: string): boolean {
     'review my errors',
     "let's review my mistakes",
     'lets review my mistakes',
+    // Instrucciones del 13 de julio — nueva "opción de ayuda" ("Revisa lo
+    // que hice") apunta a la misma funcionalidad de revisión de errores.
+    'revisa lo que hice',
+    'review what i did',
   ].some((needle) => t.includes(needle))
 }
 
