@@ -17,8 +17,21 @@ import { withOpenAIRetry } from './openaiRetry'
 const cacheTemasLLM = new Map<string, { topics: string[]; timestamp: number }>()
 const TEMAS_LLM_CACHE_TTL = 1000 * 60 * 60 // 1 hora: el documento cambia poco, no vale la pena repetir la llamada por cada pregunta
 
+// Hallazgo real (QA en vivo, 2026-07-13): en un documento de Lenguaje que
+// es un banco de ejercicios de comprensión lectora, el modelo listó los
+// primeros 4 temas genuinos de comprensión (literal, inferencial, crítica)
+// pero LUEGO siguió con los TÍTULOS de las lecturas usadas como ejercicio
+// ("La teoría de la relatividad general", "Indicadores económicos de
+// Guatemala", "El Protocolo de Montreal"...) como si fueran temas propios
+// de Lenguaje — son títulos de textos sobre OTRAS materias (física,
+// economía, ciencias sociales) usados solo como material de lectura, no
+// contenidos curriculares de Lenguaje. Se agrega una instrucción explícita
+// para que el modelo distinga esta estructura y no liste títulos de
+// lectura/pasaje como si fueran temas de la materia.
 const SYSTEM_PROMPT_EXTRAER_TEMAS =
-  'Extraes la lista de temas, lecciones o contenidos de un documento curricular. Responde SOLO con JSON: {"temas": string[]}. Cada elemento debe ser un tema/lección/contenido que aparezca LITERALMENTE en el documento (puedes limpiar numeración o formato, pero no inventes, no resumas de más ni agregues información externa). Si el documento no contiene una lista identificable de temas (por ejemplo, si es un banco de ejercicios o preguntas sin un índice de contenidos), responde {"temas": []}.'
+  'Extraes la lista de temas, lecciones o contenidos de un documento curricular. Responde SOLO con JSON: {"temas": string[]}. Cada elemento debe ser un tema/lección/contenido que aparezca LITERALMENTE en el documento (puedes limpiar numeración o formato, pero no inventes, no resumas de más ni agregues información externa). ' +
+  'Distingue con cuidado entre TEMAS curriculares reales (habilidades, competencias o contenidos que se enseñan, ej. "Comprensión inferencial", "Fracciones algebraicas") y TÍTULOS de textos, lecturas o pasajes usados solo como material de un ejercicio (ej. "La teoría de la relatividad general", "El Protocolo de Montreal", "Indicadores económicos de Guatemala") — estos últimos NUNCA son temas de la materia, incluso si el documento los usa como encabezado de cada ejercicio; no los incluyas en la lista aunque traten sobre ciencias, economía o historia dentro de una materia de lenguaje/lectura. ' +
+  'Si el documento no contiene una lista identificable de temas curriculares reales (por ejemplo, si es un banco de ejercicios o lecturas sin un índice de contenidos propio de la materia), responde {"temas": []} en vez de listar los títulos de las lecturas o ejercicios.'
 
 export function parseTemasLLMResponse(raw: string): string[] {
   try {
