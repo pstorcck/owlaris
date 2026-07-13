@@ -2249,10 +2249,26 @@ export async function POST(req: NextRequest) {
       // con evidencia en vez de suposiciones — se debe quitar una vez
       // diagnosticado y corregido de forma definitiva.
       if (index.topics.length === 0) {
+        // Segunda vuelta del diagnóstico: los primeros 1500 caracteres de
+        // los dos documentos reales reportados mostraron que NINGUNO tiene
+        // una sección "Índice de temas" tradicional — uno es un banco de
+        // ejercicios organizado por tipo de comprensión, el otro parece
+        // ser metadatos/reglas para el tutor. Se necesita ver dónde (si
+        // acaso) vive una lista real de temas/competencias más adelante en
+        // el documento, sin adivinar — se listan las líneas que contienen
+        // palabras candidatas a lo largo de TODO el documento, no solo el
+        // inicio.
+        const lineasDelDocumento = contenidoCurricular.split(/\r?\n/)
+        const lineasConMarcadores = lineasDelDocumento
+          .map((linea, i) => ({ i, linea: linea.trim() }))
+          .filter(({ linea }) => linea.length > 0 && /\b(tema|competencia|indicador|unidad|bloque|contenido|cobertura|subtema)/i.test(linea))
+          .slice(0, 60)
         console.log('DIAGNOSTICO_INDICE_VACIO', JSON.stringify({
           documentoFuente,
           longitudContenido: contenidoCurricular.length,
-          primeros1500: contenidoCurricular.substring(0, 1500),
+          totalLineas: lineasDelDocumento.length,
+          primeros1000: contenidoCurricular.substring(0, 1000),
+          lineasConMarcadores,
         }))
       }
       const respuesta = buildCourseTopicListResponse({
