@@ -454,10 +454,15 @@ Mapa del curso
   assert.equal(isReadyToCopyRequest('¿Qué es la fotosíntesis?'), false)
   assert.equal(isReadyToCopyRequest('Resuelve 24/3+5'), false)
 
+  // Posicionamiento pedagógico (instructivo 2026-07-13): el límite debe
+  // venir acompañado de una acción útil inmediata ("vamos a hacer que
+  // puedas resolverla tú... pista clara"), nunca solo una negativa.
   const redirectEs = buildReadyToCopyRedirect(false)
-  assert.match(redirectEs, /no voy a darte un texto terminado/i)
+  assert.match(redirectEs, /vamos a hacer que puedas resolverla t[uú]/i)
+  assert.doesNotMatch(redirectEs, /no voy a darte/i)
   const redirectEn = buildReadyToCopyRedirect(true)
-  assert.match(redirectEn, /won't hand you a finished piece/i)
+  assert.match(redirectEn, /let's make sure you can solve this yourself/i)
+  assert.doesNotMatch(redirectEn, /i won't/i)
 
   console.log('pedagogical-guard smoke passed')
 }

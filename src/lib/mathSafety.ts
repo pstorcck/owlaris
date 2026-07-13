@@ -441,8 +441,8 @@ function contradictionGuard(
   if (studentN !== null && correctN !== null && Math.abs(studentN - correctN) < 0.001) {
     if (feedback.toLowerCase().includes('incorrecto') || feedback.toLowerCase().includes('incorrect')) {
       const feedbackCorregido = idiomaIngles
-        ? `Correct. ${studentN} is the right answer. Can you explain how you solved it?`
-        : `Correcto. ${studentN} es la respuesta correcta. ¿Puedes explicarme cómo llegaste a ese resultado?`
+        ? `Correct. You solved it yourself — ${studentN} is the right answer. Now you don't just have the answer, you know how to find it again. Can you explain how you got there?`
+        : `Correcto. Lo resolviste tú: ${studentN} es la respuesta correcta. Ahora no solo tienes la respuesta, ya sabes cómo encontrarla otra vez. ¿Puedes explicarme cómo llegaste a ese resultado?`
       return { feedback: feedbackCorregido, guardActivado: true }
     }
   }
@@ -511,9 +511,12 @@ function generatePedagogicalFeedback(
   switch (estado) {
     case 'correcto':
     case 'equivalente':
+      // Posicionamiento pedagógico (instructivo 2026-07-13): reforzar que el
+      // estudiante lo resolvió él mismo y ya sabe cómo encontrarlo otra vez,
+      // no solo confirmar que acertó.
       return idiomaIngles
-        ? `Correct. ${studentAnswer} is the right answer. Can you explain how you solved it?`
-        : `¡Correcto! ${studentAnswer} es la respuesta correcta. ¿Puedes explicarme cómo llegaste a ese resultado?`
+        ? `Correct. You solved it yourself — ${studentAnswer} is the right answer. Now you don't just have the answer, you know how to find it again. Can you explain how you got there?`
+        : `¡Correcto! Lo resolviste tú: ${studentAnswer} es la respuesta correcta. Ahora no solo tienes la respuesta, ya sabes cómo encontrarla otra vez. ¿Puedes explicarme cómo llegaste a ese resultado?`
     case 'incorrecto':
       return idiomaIngles
         ? `Not yet. ${hint} Try again with that step.`

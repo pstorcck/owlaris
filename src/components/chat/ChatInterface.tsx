@@ -1852,7 +1852,7 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
               </button>
             </div>
             <p style={{fontSize:'10px',color:'#D4D0EE',textAlign:'center',marginTop:'8px',letterSpacing:'.4px',fontWeight:500}}>
-              {idiomaIngles ? 'Owlaris guides you to learn — it does not do your homework for you' : 'Owlaris te guía para que aprendas — no hace tu tarea por ti'}
+              {idiomaIngles ? 'Owlaris helps you understand, practice, and solve it yourself' : 'Owlaris te ayuda a entender, practicar y resolver por ti mismo'}
             </p>
           </div>
         </div>

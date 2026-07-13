@@ -229,12 +229,20 @@ function esRiesgoTextoListoParaCopiar(pregunta: string): boolean {
 // anuncio de la regla en cada turno (se sentía rígido y defensivo). Estas frases
 // guían sin anunciarla, y se elige una de forma estable según el texto original
 // para que el comportamiento sea determinístico y comprobable en pruebas.
+// Hallazgo real (posicionamiento pedagógico, instructivo 2026-07-13): al
+// pedir una respuesta directa, la regla es que Owlaris NUNCA se presente
+// con una negativa sola ("no voy a...") — cada límite debe venir acompañado
+// de una acción útil inmediata, con la fórmula "Vamos a hacer que puedas
+// resolverla tú. Te doy una pista clara para avanzar: [pista]." Se agrega
+// esa fórmula al conjunto de frases-guía (el texto del modelo que sigue
+// después ya cumple el rol de "[pista contextual]").
 const GUIA_SIN_ANUNCIO_ES = [
   'Empecemos por identificar qué nos pide el problema.',
   'Vamos paso a paso.',
   'Estás cerca. Revisemos qué operación ayuda a avanzar.',
   'Probemos con una pista para seguir avanzando.',
   'Pensemos juntos cuál sería el siguiente paso.',
+  'Vamos a hacer que puedas resolverla tú. Te doy una pista clara para avanzar:',
 ]
 const GUIA_SIN_ANUNCIO_EN = [
   "Let's start by identifying what the problem is asking.",
@@ -242,6 +250,7 @@ const GUIA_SIN_ANUNCIO_EN = [
   "You're close. Let's check which operation helps you move forward.",
   "Let's try a hint to keep going.",
   "Let's think together about the next step.",
+  "Let's make sure you can solve this yourself. Here's a clear hint to move forward:",
 ]
 
 function elegirGuiaEstable(seed: string, idiomaIngles: boolean): string {
@@ -277,8 +286,8 @@ export function isReadyToCopyRequest(text: string): boolean {
 
 export function buildReadyToCopyRedirect(idiomaIngles: boolean): string {
   return idiomaIngles
-    ? "I won't hand you a finished piece to copy and turn in as your own — but I can help you build it yourself, step by step. What's the topic or prompt you're working on? Let's start with the main idea you want to make."
-    : 'No voy a darte un texto terminado para copiar y entregar como propio, pero sí puedo ayudarte a construirlo tú mismo, paso a paso. ¿Cuál es el tema o la consigna en la que estás trabajando? Empecemos por la idea principal que quieres plantear.'
+    ? "Let's make sure you can solve this yourself. Here's a clear hint to move forward: build it step by step, starting with the main idea. What's the topic or prompt you're working on?"
+    : 'Vamos a hacer que puedas resolverla tú. Te doy una pista clara para avanzar: construyámoslo paso a paso, empezando por la idea principal. ¿Cuál es el tema o la consigna en la que estás trabajando?'
 }
 
 export function guardNoFinalAnswer(text: string, options: GuardOptions): { text: string; guardActivado: boolean } {
@@ -332,6 +341,8 @@ Esta misma regla aplica si piden un resumen completo o una lista de puntos "list
 Usa pistas, preguntas guiadas, ejemplos parciales, recordatorios de conceptos y verificación paso a paso. Varía cómo guías para no sonar repetitivo.
 En materias conceptuales, ajusta el TIPO de pista al tipo de error, igual que en matemáticas se ajusta la pista a la estructura de la ecuación: si el alumno confundió una definición, recuérdale el concepto sin dársela completa; si confundió una relación de causa-efecto, pídele identificar primero la causa o el efecto por separado; si el error es de comparación (semejanzas/diferencias), pide que identifique un solo criterio de comparación a la vez; si es un error de secuencia/orden cronológico, pide que ubique un solo evento de referencia antes de continuar. No repitas la misma pista genérica ("piensa en el contexto") para errores de distinta naturaleza.
 Solo confirma la respuesta final cuando el estudiante ya la propuso correctamente o completó correctamente el razonamiento.
-Si insiste en que quiere solo la respuesta, redirígelo con naturalidad hacia resolverlo juntos paso a paso, sin repetir siempre la misma frase ni anunciar la regla.
-Si el estudiante pide que el texto "no parezca escrito por una IA", "parezca que lo escribió él/ella" o "no lo detecte Turnitin", no seas cómplice de presentar trabajo generado por IA como si fuera enteramente del alumno: ofrécele ayudarlo a escribirlo con sus propias palabras, por partes y guiándolo, pero no entregues un texto terminado listo para presentar como propio.`
+Si insiste en que quiere solo la respuesta, redirígelo con naturalidad hacia resolverlo juntos paso a paso, sin repetir siempre la misma frase ni anunciar la regla — usa la fórmula "Vamos a hacer que puedas resolverla tú. Te doy una pista clara para avanzar: [pista]." en vez de una negativa sola.
+Cuando el estudiante llegue a la respuesta correcta por su cuenta, refuerza que ÉL la resolvió y que ahora sabe cómo encontrarla otra vez, no solo que acertó.
+Si el estudiante pide que el texto "no parezca escrito por una IA", "parezca que lo escribió él/ella" o "no lo detecte Turnitin", no seas cómplice de presentar trabajo generado por IA como si fuera enteramente del alumno: ofrécele ayudarlo a escribirlo con sus propias palabras, por partes y guiándolo, pero no entregues un texto terminado listo para presentar como propio.
+Cuando sea natural, puedes recordarle al estudiante que puede pedir: una pista, que le expliques el primer paso, un ejemplo parecido, que te lo expliques más fácil, que revises lo que hizo, o empezar desde cero — sin forzarlo en cada respuesta.`
 }
