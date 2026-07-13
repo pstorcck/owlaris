@@ -53,6 +53,40 @@ Cantidad de temas: 5
   const index = extractCourseTopicIndex(contenido)
   assert.equal(index.topics.length, 5)
 
+  // Hallazgo real CRÍTICO (sexta verificación, 2026-07-13): "temas de esta
+  // materia" respondía "no tengo suficiente información" para un documento
+  // .docx REAL y correctamente encontrado — extraerTexto() lee .docx con
+  // mammoth.extractRawText(), que DESCARTA los números/viñetas de una
+  // lista nativa de Word (Word los dibuja desde numbering.xml, no forman
+  // parte del texto del párrafo). Un índice de temas con ese formato (el
+  // caso más común en documentos reales) se convierte en líneas sueltas de
+  // texto plano SIN NINGÚN marcador — ninguna estrategia anterior podía
+  // reconocerlas. Se reproduce ese escenario exacto (sin bullets/números).
+  test('extractCourseTopicIndex reconoce un índice cuya lista nativa de Word perdió sus números/viñetas (mammoth.extractRawText)', () => {
+    const contenidoSinMarcadores = [
+      'Índice de temas',
+      'Fracciones',
+      'Decimales',
+      'Ecuaciones lineales',
+      'Geometría básica',
+      '',
+      'Objetivo: que el alumno domine las operaciones básicas.',
+    ].join('\n')
+    const indiceSinMarcadores = extractCourseTopicIndex(contenidoSinMarcadores)
+    assert.deepEqual(indiceSinMarcadores.topics, ['Fracciones', 'Decimales', 'Ecuaciones lineales', 'Geometría básica'])
+  })
+
+  test('extractCourseTopicIndex reconoce "Tema 1: X" sin encabezado markdown (# también se pierde con mammoth)', () => {
+    const contenidoSinAlmohadilla = [
+      'Tema 1: Fracciones',
+      'Tema 2: Decimales',
+      'Tema 3: Ecuaciones lineales',
+    ].join('\n')
+    const indiceSinAlmohadilla = extractCourseTopicIndex(contenidoSinAlmohadilla)
+    assert.equal(indiceSinAlmohadilla.topics.length, 3)
+    assert.equal(indiceSinAlmohadilla.topics[0], 'Fracciones')
+  })
+
   // Detección de la petición "qué sigue después de X".
   for (const frase of [
     'qué sigue después de la fotosíntesis',

@@ -9,7 +9,7 @@ import { buildGradeAdaptationInstruction } from '@/lib/gradeAdaptation'
 import { pareceIdiomaDistinto } from '@/lib/languageDetection'
 import { buscarStaffColegio, buscarSuperadmins, elegirFuenteDestinatariosAlerta, resolverDestinatariosAlerta, type DestinatarioAlerta } from '@/lib/alertaEmergencia'
 import { verificarLimiteFrecuencia } from '@/lib/rateLimit'
-import { isExplicitTableRequest, looksLikeMarkdownTable, looksLikeTableRefusal, sanitizeChatFormatting } from '@/lib/chatFormatting'
+import { isExplicitTableRequest, looksLikeMarkdownTable, sanitizeChatFormatting } from '@/lib/chatFormatting'
 import { detectarMateriaDesdeTexto, isLanguageSwitchRequest, materiaActualEnSistemaCNB, normalizarMateria } from '@/lib/materiaDetection'
 import { isExplicitCourseSwitchRequest } from '@/lib/courseSwitchDetection'
 import { isReviewMistakesRequest, primeraOperacionValida, temaMasFrecuente } from '@/lib/mistakeReview'
@@ -2137,6 +2137,79 @@ export async function POST(req: NextRequest) {
       documentoFuente = result.archivo
     }
 
+    // Hallazgo real CRÍTICO (quinta verificación, 2026-07-13): este guard
+    // se agregó y probó correctamente de forma aislada, pero seguía sin
+    // tener NINGÚN efecto en producción — el mismo patrón de bug de
+    // "arreglo no conectado al flujo real" visto antes con
+    // intentClassifier.ts. La causa: isCourseTopicListRequest (más abajo)
+    // activa con la SUBSTRING "todos los temas", que también está presente
+    // en "dame todos los temas de verificación de dominio" — y ese guard
+    // corre PRIMERO en el código, así que siempre ganaba e ignoraba por
+    // completo la categoría/bloque pedido, devolviendo el índice completo.
+    // Este bloque (más específico: exige una categoría o bloque real que
+    // coincida) ahora corre ANTES que el genérico "lista todos los temas",
+    // para que una petición con categoría específica nunca sea capturada
+    // por el guard genérico antes de tener oportunidad de filtrar.
+    //
+    // Hallazgo real (instructivo de mejoras, ronda 2026-07-11, corregido en
+    // verificación posterior 2026-07-12), ítem 24: reconocer bloques/
+    // agrupaciones de temas (ej. "dame los temas de campos e
+    // interacciones") cuando la fuente oficial los organiza con
+    // encabezados de bloque/unidad antes de cada grupo. La versión inicial
+    // solo reconocía frases con "bloque"/"unidad" explícito; el hallazgo
+    // real usó "dame los temas de X" sin esas palabras, así que se amplió
+    // la detección — pero eso crea ambigüedad con una petición normal
+    // ("dame los temas de esta clase"). Se resuelve exigiendo que el
+    // nombre consultado coincida con un bloque REAL extraído de la fuente
+    // (findBlockByQuery); si no coincide con ninguno, no se intercepta y
+    // la petición sigue el flujo normal del índice completo.
+    const consultaBloque = tipoPregunta === 'academica' && !esBienvenida ? extractBlockQuery(pregunta) : null
+    if (tipoPregunta === 'academica' && !esBienvenida && isBlockGroupingQuestion(pregunta) && consultaBloque && contenidoCurricular) {
+      const bloques = extractCourseBlocks(contenidoCurricular)
+      const bloqueEncontrado = findBlockByQuery(bloques, consultaBloque)
+      // Hallazgo real CRÍTICO (cuarta verificación, 2026-07-13): "dame
+      // todos los temas de verificación de dominio" no es un bloque con
+      // encabezado propio ("## Bloque N: X") — es una CATEGORÍA que se
+      // repite como parte del título de temas individuales dispersos en el
+      // índice (ej. "6. Verificación de dominio: células y evidencia").
+      // extractCourseBlocks nunca encuentra esto, así que bloqueEncontrado
+      // siempre era null y el flujo caía al índice COMPLETO sin filtrar —
+      // el bug real no era de tolerancia a palabras insertadas (ya
+      // corregido), sino que faltaba este segundo mecanismo de filtrado
+      // por palabra clave dentro de los títulos de los temas.
+      const respuestaCategoria = !bloqueEncontrado
+        ? buildCategoryTopicsResponse({ topics: extractCourseTopicIndex(contenidoCurricular).topics, query: consultaBloque, idiomaIngles })
+        : null
+      if (bloqueEncontrado || respuestaCategoria) {
+        const respuesta = bloqueEncontrado
+          ? buildBlockTopicsResponse({ blocks: bloques, query: consultaBloque, idiomaIngles })
+          : (respuestaCategoria as string)
+        const { data: insertedRow } = await supabase.from('interacciones').insert({
+          usuario_id: user.id,
+          colegio_id: perfil.colegio_id,
+          materia_id: materia_uuid, materia_nombre_snapshot: materiaConsultaSharePoint || null,
+          grado: gradoEfectivo,
+          tema_detectado: 'Consulta de bloque del índice',
+          pregunta,
+          respuesta,
+          tokens_usados: 0,
+          costo_usd: 0,
+          modelo_usado: 'course_index_guard',
+          documento_fuente: documentoFuente,
+          sospecha_copia: false,
+          guard_activado: true,
+        }).select('id').single()
+        return NextResponse.json({
+          respuesta,
+          source: 'course_index_guard',
+          tokens: 0,
+          documento_fuente: documentoFuente,
+          interaction_id: insertedRow?.id || null,
+          pending_math_interaction_id: null,
+        })
+      }
+    }
+
     if (tipoPregunta === 'academica' && !esBienvenida && isCourseTopicListRequest(pregunta)) {
       if (!contenidoCurricular) {
         const respuesta = respuestaSinFuenteSuficiente(idiomaIngles)
@@ -2264,65 +2337,6 @@ export async function POST(req: NextRequest) {
         interaction_id: insertedRow?.id || null,
         pending_math_interaction_id: null,
       })
-    }
-
-    // Hallazgo real (instructivo de mejoras, ronda 2026-07-11, corregido en
-    // verificación posterior 2026-07-12), ítem 24: reconocer bloques/
-    // agrupaciones de temas (ej. "dame los temas de campos e
-    // interacciones") cuando la fuente oficial los organiza con
-    // encabezados de bloque/unidad antes de cada grupo. La versión inicial
-    // solo reconocía frases con "bloque"/"unidad" explícito; el hallazgo
-    // real usó "dame los temas de X" sin esas palabras, así que se amplió
-    // la detección — pero eso crea ambigüedad con una petición normal
-    // ("dame los temas de esta clase"). Se resuelve exigiendo que el
-    // nombre consultado coincida con un bloque REAL extraído de la fuente
-    // (findBlockByQuery); si no coincide con ninguno, no se intercepta y
-    // la petición sigue el flujo normal del índice completo.
-    const consultaBloque = tipoPregunta === 'academica' && !esBienvenida ? extractBlockQuery(pregunta) : null
-    if (tipoPregunta === 'academica' && !esBienvenida && isBlockGroupingQuestion(pregunta) && consultaBloque && contenidoCurricular) {
-      const bloques = extractCourseBlocks(contenidoCurricular)
-      const bloqueEncontrado = findBlockByQuery(bloques, consultaBloque)
-      // Hallazgo real CRÍTICO (cuarta verificación, 2026-07-13): "dame
-      // todos los temas de verificación de dominio" no es un bloque con
-      // encabezado propio ("## Bloque N: X") — es una CATEGORÍA que se
-      // repite como parte del título de temas individuales dispersos en el
-      // índice (ej. "6. Verificación de dominio: células y evidencia").
-      // extractCourseBlocks nunca encuentra esto, así que bloqueEncontrado
-      // siempre era null y el flujo caía al índice COMPLETO sin filtrar —
-      // el bug real no era de tolerancia a palabras insertadas (ya
-      // corregido), sino que faltaba este segundo mecanismo de filtrado
-      // por palabra clave dentro de los títulos de los temas.
-      const respuestaCategoria = !bloqueEncontrado
-        ? buildCategoryTopicsResponse({ topics: extractCourseTopicIndex(contenidoCurricular).topics, query: consultaBloque, idiomaIngles })
-        : null
-      if (bloqueEncontrado || respuestaCategoria) {
-        const respuesta = bloqueEncontrado
-          ? buildBlockTopicsResponse({ blocks: bloques, query: consultaBloque, idiomaIngles })
-          : (respuestaCategoria as string)
-        const { data: insertedRow } = await supabase.from('interacciones').insert({
-          usuario_id: user.id,
-          colegio_id: perfil.colegio_id,
-          materia_id: materia_uuid, materia_nombre_snapshot: materiaConsultaSharePoint || null,
-          grado: gradoEfectivo,
-          tema_detectado: 'Consulta de bloque del índice',
-          pregunta,
-          respuesta,
-          tokens_usados: 0,
-          costo_usd: 0,
-          modelo_usado: 'course_index_guard',
-          documento_fuente: documentoFuente,
-          sospecha_copia: false,
-          guard_activado: true,
-        }).select('id').single()
-        return NextResponse.json({
-          respuesta,
-          source: 'course_index_guard',
-          tokens: 0,
-          documento_fuente: documentoFuente,
-          interaction_id: insertedRow?.id || null,
-          pending_math_interaction_id: null,
-        })
-      }
     }
 
     // Hallazgo real CRÍTICO (verificación posterior, 2026-07-12): al
@@ -2620,18 +2634,23 @@ ${contextoContenido}`
     const completion = await withOpenAIRetry(() => openai.chat.completions.create({ model: 'gpt-4o-mini', messages: mensajesOpenAI, max_tokens: 700, temperature: 0.7 }))
     let respuesta = completion.choices[0].message.content || 'No pude generar una respuesta.'
 
-    // Hallazgo real (cuarta verificación, 2026-07-13): incluso con la
-    // instrucción puntual de arriba, el modelo a veces igual RECHAZABA la
-    // tabla explícitamente pedida ("no puedo hacer una tabla en formato
-    // visual") y entregaba viñetas en su lugar — una instrucción de prompt,
-    // por más puntual que sea, no es una garantía. Se agrega un respaldo
-    // determinístico: si la petición era explícitamente de tabla, la
-    // respuesta NO contiene sintaxis de tabla real, y además contiene una
-    // frase de rechazo reconocible, se reintenta UNA vez con una
-    // instrucción de seguimiento explícita — si el reintento sí produce una
-    // tabla real, se usa esa; si no, se conserva la respuesta original (no
-    // se bloquea la respuesta del alumno por un reintento fallido).
-    if (isExplicitTableRequest(pregunta) && !looksLikeMarkdownTable(respuesta) && looksLikeTableRefusal(respuesta)) {
+    // Hallazgo real (cuarta y quinta verificación, 2026-07-13): incluso con
+    // la instrucción puntual de arriba, el modelo a veces igual RECHAZABA
+    // la tabla explícitamente pedida ("no puedo hacer una tabla en formato
+    // visual") y entregaba viñetas en su lugar. El primer respaldo solo
+    // reintentaba cuando el texto tenía una frase de rechazo RECONOCIBLE —
+    // pero la quinta verificación mostró que el mismo prompt, repetido dos
+    // veces, dio resultados distintos (una vez funcionó, otra no): el
+    // "no" silencioso (el modelo simplemente entrega viñetas sin decir
+    // explícitamente que no puede) es tan común como el rechazo verbal, y
+    // ese caso no activaba el reintento. Ya no se exige una frase de
+    // rechazo reconocible — cualquier vez que se pidió tabla explícitamente
+    // y la respuesta no contiene sintaxis de tabla real, se reintenta UNA
+    // vez con una instrucción de seguimiento explícita; si el reintento sí
+    // produce una tabla real, se usa esa, si no, se conserva la respuesta
+    // original (no se bloquea la respuesta del alumno por un reintento
+    // fallido).
+    if (isExplicitTableRequest(pregunta) && !looksLikeMarkdownTable(respuesta)) {
       try {
         const reintentoTabla = await withOpenAIRetry(() => openai.chat.completions.create({
           model: 'gpt-4o-mini',

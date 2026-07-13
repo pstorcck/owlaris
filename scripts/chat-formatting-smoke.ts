@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { isExplicitTableRequest, isFormatRequest, looksLikeMarkdownTable, looksLikeTableRefusal, sanitizeChatFormatting } from '../src/lib/chatFormatting'
+import { isExplicitTableRequest, isFormatRequest, looksLikeMarkdownTable, sanitizeChatFormatting } from '../src/lib/chatFormatting'
 
 function main() {
   assert.equal(sanitizeChatFormatting('### Ejemplo:\nAlgo de texto'), 'Ejemplo:\nAlgo de texto')
@@ -110,10 +110,6 @@ function main() {
   )
   assert.equal(looksLikeMarkdownTable('- Proceso: fotosíntesis\n- Lugar: cloroplastos'), false)
   assert.equal(looksLikeMarkdownTable(''), false)
-
-  assert.equal(looksLikeTableRefusal('Recuerda que no puedo hacer una tabla en formato visual. Aquí tienes la información organizada en texto.'), true)
-  assert.equal(looksLikeTableRefusal("I can't make a visual table, but here is the information as a list."), true)
-  assert.equal(looksLikeTableRefusal('Aquí tienes la comparación en una tabla:'), false)
 
   console.log('chat-formatting smoke passed')
 }

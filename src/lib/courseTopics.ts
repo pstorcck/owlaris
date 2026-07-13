@@ -29,6 +29,15 @@ function isProbablyTopic(value: string) {
   if (/[?¿]/.test(cleaned)) return false
   if (/^(explica|resuelve|calcula|responde|describe|analiza|identifica|menciona|define|desarrolla|justifica)\b/.test(normalized)) return false
   if (/^(explain|solve|calculate|answer|describe|analyze|identify|define|discuss|justify)\b/.test(normalized)) return false
+  // Hallazgo real (sexta verificación, 2026-07-13): el respaldo de línea
+  // suelta (para índices que perdieron su viñeta/número vía mammoth)
+  // empezó a tratar la línea de metadata "Cantidad de temas: N" como si
+  // fuera un tema más — esa frase ya tiene su propio parser dedicado
+  // (extractDeclaredTopicCount) y nunca debe contarse como un tema en sí.
+  if (/\b(?:cantidad|total)\s+de\s+temas\b/.test(normalized)) return false
+  if (/\btemas?\s+de\s+ciclo\s+completo\b/.test(normalized)) return false
+  if (/\bcurso\s+tiene\s+\d+\s+temas\b/.test(normalized)) return false
+  if (/^\d+\s+(?:temas|topics)\b/.test(normalized)) return false
   return /[a-zA-ZáéíóúÁÉÍÓÚñÑ]/.test(cleaned)
 }
 
@@ -89,8 +98,23 @@ export function extractCourseTopicIndex(content: string): CourseTopicIndex {
   const lines = (content || '').split(/\r?\n/)
   const topics: string[] = []
 
+  // Hallazgo real CRÍTICO (sexta verificación, 2026-07-13): "temas de esta
+  // materia" respondía "no tengo suficiente información" para un documento
+  // .docx REAL y correctamente encontrado (el nombre del archivo aparecía
+  // como fuente) — el bug no era de contenido faltante, era de extracción.
+  // extraerTexto() lee .docx con mammoth.extractRawText(), que DESCARTA los
+  // números y viñetas de una lista nativa de Word (esa numeración la
+  // dibuja Word desde numbering.xml, no forma parte del texto del párrafo)
+  // — así que un índice de temas con formato de lista nativa de Word (el
+  // caso más común en documentos reales preparados en Word) se convierte
+  // en líneas sueltas de texto plano SIN NINGÚN marcador, y ninguna de las
+  // cuatro estrategias de abajo (que exigen "#", "-", "*", "•" o "N."/"N)")
+  // podía reconocerlas jamás. Se hace opcional el prefijo "#" en
+  // topic_headings (un encabezado de Word "Tema 1: X" también pierde su
+  // "#" al pasar por mammoth) y se agrega un respaldo de línea suelta en el
+  // índice explícito (ver más abajo).
   for (const line of lines) {
-    const match = line.match(/^\s*#{1,5}\s*(?:tema|topic)\s*(?:\d+)?\s*[:.\-–—]\s*(.+)$/i)
+    const match = line.match(/^\s*#{0,5}\s*(?:tema|topic)\s*(?:\d+)?\s*[:.\-–—]\s*(.+)$/i)
     if (match) pushUnique(topics, match[1])
   }
   if (topics.length > 0) {
@@ -106,8 +130,23 @@ export function extractCourseTopicIndex(content: string): CourseTopicIndex {
     }
     if (inIndex && /^#{1,2}\s+/.test(line) && !/(tema|topic|unidad|unit|bloque|block)/i.test(line)) break
     if (!inIndex) continue
+    if (!line.trim()) continue
     const item = line.match(/^\s*(?:[-*•]|\d{1,3}[.)])\s+(.+)$/)
-    if (item) pushUnique(topics, item[1])
+    if (item) {
+      pushUnique(topics, item[1])
+      continue
+    }
+    // Respaldo de línea suelta (sin viñeta/número): trata la línea como
+    // tema si "parece" uno (isProbablyTopic ya filtra objetivos, preguntas
+    // e instrucciones) — y corta la sección en cuanto aparece una línea
+    // que claramente no lo es, una vez que ya se llevan temas acumulados,
+    // para no arrastrar párrafos de prosa no relacionados que vengan
+    // después del índice.
+    if (isProbablyTopic(line)) {
+      pushUnique(topics, line)
+    } else if (topics.length > 0) {
+      break
+    }
   }
   if (topics.length > 0) {
     return { topics, declaredCount, source: 'explicit_index', incomplete: declaredCount !== null && topics.length < declaredCount }
