@@ -87,6 +87,96 @@ Cantidad de temas: 5
     assert.equal(indiceSinAlmohadilla.topics[0], 'Fracciones')
   })
 
+  // Hallazgo real CRÍTICO (séptima verificación, 2026-07-13): el fix
+  // anterior (mammoth/líneas sueltas) NO resolvió el caso real reportado —
+  // con evidencia real de los logs de producción se confirmó que los
+  // documentos CNB de este colegio no usan una lista de temas en absoluto:
+  // usan una TABLA de Word titulada "Mapa de contenidos para tutoría" con
+  // columnas [#, Competencia, Indicador, Tema tutor], que mammoth aplana
+  // en líneas sueltas (fila de encabezados completa, luego cada fila de
+  // datos completa, celda por celda). Se reproduce la estructura EXACTA
+  // vista en los logs (recortada a 3 filas de las 16 reales).
+  test('extractCourseTopicIndex reconoce la tabla real "Mapa de contenidos para tutoría" aplanada por mammoth', () => {
+    const contenidoTablaReal = [
+      'Matemática - Tercero Básico',
+      'Cobertura oficial CNB',
+      'Elemento auditado',
+      'Resultado',
+      'Competencias oficiales de grado',
+      '5',
+      'Indicadores de logro oficiales',
+      '16',
+      'Saberes / contenidos oficiales',
+      '102',
+      'Competencias oficiales de grado',
+      'Competencia 1. Construye patrones aritméticos, algebraicos y geométricos, aplicando propiedades y relaciones en la solución de problemas.',
+      'Mapa de contenidos para tutoría',
+      '#',
+      'Competencia',
+      'Indicador',
+      'Tema tutor',
+      '1',
+      'Competencia 1',
+      '1.1. Aplica la factorización de polinomios al simplificar fracciones algebraicas.',
+      'Productos notables, factorización y fracciones algebraicas',
+      '2',
+      'Competencia 1',
+      '1.2. Resuelve problemas que involucran el cálculo de medidas y la aplicación de propiedades de figuras planas y cuerpos sólidos.',
+      'Figuras planas, círculo y cuerpos sólidos',
+      '3',
+      'Competencia 1',
+      '1.3. Utiliza teoremas relacionados con triángulos obtusángulos en la solución de problemas.',
+      'Razones trigonométricas, ley de senos y ley de cosenos',
+    ].join('\n')
+    const indiceTabla = extractCourseTopicIndex(contenidoTablaReal)
+    assert.equal(indiceTabla.source, 'tema_tutor_table')
+    assert.deepEqual(indiceTabla.topics, [
+      'Productos notables, factorización y fracciones algebraicas',
+      'Figuras planas, círculo y cuerpos sólidos',
+      'Razones trigonométricas, ley de senos y ley de cosenos',
+    ])
+    // No debe confundir las filas de la tabla "Cobertura oficial CNB" (2
+    // columnas: Elemento auditado / Resultado) ni el resumen de
+    // competencias con temas reales.
+    assert.doesNotMatch(indiceTabla.topics.join(' '), /Elemento auditado|Competencias oficiales de grado/)
+  })
+
+  test('extractCourseTopicIndex no confunde la sección "Cobertura oficial" (solo metadatos, sin tabla de temas) con un índice real', () => {
+    const contenidoSoloMetadatos = [
+      'Estadística Descriptiva - Quinto Bachillerato',
+      'Cobertura oficial',
+      '3 competencias, 12 indicadores y 40 contenidos oficiales',
+      'Dosificación registrada',
+      '12 lecciones anuales indicadas por Eduardo',
+      'Propósito del documento',
+      'Este documento reúne el contenido académico necesario para tutoría.',
+    ].join('\n')
+    const indiceSoloMetadatos = extractCourseTopicIndex(contenidoSoloMetadatos)
+    assert.equal(indiceSoloMetadatos.topics.length, 0, 'sin una tabla real de temas, no debe inventar temas a partir de metadatos')
+  })
+
+  // Hallazgo real (séptima verificación, 2026-07-13): el documento real de
+  // Lenguaje no tiene tabla ni "índice de temas" — tiene una sección
+  // "Cobertura del paquete" con los tipos de comprensión como líneas
+  // sueltas (mammoth también les quitó cualquier viñeta).
+  test('extractCourseTopicIndex reconoce "Cobertura del paquete" (estructura real del documento de Lenguaje)', () => {
+    const contenidoLenguaje = [
+      'Tercero Básico — Ejercicios para Mineduc Lenguaje',
+      'Cobertura del paquete',
+      'Comprensión literal: localizar información explícita, detalles, secuencias e instrucciones.',
+      'Comprensión inferencial: deducir causas, consecuencias, intenciones y relaciones.',
+      'Comprensión crítica: evaluar decisiones, argumentos, anuncios, responsabilidad y convivencia.',
+      'Prueba liberada de lectura: competencias interpretativa, argumentativa y propositiva.',
+      'Banco de práctica integrado',
+      'Comprensión Literal',
+      'Instrucciones generales para estudiantes',
+      'Lee cada pregunta con atención.',
+    ].join('\n')
+    const indiceLenguaje = extractCourseTopicIndex(contenidoLenguaje)
+    assert.equal(indiceLenguaje.topics.length, 4)
+    assert.match(indiceLenguaje.topics[0], /Comprensión literal/)
+  })
+
   // Detección de la petición "qué sigue después de X".
   for (const frase of [
     'qué sigue después de la fotosíntesis',

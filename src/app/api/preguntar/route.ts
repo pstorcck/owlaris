@@ -2239,41 +2239,6 @@ export async function POST(req: NextRequest) {
       }
 
       const index = extractCourseTopicIndex(contenidoCurricular)
-      // Hallazgo real (séptima verificación, 2026-07-13): el fix anterior
-      // (mammoth/líneas sueltas) no resolvió el caso real reportado — mismo
-      // documento, misma respuesta de "no tengo información". Seguir
-      // adivinando patrones sin ver el contenido real sería repetir el
-      // mismo ciclo de "arreglo aislado que no aplica en producción". Este
-      // log temporal (solo cuando la extracción falla) permite revisar en
-      // los logs de Vercel la estructura REAL del documento para corregir
-      // con evidencia en vez de suposiciones — se debe quitar una vez
-      // diagnosticado y corregido de forma definitiva.
-      if (index.topics.length === 0) {
-        // Tercera vuelta del diagnóstico: la segunda vuelta confirmó que
-        // estos documentos SÍ declaran un conteo real ("3 competencias, 12
-        // indicadores y 40 contenidos oficiales"), pero el log con hasta 60
-        // líneas candidatas se truncó en el visor de Vercel antes de poder
-        // ver dónde vive la lista real de "contenidos" (el equivalente a
-        // "temas" en la nomenclatura CNB). Se apunta directo a la primera
-        // aparición de "indicador" (ahí debería empezar la estructura
-        // competencia → indicador → contenido) y se vuelca una ventana de
-        // líneas crudas alrededor, en varios console.log pequeños para que
-        // ninguno se trunque.
-        const lineasDelDocumento = contenidoCurricular.split(/\r?\n/).map((l) => l.trim()).filter(Boolean)
-        console.log('DIAGNOSTICO_RESUMEN', JSON.stringify({
-          documentoFuente,
-          longitudContenido: contenidoCurricular.length,
-          totalLineasNoVacias: lineasDelDocumento.length,
-        }))
-        const primerIndicador = lineasDelDocumento.findIndex((linea) => /indicador/i.test(linea))
-        const primerContenidoOficial = lineasDelDocumento.findIndex((linea) => /^contenido(?:s)?\b/i.test(linea))
-        console.log('DIAGNOSTICO_POSICIONES', JSON.stringify({ primerIndicador, primerContenidoOficial }))
-        const inicioVentana = primerIndicador >= 0 ? primerIndicador : 0
-        const ventana = lineasDelDocumento.slice(inicioVentana, inicioVentana + 80)
-        for (let i = 0; i < ventana.length; i += 8) {
-          console.log(`DIAGNOSTICO_VENTANA_${i}`, JSON.stringify(ventana.slice(i, i + 8)))
-        }
-      }
       const respuesta = buildCourseTopicListResponse({
         index,
         subject: materiaConsultaSharePoint || materia_id || 'esta clase',

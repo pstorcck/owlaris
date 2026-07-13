@@ -89,14 +89,68 @@ export function extractDeclaredTopicCount(content: string) {
 export type CourseTopicIndex = {
   topics: string[]
   declaredCount: number | null
-  source: 'topic_headings' | 'explicit_index' | 'list_items' | 'headings' | 'none'
+  source: 'tema_tutor_table' | 'topic_headings' | 'explicit_index' | 'list_items' | 'headings' | 'none'
   incomplete: boolean
+}
+
+// Hallazgo real CRÍTICO (séptima verificación, 2026-07-13): con evidencia
+// real de los logs de producción (no una suposición más), se confirmó que
+// los documentos CNB reales de este colegio no usan una lista de temas en
+// absoluto — usan una TABLA de Word titulada "Mapa de contenidos para
+// tutoría" con columnas [#, Competencia, Indicador, Tema tutor].
+// mammoth.extractRawText() aplana esa tabla en una secuencia de líneas
+// sueltas, celda por celda, fila por fila (sin ningún separador de tabla):
+// primero la fila de encabezados completa, luego cada fila de datos
+// completa en el mismo orden de columnas. Esta función reconstruye esa
+// tabla a partir de las líneas planas y extrae la columna que contiene la
+// palabra "tema" en su encabezado (tolerante a variantes: "Tema tutor",
+// "Tema", "Tema/Contenido", etc., no solo el nombre exacto visto en este
+// documento).
+function extractTemaTutorTable(lines: string[]): string[] {
+  const inicioIdx = lines.findIndex((linea) => /mapa\s+de\s+contenidos/i.test(linea))
+  if (inicioIdx === -1) return []
+
+  // La fila de encabezados de una tabla real son celdas cortas (nombres de
+  // columna, no oraciones) — se prueba con ventanas crecientes hasta
+  // encontrar una que incluya una columna de "tema" y donde todas las
+  // celdas candidatas sean cortas (encabezados reales, no párrafos).
+  let colTemaIdx = -1
+  let numCols = 0
+  for (let n = 2; n <= 6 && inicioIdx + n <= lines.length; n++) {
+    const candidato = lines.slice(inicioIdx + 1, inicioIdx + 1 + n)
+    if (candidato.some((h) => h.length > 40)) continue
+    const idxTema = candidato.findIndex((h) => /\btema\b/i.test(h))
+    if (idxTema !== -1) {
+      colTemaIdx = idxTema
+      numCols = n
+      break
+    }
+  }
+  if (colTemaIdx === -1) return []
+
+  // Las filas de datos de esta plantilla siempre empiezan con el número de
+  // fila (columna "#") — se usa como ancla para no desalinear la lectura
+  // de columnas si alguna celda tiene saltos de línea inesperados.
+  const temas: string[] = []
+  let idx = inicioIdx + 1 + numCols
+  while (idx + numCols <= lines.length && /^\d+$/.test(lines[idx])) {
+    const fila = lines.slice(idx, idx + numCols)
+    const valor = fila[colTemaIdx]
+    if (valor) pushUnique(temas, valor)
+    idx += numCols
+  }
+  return temas
 }
 
 export function extractCourseTopicIndex(content: string): CourseTopicIndex {
   const declaredCount = extractDeclaredTopicCount(content)
   const lines = (content || '').split(/\r?\n/)
   const topics: string[] = []
+
+  const temasDeTabla = extractTemaTutorTable(lines.map((l) => l.trim()).filter(Boolean))
+  if (temasDeTabla.length > 0) {
+    return { topics: temasDeTabla, declaredCount, source: 'tema_tutor_table', incomplete: declaredCount !== null && temasDeTabla.length < declaredCount }
+  }
 
   // Hallazgo real CRÍTICO (sexta verificación, 2026-07-13): "temas de esta
   // materia" respondía "no tengo suficiente información" para un documento
@@ -122,10 +176,21 @@ export function extractCourseTopicIndex(content: string): CourseTopicIndex {
   }
 
   let inIndex = false
+  // Hallazgo real (séptima verificación, 2026-07-13): la sección real
+  // "Cobertura del paquete" del documento de Lenguaje sí se reconocía,
+  // pero el respaldo de línea suelta seguía arrastrando la sección
+  // SIGUIENTE ("Banco de práctica integrado", "Comprensión Literal" como
+  // subtítulo repetido) porque esas líneas también "parecen" un tema
+  // aislado. Las 4 líneas reales de esa sección tienen el patrón
+  // "Etiqueta: descripción" (una etiqueta corta seguida de dos puntos); una
+  // vez que ese patrón queda establecido, una línea sin esa forma señala
+  // el inicio de una sección nueva, no una continuación de la lista.
+  let modoEtiquetaDescripcion: boolean | null = null
   for (const line of lines) {
     const normalized = normalizeText(line)
-    if (/^(#{1,4}\s*)?(indice de temas|indice del curso|temas|secuencia de temas|mapa del curso|course index|topics|course map)\b/.test(normalized)) {
+    if (/^(#{1,4}\s*)?(indice de temas|indice del curso|temas|secuencia de temas|mapa del curso|cobertura del paquete|course index|topics|course map)\b/.test(normalized)) {
       inIndex = true
+      modoEtiquetaDescripcion = null
       continue
     }
     if (inIndex && /^#{1,2}\s+/.test(line) && !/(tema|topic|unidad|unit|bloque|block)/i.test(line)) break
@@ -143,6 +208,10 @@ export function extractCourseTopicIndex(content: string): CourseTopicIndex {
     // para no arrastrar párrafos de prosa no relacionados que vengan
     // después del índice.
     if (isProbablyTopic(line)) {
+      const idxDosPuntos = line.indexOf(':')
+      const esEtiquetaDescripcion = idxDosPuntos > 0 && idxDosPuntos <= 60
+      if (modoEtiquetaDescripcion === null) modoEtiquetaDescripcion = esEtiquetaDescripcion
+      if (modoEtiquetaDescripcion && !esEtiquetaDescripcion && topics.length > 0) break
       pushUnique(topics, line)
     } else if (topics.length > 0) {
       break
@@ -422,7 +491,7 @@ export function extractCourseBlocks(content: string): CourseTopicBlock[] {
 
   for (const line of lines) {
     const normalized = normalizeText(line)
-    if (!inIndex && /^(#{1,4}\s*)?(indice de temas|indice del curso|temas|secuencia de temas|mapa del curso|course index|topics|course map)\b/.test(normalized)) {
+    if (!inIndex && /^(#{1,4}\s*)?(indice de temas|indice del curso|temas|secuencia de temas|mapa del curso|cobertura del paquete|course index|topics|course map)\b/.test(normalized)) {
       inIndex = true
       continue
     }
