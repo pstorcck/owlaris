@@ -2271,6 +2271,20 @@ export async function POST(req: NextRequest) {
 
       let index = extractCourseTopicIndex(contenidoCurricular)
       if (index.topics.length === 0) {
+        // DIAGNOSTICO TEMPORAL (2026-07-13, tercera vía para Mineduc-Lenguaje):
+        // dos intentos de prompt (exclusión general, luego clasificación por
+        // ítem) no lograron que el modelo excluyera de forma confiable los
+        // títulos de lectura de otras materias. Se necesita ver la estructura
+        // REAL del documento (no solo la salida del modelo) para construir un
+        // parser determinístico, igual que se hizo con la tabla de
+        // Matemática. Se debe quitar una vez diagnosticado y corregido.
+        if ((documentoFuente || '').toLowerCase().includes('lenguaje')) {
+          const lineas = contenidoCurricular.split(/\r?\n/).map((l) => l.trim()).filter(Boolean)
+          console.log('DIAGNOSTICO_LENGUAJE_RESUMEN', { archivo: documentoFuente, totalLineas: lineas.length })
+          for (let i = 0; i < Math.min(lineas.length, 120); i += 8) {
+            console.log(`DIAGNOSTICO_LENGUAJE_VENTANA_${i}`, lineas.slice(i, i + 8))
+          }
+        }
         const temasLLM = await extraerTemasConModelo(openai, contenidoCurricular, documentoFuente)
         if (temasLLM.length > 0) {
           index = { topics: temasLLM, declaredCount: null, source: 'llm_fallback', incomplete: false }
