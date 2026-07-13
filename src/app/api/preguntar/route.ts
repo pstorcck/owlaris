@@ -2239,6 +2239,22 @@ export async function POST(req: NextRequest) {
       }
 
       const index = extractCourseTopicIndex(contenidoCurricular)
+      // Hallazgo real (séptima verificación, 2026-07-13): el fix anterior
+      // (mammoth/líneas sueltas) no resolvió el caso real reportado — mismo
+      // documento, misma respuesta de "no tengo información". Seguir
+      // adivinando patrones sin ver el contenido real sería repetir el
+      // mismo ciclo de "arreglo aislado que no aplica en producción". Este
+      // log temporal (solo cuando la extracción falla) permite revisar en
+      // los logs de Vercel la estructura REAL del documento para corregir
+      // con evidencia en vez de suposiciones — se debe quitar una vez
+      // diagnosticado y corregido de forma definitiva.
+      if (index.topics.length === 0) {
+        console.log('DIAGNOSTICO_INDICE_VACIO', JSON.stringify({
+          documentoFuente,
+          longitudContenido: contenidoCurricular.length,
+          primeros1500: contenidoCurricular.substring(0, 1500),
+        }))
+      }
       const respuesta = buildCourseTopicListResponse({
         index,
         subject: materiaConsultaSharePoint || materia_id || 'esta clase',
