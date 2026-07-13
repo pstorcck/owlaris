@@ -104,6 +104,80 @@ function renderTexto(texto: string): React.ReactNode[] {
   })
 }
 
+// Hallazgo real (tercera verificación, 2026-07-13): cuando el alumno pide
+// explícitamente una tabla, preguntar/route.ts ya deja de convertirla a
+// "Etiqueta: valor" en línea y entrega la sintaxis real de tabla markdown
+// (fila de encabezado con pipes + fila separadora de guiones) — pero esta
+// interfaz nunca sabía interpretar esa sintaxis: renderTexto solo separa
+// por líneas, así que el alumno veía los pipes y guiones como texto plano
+// en vez de una cuadrícula legible. Se detecta el mismo patrón que ya
+// reconoce sanitizeChatFormatting en el backend (una línea con pipes
+// seguida de una fila separadora) y se renderiza como una tabla HTML real.
+const SEPARATOR_ROW_TABLA = /^\s*\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)*\|?\s*$/
+
+function splitTableRowTabla(linea: string): string[] {
+  return linea.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map((celda) => celda.trim())
+}
+
+function renderTablaMarkdown(headerLine: string, bodyLines: string[], key: number): React.ReactNode {
+  const encabezados = splitTableRowTabla(headerLine)
+  return (
+    <table key={key} style={{borderCollapse:'collapse',width:'100%',margin:'6px 0',fontSize:'13px'}}>
+      <thead>
+        <tr>
+          {encabezados.map((h, i) => (
+            <th key={i} style={{border:'1px solid rgba(109,40,217,.25)',padding:'6px 10px',textAlign:'left',background:'rgba(109,40,217,.08)',color:'inherit',fontWeight:700}}>{h}</th>
+          ))}
+        </tr>
+      </thead>
+      <tbody>
+        {bodyLines.map((linea, filaIdx) => (
+          <tr key={filaIdx}>
+            {splitTableRowTabla(linea).map((celda, celdaIdx) => (
+              <td key={celdaIdx} style={{border:'1px solid rgba(109,40,217,.15)',padding:'6px 10px',color:'inherit'}}>{celda}</td>
+            ))}
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  )
+}
+
+function renderTextoConTablas(texto: string): React.ReactNode[] {
+  const lineas = texto.split('\n')
+  const bloques: React.ReactNode[] = []
+  let buffer: string[] = []
+  let key = 0
+
+  const flushBuffer = () => {
+    if (buffer.length === 0) return
+    bloques.push(<React.Fragment key={key++}>{renderTexto(buffer.join('\n'))}</React.Fragment>)
+    buffer = []
+  }
+
+  let i = 0
+  while (i < lineas.length) {
+    const linea = lineas[i]
+    const siguienteEsSeparador = i + 1 < lineas.length && /\|/.test(linea) && SEPARATOR_ROW_TABLA.test(lineas[i + 1] || '')
+    if (siguienteEsSeparador) {
+      flushBuffer()
+      const headerLine = linea
+      i += 2
+      const bodyLines: string[] = []
+      while (i < lineas.length && lineas[i].includes('|') && lineas[i].trim() !== '') {
+        bodyLines.push(lineas[i])
+        i += 1
+      }
+      bloques.push(renderTablaMarkdown(headerLine, bodyLines, key++))
+      continue
+    }
+    buffer.push(linea)
+    i += 1
+  }
+  flushBuffer()
+  return bloques
+}
+
 export default function ChatInterface({ usuario, materiasDisponibles: materiasIniciales = [] }: Props) {
   const [mensajes, setMensajes]         = useState<MensajeChat[]>([])
   const [pregunta, setPregunta]         = useState('')
@@ -1570,9 +1644,9 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
                       {esU ? (nombreAlumno || usuario.nombre_completo.split(' ')[0]) : 'Owlaris Tutor'}
                     </p>
                     <div className={esU?'bbl-user':'bbl-tutor'} style={{padding:'14px 18px'}}>
-                      <p style={{fontSize:'14px',lineHeight:'1.8',color:esU?'#EDE9FE':'#2D2B55',whiteSpace:'pre-wrap',fontWeight:400}}>
-                        {largo&&!abierto?<>{renderTexto(msg.contenido.substring(0,300))}...</>:renderTexto(msg.contenido)}
-                      </p>
+                      <div style={{fontSize:'14px',lineHeight:'1.8',color:esU?'#EDE9FE':'#2D2B55',whiteSpace:'pre-wrap',fontWeight:400}}>
+                        {largo&&!abierto?<>{renderTexto(msg.contenido.substring(0,300))}...</>:renderTextoConTablas(msg.contenido)}
+                      </div>
                       {largo&&<button className="o-ver-mas" onClick={()=>setExpandido(abierto?null:msg.id)}>{abierto ? (idiomaIngles ? '↑ Show less' : '↑ Ver menos') : (idiomaIngles ? '↓ Show full explanation' : '↓ Ver explicación completa')}</button>}
                       {msg.documento_fuente&&<div className="o-fuente"><span>◈</span><span>{msg.documento_fuente}</span></div>}
                     </div>

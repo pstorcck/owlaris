@@ -27,6 +27,7 @@ import {
   extractCourseTopicIndex,
   extractNextTopicReference,
   extractStandardFromPriorResponse,
+  extractStandardMentionedInHistory,
   extractStandardQuery,
   findBlockByQuery,
   isBlockGroupingQuestion,
@@ -2352,7 +2353,16 @@ export async function POST(req: NextRequest) {
     // y falsa al sentirse presionado. Se reutiliza el mismo resultado
     // determinístico si el turno anterior fue una respuesta de este guard.
     if (tipoPregunta === 'academica' && !esBienvenida && isStandardsCitationFollowUp(pregunta)) {
-      const estandarPrevio = extractStandardFromPriorResponse(ultimoMensajeAsistente(historial))
+      // Hallazgo real CRÍTICO (tercera verificación, 2026-07-13): depender
+      // solo de que el turno inmediatamente anterior tenga el formato exacto
+      // de este guard seguía dejando pasar el seguimiento a generación
+      // libre (ej. si la pregunta inicial no coincidió con
+      // isStandardsAlignmentQuestion, o hubo un turno intermedio). Se agrega
+      // un respaldo que busca el nombre de un estándar conocido en
+      // cualquier mensaje reciente del historial, no solo en el turno
+      // anterior con el formato exacto del guard.
+      const estandarPrevio = extractStandardFromPriorResponse(ultimoMensajeAsistente(historial)) ||
+        extractStandardMentionedInHistory(historial)
       if (estandarPrevio) {
         const respuesta = buildStandardsAlignmentResponse({ content: contenidoCurricular, standard: estandarPrevio, idiomaIngles })
         const { data: insertedRow } = await supabase.from('interacciones').insert({
@@ -2692,7 +2702,23 @@ ${contextoContenido}`
     // patrón de rectángulo se detecta con certeza (ver inferRectangleWordProblem),
     // su cálculo tiene prioridad sobre cualquier etiqueta del modelo, correcta
     // o no, porque se deriva directamente de la estructura del problema.
-    const opGeometriaEnRespuesta = looksLikeMathPracticePrompt(respuesta) ? inferRectangleWordProblem(respuesta) : null
+    //
+    // Hallazgo real (tercera verificación, 2026-07-13): el fix funcionaba
+    // para "área" pero no para "perímetro" en la práctica — la causa fue que
+    // este chequeo dependía de looksLikeMathPracticePrompt(respuesta), y esa
+    // función exige una de un conjunto fijo de palabras clave ("cuánto",
+    // "resuelve", "calcula", "resultado"...) que no incluye una frase como
+    // "¿cuál es su perímetro?". Si el modelo redactó el problema de área con
+    // una palabra que sí coincidía ("cuánto") pero el de perímetro con una
+    // que no ("cuál es"), el override de geometría simplemente no se
+    // ejecutaba para el segundo caso, dejando pasar la etiqueta [OP:] mal
+    // calculada del modelo sin ningún contraste. inferRectangleWordProblem ya
+    // exige por sí solo (palabra de perímetro/área + ancho+largo o
+    // base+altura + exactamente 2 números) suficiente especificidad para no
+    // necesitar ese filtro adicional — se quita la dependencia de
+    // looksLikeMathPracticePrompt para que el override no dependa de que el
+    // modelo haya usado una de esas palabras específicas.
+    const opGeometriaEnRespuesta = inferRectangleWordProblem(respuesta)
     const opAlumno = inferCanonicalOperationFromText(pregunta)
     const respuestaGuiaEcuacion = /(?:suma|sumar|resta|restar|divide|dividir|multiplica|multiplicar|ambos lados|despej|aisla|a[ií]sla|both sides|isolate|add|subtract|divide|multiply)/i.test(respuesta)
     const opDesdeAlumno = opAlumno &&

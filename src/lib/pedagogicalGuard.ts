@@ -26,6 +26,17 @@ const SOLICITUD_RESPUESTA_DIRECTA = [
   /no\s+me\s+expliques/i,
   /just\s+(?:give|tell)\s+me\s+the\s+answer/i,
   /give\s+me\s+the\s+answer/i,
+  // Hallazgo real CRÍTICO (tercera verificación, 2026-07-13): al quitar la
+  // activación en bloque por materiaNumerica (ver shouldGuideWithoutFinalAnswer
+  // más abajo), estas frases de "dame la respuesta directa" con redacción
+  // distinta a las de arriba dejaron de detectarse — antes pasaban solo
+  // porque CUALQUIER mensaje en una materia numérica activaba el guard, sin
+  // importar si coincidía con alguna frase específica.
+  /me\s+resuelvas\b/i,
+  /p[aá]same\s+la\s+respuesta/i,
+  /no\s+quiero\s+explicaci[oó]n/i,
+  /no\s+quiero\s+pasos/i,
+  /solo\s+el\s+n[uú]mero/i,
   // Hallazgo real (verificación posterior, 2026-07-12): "dame algo para
   // copiar" es una petición directa y explícita de contenido listo para
   // entregar como propio — no activaba el guard en absoluto porque no
@@ -154,14 +165,42 @@ const FRASES_RESPUESTA_FINAL_CONCEPTUAL = [
   /\bhere('|’)s\s+the\s+complete\s+(?:summary|list)\s+ready\s+to\s+(?:submit|copy)\b[^\n]*[.\n]?/gi,
 ]
 
+// Hallazgo real CRÍTICO (tercera verificación, 2026-07-13): la versión
+// anterior activaba el guard EN BLOQUE para "options.materiaNumerica" solo
+// por ser cierto, sin importar de qué tratara el mensaje — y
+// materiaNumerica viene de isLikelyNumericSubject, que incluye Biología,
+// Física, Química, etc. (mathSafety.ts). Eso significa que CUALQUIER
+// pregunta académica en esas materias, incluida una pregunta puramente
+// conceptual ("¿qué es la fotosíntesis?"), una petición de reformatear
+// ("ponme esto en una tabla") o una comparación, activaba el aparato
+// completo de "no revelar respuesta final" — incluyendo el recorte de
+// frases tipo "el resultado es X" (FRASES_RESPUESTA_FINAL*) sobre
+// contenido que no tenía ningún ejercicio que resolver, seguido de la
+// frase-guía genérica pegada al inicio de la respuesta. Esto reproducía
+// el síntoma de "contexto/frase pegada al inicio" incluso para peticiones
+// de tabla, sin relación alguna con ensayos, autoría de IA o pedir la
+// respuesta directa.
+//
+// El protocolo matemático ESTRICTO (evaluacionProtocolo en preguntar/
+// route.ts) ya maneja por su cuenta, sin pasar por este guard, cualquier
+// expresión matemática literal calculable — nunca revela la respuesta
+// correcta en su feedback de "incorrecto" (ver mathSafety.ts). Este guard
+// es la red de seguridad para el camino de generación libre (humanístico/
+// conceptual), donde la señal correcta de "esto es un intento de resolver
+// un ejercicio o pedir la respuesta" es el CONTENIDO del mensaje del
+// alumno (CONTEXTO_PRACTICA, SOLICITUD_RESPUESTA_DIRECTA,
+// SOLICITUD_TRABAJO_CONCEPTUAL), no la materia en la que se está
+// estudiando. Se quita la activación en bloque por materiaNumerica —
+// Biología/Física/Química ahora se comportan igual que Historia/Filosofía
+// ya se comportaban correctamente: el guard se activa por el CONTENIDO del
+// mensaje, no por la etiqueta de la materia.
 export function shouldGuideWithoutFinalAnswer(options: GuardOptions): boolean {
   if (options.tipoPregunta !== 'academica') return false
   if (options.respuestaVerificadaCorrecta) return false
   const pregunta = options.pregunta || ''
-  return options.materiaNumerica ||
-    SOLICITUD_RESPUESTA_DIRECTA.some((pattern) => pattern.test(pregunta)) ||
+  return SOLICITUD_RESPUESTA_DIRECTA.some((pattern) => pattern.test(pregunta)) ||
     CONTEXTO_PRACTICA.some((pattern) => pattern.test(pregunta)) ||
-    (!options.materiaNumerica && SOLICITUD_TRABAJO_CONCEPTUAL.some((pattern) => pattern.test(pregunta))) ||
+    SOLICITUD_TRABAJO_CONCEPTUAL.some((pattern) => pattern.test(pregunta)) ||
     isDisguiseAiAuthorshipRequest(pregunta)
 }
 

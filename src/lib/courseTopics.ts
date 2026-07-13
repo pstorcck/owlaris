@@ -419,10 +419,17 @@ export function extractCourseBlocks(content: string): CourseTopicBlock[] {
 // fijas de arriba usaba coincidencia de substring exacto (.includes), que
 // se rompe con una sola palabra insertada — "dame TODOS los temas de
 // verificación de dominio" no contiene la substring literal "dame los
-// temas de" por la palabra "todos" en medio, así que la petición no se
-// interceptaba en absoluto y caía al índice completo sin filtrar. Se
-// reemplaza por expresiones regulares tolerantes a palabras insertadas
-// comunes (todos/todas, el listado de, etc.) en vez de frases fijas.
+// temas de" por la palabra "todos" en medio. Un primer intento de arreglo
+// enumeró palabras insertables específicas (todos/todas, el listado de),
+// pero eso es la MISMA clase de bug con una lista distinta: "dame
+// ABSOLUTAMENTE todos los temas de X" (tercera verificación, 2026-07-13)
+// volvió a fallar porque "absolutamente" no estaba en la lista. Enumerar
+// palabras insertables es una carrera perdida — se reemplaza por un hueco
+// de longitud acotada (hasta 40 caracteres) entre el verbo/pregunta y "los
+// temas de"/"topics of", que tolera CUALQUIER palabra o combinación
+// intermedia sin necesidad de enumerarlas. El riesgo de falso positivo es
+// bajo porque route.ts solo intercepta si el nombre consultado coincide
+// con un bloque REAL extraído de la fuente (findBlockByQuery).
 const PATRONES_BLOQUE_O_TEMAS_DE = [
   /que\s+temas\s+incluye\s+el\s+bloque/,
   /que\s+temas\s+tiene\s+el\s+bloque/,
@@ -435,12 +442,11 @@ const PATRONES_BLOQUE_O_TEMAS_DE = [
   /what\s+topics\s+are\s+in\s+the\s+unit/,
   /what\s+does\s+the\s+block\s+cover/,
   /what\s+does\s+the\s+unit\s+cover/,
-  /dame\s+(?:todos\s+|todas\s+)?(?:el\s+listado\s+de\s+)?los\s+temas\s+de/,
-  /quiero\s+(?:todos\s+|todas\s+)?los\s+temas\s+de/,
-  /cuales\s+son\s+(?:todos\s+|todas\s+)?los\s+temas\s+de/,
+  /\b(?:dame|deme|quiero|necesito)\b.{0,40}\blos\s+temas\s+de\b/,
+  /cuales\s+son.{0,40}\blos\s+temas\s+de\b/,
   /que\s+temas\s+tiene/,
-  /give\s+me\s+(?:all\s+(?:the\s+)?)?(?:the\s+)?topics\s+of/,
-  /what\s+are\s+(?:all\s+)?the\s+topics\s+of/,
+  /\b(?:give\s+me|i\s+want|i\s+need)\b.{0,40}\btopics\s+of\b/,
+  /what\s+are.{0,40}\btopics\s+of\b/,
   /topics\s+of/,
   /topics\s+in/,
 ]
@@ -567,12 +573,16 @@ export function buildStandardsAlignmentResponse(input: {
 
 const FRASES_CITA_TEXTUAL_SEGUIMIENTO = [
   /c[ií]tame\s+textualmente/,
+  /citar\s+textualmente/,
+  /puedes\s+citar/,
   /muestrame\s+(?:textualmente\s+)?donde/,
   /donde\s+dice\s+eso/,
+  /donde\s+aparece\s+eso/,
   /en\s+que\s+parte\s+(?:exacta\s+)?(?:dice|aparece)/,
   /cita\s+textual/,
   /texto\s+exacto\s+donde/,
   /quote\s+it\s+exactly/,
+  /can\s+you\s+quote/,
   /show\s+me\s+exactly\s+where/,
   /where\s+exactly\s+does\s+it\s+say/,
 ]
@@ -597,4 +607,31 @@ export function extractStandardFromPriorResponse(previousAssistantMessage: strin
   if (!esRespuestaDelGuard) return null
   const match = /"([^"]+)"/.exec(text)
   return match ? match[1] : null
+}
+
+// Hallazgo real CRÍTICO (tercera verificación, 2026-07-13): el seguimiento
+// "¿puedes citar textualmente dónde dice eso?" seguía sin interceptarse en
+// la práctica — la causa más probable es que extractStandardFromPriorResponse
+// depende de que el turno INMEDIATAMENTE anterior sea exactamente el texto
+// canónico de este guard, y la pregunta inicial de alineación pudo no haber
+// pasado por isStandardsAlignmentQuestion (frase distinta a la esperada) o
+// haber otro turno intermedio. Esta función es una red más amplia y
+// tolerante: busca el nombre de un estándar conocido en CUALQUIER mensaje
+// reciente del historial (de cualquier rol), no solo en el turno anterior
+// con el formato exacto del guard — así el seguimiento se puede resolver de
+// forma determinística incluso si la respuesta inicial fue generada
+// libremente por el modelo (siempre que haya nombrado el estándar).
+export function extractStandardMentionedInHistory(
+  historial: { rol: string; contenido: string }[] | undefined,
+  maxTurnsAtras = 6
+): string | null {
+  if (!Array.isArray(historial)) return null
+  const recientes = historial.slice(-maxTurnsAtras)
+  for (let i = recientes.length - 1; i >= 0; i -= 1) {
+    const texto = recientes[i]?.contenido || ''
+    for (const nombre of NOMBRES_ESTANDAR_CONOCIDOS) {
+      if (new RegExp(`\\b${nombre.replace(/\s+/g, '\\s+')}\\b`, 'i').test(texto)) return nombre
+    }
+  }
+  return null
 }

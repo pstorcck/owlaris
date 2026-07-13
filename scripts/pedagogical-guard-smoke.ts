@@ -227,6 +227,61 @@ Mapa del curso
     )
   }
 
+  // Hallazgo real CRÍTICO (tercera verificación, 2026-07-13): materiaNumerica
+  // (Biología, Física, Química... ver isLikelyNumericSubject) activaba el
+  // guard EN BLOQUE sin importar el contenido del mensaje — una pregunta
+  // puramente conceptual o una petición de reformatear en una materia
+  // numérica también lo activaba, a diferencia de la misma pregunta en una
+  // materia no numérica (Historia, Filosofía), que sí se manejaba bien. Con
+  // materiaNumerica: true, estas mismas peticiones conceptuales/de formato
+  // NO deben activar el guard — el mismo comportamiento que ya tenían las
+  // materias no numéricas.
+  for (const pregunta of [
+    '¿Qué es la fotosíntesis?',
+    'ponme esto en una tabla comparando célula procariota y eucariota',
+    'Explícame la diferencia entre mitosis y meiosis',
+    '¿Cuáles son las fases de la respiración celular?',
+  ]) {
+    assert.equal(
+      shouldGuideWithoutFinalAnswer({ pregunta, tipoPregunta: 'academica', materiaNumerica: true }),
+      false,
+      `"${pregunta}" en una materia numérica (ej. Biología) es conceptual/de formato, no debería activar el guard`
+    )
+  }
+
+  // El guard debe seguir activándose en materia numérica cuando el CONTENIDO
+  // del mensaje sí indica un contexto de ejercicio/práctica o una petición
+  // directa de la respuesta — la señal correcta es el mensaje, no la materia.
+  for (const pregunta of [
+    'Resuelve este ejercicio de genética',
+    '¿Cuánto es la tasa de crecimiento poblacional en este problema?',
+    'Solo dame la respuesta del problema de Punnett',
+  ]) {
+    assert.equal(
+      shouldGuideWithoutFinalAnswer({ pregunta, tipoPregunta: 'academica', materiaNumerica: true }),
+      true,
+      `"${pregunta}" sí es un contexto de ejercicio/práctica y debería activar el guard`
+    )
+  }
+
+  // Hallazgo real (regresión detectada en exercise-repetition-stress.ts al
+  // quitar la activación en bloque por materiaNumerica): estas frases de
+  // "dame la respuesta directa" con redacción no cubierta por las frases
+  // anteriores dejaron de detectarse porque antes pasaban solo por estar en
+  // una materia numérica, sin importar el contenido exacto del mensaje.
+  for (const pregunta of [
+    'necesito que me resuelvas esto ya',
+    'pásame la respuesta correcta',
+    'cuál es la respuesta, no quiero explicación',
+    'no quiero pasos, solo el número',
+  ]) {
+    assert.equal(
+      shouldGuideWithoutFinalAnswer({ pregunta, tipoPregunta: 'academica', materiaNumerica: true }),
+      true,
+      `"${pregunta}" es una petición directa de la respuesta y debería activar el guard`
+    )
+  }
+
   // Hallazgo real (QA amplia 2026-07-08): pedir un resumen o lista "listo
   // para entregar/copiar y pegar" debe activar el mismo guard que un
   // ensayo/tesis, aunque no sea prosa continua.

@@ -378,6 +378,26 @@ D) 10
   assert.equal(inferRectangleWordProblem('¿Qué es la fotosíntesis?'), null)
   assert.equal(inferRectangleWordProblem(''), null)
 
+  // Hallazgo real CRÍTICO (tercera verificación, 2026-07-13): el fix de
+  // arriba funcionaba para "área" pero no para "perímetro" en la práctica.
+  // La causa fue que preguntar/route.ts condicionaba el cálculo de
+  // inferRectangleWordProblem a looksLikeMathPracticePrompt(respuesta), y
+  // esa función exige una de un conjunto fijo de palabras clave que NO
+  // incluye "¿cuál es su perímetro?" (solo cubre "cuánto", no "cuál es").
+  // Esta prueba deja explícito que looksLikeMathPracticePrompt puede ser
+  // false para una frase de perímetro perfectamente válida — por eso el
+  // cálculo de rectángulo en route.ts ya NO depende de ese gate.
+  assert.equal(
+    looksLikeMathPracticePrompt('Un rectángulo tiene un ancho de 4 y un largo de 8. ¿Cuál es su perímetro?'),
+    false,
+    'looksLikeMathPracticePrompt no cubre esta frase de perímetro — inferRectangleWordProblem no debe depender de ese gate'
+  )
+  assert.equal(
+    inferRectangleWordProblem('Un rectángulo tiene un ancho de 4 y un largo de 8. ¿Cuál es su perímetro?'),
+    '2*(4+8)',
+    'inferRectangleWordProblem debe funcionar aunque looksLikeMathPracticePrompt sea false'
+  )
+
   console.log('math-safety smoke passed')
 }
 

@@ -14,6 +14,7 @@ import {
   extractCourseTopicIndex,
   extractNextTopicReference,
   extractStandardFromPriorResponse,
+  extractStandardMentionedInHistory,
   extractStandardQuery,
   findBlockByQuery,
   findNextTopic,
@@ -204,6 +205,27 @@ Cantidad de temas: 6
     })
   }
 
+  // Hallazgo real CRÍTICO (tercera verificación, 2026-07-13): el arreglo
+  // anterior enumeraba palabras insertables específicas (todos/todas), pero
+  // "dame ABSOLUTAMENTE todos los temas de X" volvió a fallar porque
+  // "absolutamente" no estaba en esa lista — la misma clase de bug con
+  // palabras distintas. Ahora se tolera cualquier palabra intermedia
+  // (hueco acotado en vez de una lista fija).
+  for (const frase of [
+    'dame absolutamente todos los temas de verificación de dominio de este curso, por favor',
+    'quiero por favor absolutamente todos los temas de campos e interacciones',
+  ]) {
+    test(`block-grouping-con-cualquier-palabra-insertada-detectado: ${frase}`, () => {
+      assert.equal(isBlockGroupingQuestion(frase), true, frase)
+    })
+  }
+
+  test('petición genérica de temas de un bloque real (con palabra insertada arbitraria) encuentra el bloque correcto', () => {
+    const query = extractBlockQuery('dame absolutamente todos los temas de campos e interacciones')
+    const encontrado = findBlockByQuery(bloques, query)
+    assert.equal(encontrado?.nombre, 'Campos e interacciones')
+  })
+
   test('petición genérica de temas de un bloque real encuentra el bloque correcto', () => {
     const query = extractBlockQuery('dame los temas de campos e interacciones')
     const encontrado = findBlockByQuery(bloques, query)
@@ -266,6 +288,10 @@ Cantidad de temas: 6
     '¿en qué parte exacta dice eso?',
     'muéstrame textualmente donde',
     'show me exactly where it says that',
+    // Hallazgo real CRÍTICO (tercera verificación, 2026-07-13): esta frase
+    // exacta seguía sin interceptarse — "citar" (no "cítame") y "puedes
+    // citar" no coincidían con los patrones anteriores.
+    '¿puedes citar textualmente dónde dice eso?',
   ]) {
     test(`standards-citation-follow-up-detectado: ${frase}`, () => {
       assert.equal(isStandardsCitationFollowUp(frase), true, frase)
@@ -285,6 +311,29 @@ Cantidad de temas: 6
   })
   test('no confunde un mensaje normal del asistente con una respuesta previa del guard', () => {
     assert.equal(extractStandardFromPriorResponse('Claro, la fotosíntesis es el proceso por el cual las plantas producen energía.'), null)
+  })
+
+  // Hallazgo real CRÍTICO (tercera verificación, 2026-07-13): el seguimiento
+  // seguía sin resolverse en la práctica porque extractStandardFromPriorResponse
+  // depende de que el turno anterior tenga EXACTAMENTE el formato canónico
+  // de este guard — si la pregunta inicial se respondió de otra forma (o
+  // hubo un turno intermedio), no se reconocía nada y el seguimiento caía a
+  // generación libre, que alucinó una justificación nueva. El respaldo
+  // busca el nombre del estándar en cualquier mensaje reciente del
+  // historial, sin depender del formato exacto de este guard.
+  test('extractStandardMentionedInHistory encuentra el estándar aunque el turno anterior no tenga el formato exacto del guard', () => {
+    const historialSimulado = [
+      { rol: 'usuario', contenido: '¿este curso está alineado con NGSS?' },
+      { rol: 'asistente', contenido: 'Sí, el curso está diseñado con base en los estándares de NGSS, que son el marco fundacional para esta iniciativa.' },
+    ]
+    assert.equal(extractStandardMentionedInHistory(historialSimulado), 'NGSS')
+  })
+  test('extractStandardMentionedInHistory devuelve null si no hay ningún estándar conocido en el historial reciente', () => {
+    const historialSimulado = [
+      { rol: 'usuario', contenido: '¿qué es la fotosíntesis?' },
+      { rol: 'asistente', contenido: 'La fotosíntesis es el proceso por el cual las plantas producen energía.' },
+    ]
+    assert.equal(extractStandardMentionedInHistory(historialSimulado), null)
   })
 
   if (failures.length > 0) {
