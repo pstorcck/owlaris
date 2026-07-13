@@ -222,6 +222,7 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
       .catch(() => {})
   }, [])
   const [idiomaIngles, setIdiomaIngles]       = useState(false)
+  const [sidebarAbierto, setSidebarAbierto]   = useState(false)
   const [pendingMathId, setPendingMathId]     = useState<string | null>(null)
   const [modoConversacion, setModoConversacion] = useState(false)
   const [grabando, setGrabando]               = useState(false)
@@ -1424,8 +1425,25 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
   return (
     <>
       <style suppressHydrationWarning>{`
-        .owlaris-root { min-height:100vh; display:flex; flex-direction:column; background:#F8F7FF; background-image:radial-gradient(ellipse at 15% 0%,rgba(109,40,217,.06) 0%,transparent 55%),radial-gradient(ellipse at 85% 100%,rgba(14,165,233,.05) 0%,transparent 50%); font-family:"Plus Jakarta Sans",sans-serif; }
+        .owlaris-root { min-height:100vh; display:flex; flex-direction:row; background:#F8F7FF; background-image:radial-gradient(ellipse at 15% 0%,rgba(109,40,217,.06) 0%,transparent 55%),radial-gradient(ellipse at 85% 100%,rgba(14,165,233,.05) 0%,transparent 50%); font-family:"Plus Jakarta Sans",sans-serif; }
+        .o-main-col { flex:1; min-width:0; display:flex; flex-direction:column; min-height:100vh; }
         .o-header { background:rgba(255,255,255,.88); backdrop-filter:blur(24px); border-bottom:1px solid rgba(109,40,217,.08); box-shadow:0 1px 24px rgba(109,40,217,.06); position:sticky; top:0; z-index:50; padding:14px 24px; }
+        .o-sidebar { width:268px; background:rgba(255,255,255,.94); backdrop-filter:blur(24px); border-right:1px solid rgba(109,40,217,.08); box-shadow:0 0 40px rgba(109,40,217,.05); display:flex; flex-direction:column; padding:22px 16px 18px; gap:16px; position:fixed; top:0; left:0; bottom:0; z-index:70; transform:translateX(-100%); transition:transform .28s cubic-bezier(.4,0,.2,1); overflow-y:auto; }
+        .o-sidebar.abierto { transform:translateX(0); box-shadow:0 0 60px rgba(20,10,60,.28); }
+        .o-sidebar-overlay { position:fixed; inset:0; background:rgba(15,10,40,.4); backdrop-filter:blur(2px); z-index:65; animation:oFadeIn .2s ease; }
+        @keyframes oFadeIn { from{opacity:0} to{opacity:1} }
+        .o-topbar-mobile { display:flex; align-items:center; gap:12px; padding:12px 18px; background:rgba(255,255,255,.9); backdrop-filter:blur(20px); border-bottom:1px solid rgba(109,40,217,.08); position:sticky; top:0; z-index:40; }
+        .o-hamburger { width:38px; height:38px; border-radius:11px; border:1px solid rgba(109,40,217,.15); background:#F3F0FF; display:flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0; transition:all .2s; }
+        .o-hamburger:hover { background:#EAE3FF; }
+        .o-sidebar-section-title { font-size:10px; font-weight:700; letter-spacing:1.1px; text-transform:uppercase; color:#B0A8D9; margin:2px 0 2px 4px; }
+        .o-sidebar-status { display:flex; align-items:center; gap:8px; background:rgba(109,40,217,.06); border:1px solid rgba(109,40,217,.1); border-radius:12px; padding:9px 12px; font-size:12px; font-weight:600; color:#5B21B6; }
+        .o-sidebar-divider { height:1px; background:rgba(109,40,217,.08); margin:2px 0; flex-shrink:0; }
+        .o-sidebar-idioma { width:100%; justify-content:center; }
+        @media (min-width:960px) {
+          .o-sidebar { position:sticky; top:0; height:100vh; transform:none; box-shadow:none; }
+          .o-sidebar-overlay { display:none; }
+          .o-topbar-mobile { display:none; }
+        }
         .bbl-tutor { background:white; border:1px solid rgba(109,40,217,.1); border-radius:4px 20px 20px 20px; box-shadow:0 2px 20px rgba(109,40,217,.08); position:relative; }
         .bbl-tutor::before { content:""; position:absolute; top:0; left:0; width:3px; height:100%; background:linear-gradient(180deg,#7C3AED,#0EA5E9); }
         .bbl-user { background:linear-gradient(135deg,#6D28D9,#5B21B6); border-radius:20px 4px 20px 20px; box-shadow:0 4px 20px rgba(109,40,217,.3); }
@@ -1564,60 +1582,93 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
             </div>
           )
         })()}
-        {/* Header */}
-        <header className="o-header">
-          <div style={{maxWidth:'900px',margin:'0 auto',display:'flex',alignItems:'center',justifyContent:'space-between',gap:'16px'}}>
-            <div style={{display:'flex',alignItems:'center',gap:'10px',flexShrink:0}}>
-              <div className="o-avatar-ring" style={{width:'42px',height:'42px'}}>
-                <div style={{background:'white',borderRadius:'50%',width:'38px',height:'38px',display:'flex',alignItems:'center',justifyContent:'center'}}>
-                  <img src="/buho.png" alt="Owlaris" style={{width:'28px',height:'28px',objectFit:'contain'}}/>
+        {/* Sidebar — sustituye la barra de botones que antes iba sobre el chat */}
+        {sidebarAbierto && <div className="o-sidebar-overlay" onClick={()=>setSidebarAbierto(false)} />}
+        <aside className={`o-sidebar${sidebarAbierto ? ' abierto' : ''}`}>
+          <div style={{display:'flex',alignItems:'center',gap:'10px'}}>
+            <div className="o-avatar-ring" style={{width:'40px',height:'40px',flexShrink:0}}>
+              <div style={{background:'white',borderRadius:'50%',width:'36px',height:'36px',display:'flex',alignItems:'center',justifyContent:'center'}}>
+                <img src="/buho.png" alt="Owlaris" style={{width:'25px',height:'25px',objectFit:'contain'}}/>
+              </div>
+            </div>
+            <div style={{minWidth:0}}>
+              <p style={{fontFamily:"'Syne',sans-serif",fontSize:'16px',fontWeight:700,color:'#1E1B4B',letterSpacing:'-0.4px'}}>Owlaris</p>
+              <p style={{fontSize:'10px',color:'#9490B8',fontWeight:500}}>{idiomaIngles ? 'Your academic tutor' : 'Tu tutor académico'}</p>
+            </div>
+            <button className="o-hamburger" style={{marginLeft:'auto'}} onClick={()=>setSidebarAbierto(false)} aria-label="Close menu">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6D28D9" strokeWidth="2.4" strokeLinecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+            </button>
+          </div>
+
+          {(nombreAlumno || gradoAlumno || materiaAlumno) && (
+            <>
+              <div className="o-sidebar-divider" />
+              <div>
+                <p className="o-sidebar-section-title">{idiomaIngles ? 'Current session' : 'Sesión actual'}</p>
+                <div style={{display:'flex',flexDirection:'column',gap:'7px'}}>
+                  {nombreAlumno && <div className="o-sidebar-status">👤 {nombreAlumno}</div>}
+                  {gradoAlumno  && <div className="o-sidebar-status">🎓 {gradoAlumno}</div>}
+                  {materiaAlumno && <div className="o-sidebar-status">📚 {materiaAlumno}</div>}
                 </div>
               </div>
-              <div className="hidden sm:block">
-                <p style={{fontFamily:"'Syne',sans-serif",fontSize:'16px',fontWeight:700,color:'#1E1B4B',letterSpacing:'-0.4px'}}>Owlaris</p>
-                <p style={{fontSize:'11px',color:'#9490B8',fontWeight:500}}>{idiomaIngles ? 'Your academic tutor' : 'Tu tutor académico'}</p>
-              </div>
-              <button onClick={()=>{
-                setIdiomaIngles(!idiomaIngles)
-                if(modoConversacion) {
-                  modoConversacionRef.current = false
-                  setModoConversacion(false)
-                  if (autoEscuchaTimeoutRef.current) { clearTimeout(autoEscuchaTimeoutRef.current); autoEscuchaTimeoutRef.current = null }
-                  detenerReconocimientoVoz()
-                  limpiarVAD()
-                  if (grabando) { grabacionCanceladaRef.current = true; try { mediaRecorderRef.current?.stop() } catch { /* ya estaba detenida */ } setGrabando(false) }
-                  reproduciendoRef.current = false
-                  if (audioRef.current) { try { audioRef.current.pause() } catch { /* */ } }
-                  if (typeof window !== 'undefined' && 'speechSynthesis' in window) window.speechSynthesis.cancel()
-                  setReproduciendo(false)
-                }
-              }}
-                style={{background:idiomaIngles?'linear-gradient(135deg,#1d4ed8,#1e40af)':'#F3F0FF',border:idiomaIngles?'none':'1px solid rgba(109,40,217,.2)',borderRadius:'10px',padding:'6px 12px',fontSize:'12px',fontWeight:700,color:idiomaIngles?'white':'#7C3AED',cursor:'pointer',display:'flex',alignItems:'center',gap:'5px',transition:'all .2s',flexShrink:0}}>
-                {idiomaIngles ? '🇪🇸 ES' : '🇬🇧 EN'}
-              </button>
-            </div>
+            </>
+          )}
 
-            {/* Estado actual */}
-            <div style={{display:'flex',alignItems:'center',gap:'8px',flex:1,justifyContent:'center',flexWrap:'wrap'}}>
-              {nombreAlumno && <span className="estado-badge">👤 {nombreAlumno}</span>}
-              {gradoAlumno  && <span className="estado-badge">🎓 {gradoAlumno}</span>}
-              {materiaAlumno && <span className="estado-badge">📚 {materiaAlumno}</span>}
-            </div>
+          <div className="o-sidebar-divider" />
+          <div>
+            <p className="o-sidebar-section-title">{idiomaIngles ? 'Language' : 'Idioma'}</p>
+            <button onClick={()=>{
+              setIdiomaIngles(!idiomaIngles)
+              if(modoConversacion) {
+                modoConversacionRef.current = false
+                setModoConversacion(false)
+                if (autoEscuchaTimeoutRef.current) { clearTimeout(autoEscuchaTimeoutRef.current); autoEscuchaTimeoutRef.current = null }
+                detenerReconocimientoVoz()
+                limpiarVAD()
+                if (grabando) { grabacionCanceladaRef.current = true; try { mediaRecorderRef.current?.stop() } catch { /* ya estaba detenida */ } setGrabando(false) }
+                reproduciendoRef.current = false
+                if (audioRef.current) { try { audioRef.current.pause() } catch { /* */ } }
+                if (typeof window !== 'undefined' && 'speechSynthesis' in window) window.speechSynthesis.cancel()
+                setReproduciendo(false)
+              }
+            }}
+              className="o-sidebar-idioma"
+              style={{background:idiomaIngles?'linear-gradient(135deg,#1d4ed8,#1e40af)':'#F3F0FF',border:idiomaIngles?'none':'1px solid rgba(109,40,217,.2)',borderRadius:'10px',padding:'9px 12px',fontSize:'12px',fontWeight:700,color:idiomaIngles?'white':'#7C3AED',cursor:'pointer',display:'flex',alignItems:'center',gap:'6px',transition:'all .2s'}}>
+              {idiomaIngles ? '🇪🇸 Español' : '🇬🇧 English'}
+            </button>
+          </div>
 
-            <div style={{display:'flex',alignItems:'center',gap:'10px',flexShrink:0}}>
-              <div className="hidden sm:block" style={{textAlign:'right'}}>
-                <p style={{fontSize:'13px',fontWeight:600,color:'#1E1B4B'}}>{usuario.nombre_completo.split(' ')[0]}</p>
-                <p style={{fontSize:'10px',color:'#9490B8'}}>{usuario.colegio?.nombre}</p>
-              </div>
-              <div style={{width:'36px',height:'36px',borderRadius:'50%',background:'linear-gradient(135deg,#7C3AED,#0EA5E9)',display:'flex',alignItems:'center',justifyContent:'center',boxShadow:'0 4px 12px rgba(109,40,217,.3)'}}>
-                <span style={{fontSize:'13px',fontWeight:700,color:'white'}}>{iniciales}</span>
-              </div>
-              <button onClick={cerrarSesion} style={{background:'#F3F0FF',border:'1px solid rgba(109,40,217,.15)',borderRadius:'10px',padding:'7px 13px',fontSize:'12px',fontWeight:500,color:'#7C3AED',cursor:'pointer',display:'flex',alignItems:'center',gap:'5px',fontFamily:"'Plus Jakarta Sans',sans-serif"}}>
-                <span>↩</span><span className="hidden sm:inline">Salir</span>
-              </button>
+          <div style={{flex:1}} />
+
+          <div className="o-sidebar-divider" />
+          <div style={{display:'flex',alignItems:'center',gap:'10px'}}>
+            <div style={{width:'34px',height:'34px',borderRadius:'50%',background:'linear-gradient(135deg,#7C3AED,#0EA5E9)',display:'flex',alignItems:'center',justifyContent:'center',boxShadow:'0 4px 12px rgba(109,40,217,.3)',flexShrink:0}}>
+              <span style={{fontSize:'12px',fontWeight:700,color:'white'}}>{iniciales}</span>
+            </div>
+            <div style={{minWidth:0}}>
+              <p style={{fontSize:'13px',fontWeight:600,color:'#1E1B4B',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{usuario.nombre_completo.split(' ')[0]}</p>
+              <p style={{fontSize:'10px',color:'#9490B8',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{usuario.colegio?.nombre}</p>
             </div>
           </div>
-        </header>
+          <button onClick={cerrarSesion} style={{width:'100%',background:'#F3F0FF',border:'1px solid rgba(109,40,217,.15)',borderRadius:'10px',padding:'9px 13px',fontSize:'12px',fontWeight:500,color:'#7C3AED',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',gap:'6px',fontFamily:"'Plus Jakarta Sans',sans-serif"}}>
+            <span>↩</span><span>{idiomaIngles ? 'Log out' : 'Salir'}</span>
+          </button>
+        </aside>
+
+        <div className="o-main-col">
+          {/* Barra superior solo en mobile — el sidebar reemplaza la barra de botones en desktop */}
+          <div className="o-topbar-mobile">
+            <button className="o-hamburger" onClick={()=>setSidebarAbierto(true)} aria-label="Menu">
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#6D28D9" strokeWidth="2.2" strokeLinecap="round"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+            </button>
+            <div className="o-avatar-ring" style={{width:'28px',height:'28px'}}>
+              <div style={{background:'white',borderRadius:'50%',width:'24px',height:'24px',display:'flex',alignItems:'center',justifyContent:'center'}}>
+                <img src="/buho.png" alt="Owlaris" style={{width:'17px',height:'17px',objectFit:'contain'}}/>
+              </div>
+            </div>
+            <p style={{fontFamily:"'Syne',sans-serif",fontSize:'15px',fontWeight:700,color:'#1E1B4B'}}>Owlaris</p>
+            {materiaAlumno && <span className="estado-badge" style={{marginLeft:'auto'}}>📚 {materiaAlumno}</span>}
+          </div>
 
         {/* Mensajes */}
         <main style={{flex:1,overflowY:'auto',padding:'28px 16px'}} className="scrollbar-hide">
@@ -1804,6 +1855,7 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
               {idiomaIngles ? 'Owlaris guides you to learn — it does not do your homework for you' : 'Owlaris te guía para que aprendas — no hace tu tarea por ti'}
             </p>
           </div>
+        </div>
         </div>
 
         {/* MODO CONVERSACIÓN — pantalla completa tipo asistente de voz */}
