@@ -25,21 +25,33 @@ const TEMAS_LLM_CACHE_TTL = 1000 * 60 * 60 // 1 hora: el documento cambia poco, 
 // Guatemala", "El Protocolo de Montreal"...) como si fueran temas propios
 // de Lenguaje — son títulos de textos sobre OTRAS materias (física,
 // economía, ciencias sociales) usados solo como material de lectura, no
-// contenidos curriculares de Lenguaje. Se agrega una instrucción explícita
-// para que el modelo distinga esta estructura y no liste títulos de
-// lectura/pasaje como si fueran temas de la materia.
+// contenidos curriculares de Lenguaje. Una instrucción de una sola pasada
+// ("no incluyas X") NO bastó — el modelo repitió el mismo error tras el
+// primer intento de corrección por prompt. Se cambia el esquema de
+// respuesta para exigir una CLASIFICACIÓN explícita por elemento
+// (es_tema_curricular: true/false) en vez de solo una lista ya filtrada —
+// un juicio individual por ítem es más confiable que una exclusión general
+// aplicada de una vez a toda la lista — y el filtrado final se hace en
+// código de forma determinística según esa bandera, no confiando en que
+// el modelo ya haya excluido todo correctamente por sí solo.
 const SYSTEM_PROMPT_EXTRAER_TEMAS =
-  'Extraes la lista de temas, lecciones o contenidos de un documento curricular. Responde SOLO con JSON: {"temas": string[]}. Cada elemento debe ser un tema/lección/contenido que aparezca LITERALMENTE en el documento (puedes limpiar numeración o formato, pero no inventes, no resumas de más ni agregues información externa). ' +
-  'Distingue con cuidado entre TEMAS curriculares reales (habilidades, competencias o contenidos que se enseñan, ej. "Comprensión inferencial", "Fracciones algebraicas") y TÍTULOS de textos, lecturas o pasajes usados solo como material de un ejercicio (ej. "La teoría de la relatividad general", "El Protocolo de Montreal", "Indicadores económicos de Guatemala") — estos últimos NUNCA son temas de la materia, incluso si el documento los usa como encabezado de cada ejercicio; no los incluyas en la lista aunque traten sobre ciencias, economía o historia dentro de una materia de lenguaje/lectura. ' +
-  'Si el documento no contiene una lista identificable de temas curriculares reales (por ejemplo, si es un banco de ejercicios o lecturas sin un índice de contenidos propio de la materia), responde {"temas": []} en vez de listar los títulos de las lecturas o ejercicios.'
+  'Identificas candidatos a tema/lección/contenido de un documento curricular. Responde SOLO con JSON: {"items": [{"texto": string, "es_tema_curricular": boolean}]}. Cada "texto" debe aparecer LITERALMENTE en el documento (puedes limpiar numeración o formato, pero no inventes ni resumas de más). ' +
+  'Para CADA candidato, marca "es_tema_curricular" en true SOLO si es una habilidad, competencia o contenido que se enseña explícitamente (ej. "Comprensión inferencial", "Fracciones algebraicas"). Marca false si es el TÍTULO de una lectura, pasaje, texto o ejercicio usado solo como material (ej. "La teoría de la relatividad general", "El Protocolo de Montreal", "Indicadores económicos de Guatemala") — estos títulos NUNCA son temas de la materia, incluso si el documento los usa como encabezado de cada ejercicio y aunque traten sobre ciencias, economía o historia dentro de una materia de lenguaje/lectura. Marca false también en fragmentos de encabezado del documento que no sean en sí un tema (ej. "NIVEL LITERAL" en mayúsculas como rótulo de sección). ' +
+  'Si el documento no contiene ningún tema curricular real (por ejemplo, si es solo un banco de ejercicios o lecturas), responde {"items": []}.'
 
 export function parseTemasLLMResponse(raw: string): string[] {
   try {
     const parsed = JSON.parse(raw)
-    if (!Array.isArray(parsed?.temas)) return []
-    return parsed.temas
-      .filter((t: unknown): t is string => typeof t === 'string' && t.trim().length > 0)
-      .map((t: string) => t.trim())
+    if (!Array.isArray(parsed?.items)) return []
+    return parsed.items
+      .filter((item: unknown): item is { texto: string; es_tema_curricular: boolean } =>
+        !!item &&
+        typeof item === 'object' &&
+        typeof (item as { texto?: unknown }).texto === 'string' &&
+        (item as { texto: string }).texto.trim().length > 0 &&
+        (item as { es_tema_curricular?: unknown }).es_tema_curricular === true
+      )
+      .map((item: { texto: string }) => item.texto.trim())
   } catch {
     return []
   }

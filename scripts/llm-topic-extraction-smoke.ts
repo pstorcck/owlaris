@@ -18,12 +18,50 @@ function fakeOpenAI(respuestas: string[]) {
 }
 
 async function main() {
-  // parseTemasLLMResponse: casos básicos de parseo real.
-  assert.deepEqual(parseTemasLLMResponse('{"temas": ["Fracciones", "Álgebra"]}'), ['Fracciones', 'Álgebra'])
-  assert.deepEqual(parseTemasLLMResponse('{"temas": []}'), [])
+  // parseTemasLLMResponse: casos básicos de parseo real con el esquema de
+  // clasificación por ítem (texto + es_tema_curricular).
+  assert.deepEqual(
+    parseTemasLLMResponse('{"items": [{"texto": "Fracciones", "es_tema_curricular": true}, {"texto": "Álgebra", "es_tema_curricular": true}]}'),
+    ['Fracciones', 'Álgebra']
+  )
+  assert.deepEqual(parseTemasLLMResponse('{"items": []}'), [])
   assert.deepEqual(parseTemasLLMResponse('esto no es json'), [])
   assert.deepEqual(parseTemasLLMResponse('{}'), [])
-  assert.deepEqual(parseTemasLLMResponse('{"temas": ["  Trigonometría  ", "", "   ", 42, null]}'), ['Trigonometría'])
+  assert.deepEqual(
+    parseTemasLLMResponse('{"items": [{"texto": "  Trigonometría  ", "es_tema_curricular": true}, {"texto": "", "es_tema_curricular": true}, {"texto": "   ", "es_tema_curricular": true}, {"texto": 42, "es_tema_curricular": true}, {"texto": null, "es_tema_curricular": true}]}'),
+    ['Trigonometría']
+  )
+
+  // Hallazgo real CRÍTICO (QA en vivo, 2026-07-13): un documento de
+  // Lenguaje (banco de ejercicios de comprensión lectora) devolvió los 4
+  // temas genuinos de comprensión SEGUIDOS de títulos de lecturas de otras
+  // materias, presentados como si fueran temas de Lenguaje — y un intento
+  // anterior de corregirlo con una sola instrucción de prompt no bastó (el
+  // modelo repitió el mismo error). Se reproduce exactamente ese patrón
+  // real: el modelo ahora debe marcar es_tema_curricular=false para los
+  // títulos de lectura y el fragmento de encabezado suelto, y
+  // parseTemasLLMResponse debe filtrarlos determinísticamente en código,
+  // sin depender de que el modelo ya los haya excluido de la lista.
+  const respuestaContaminadaClasificada = JSON.stringify({
+    items: [
+      { texto: 'Comprensión lectora', es_tema_curricular: true },
+      { texto: 'Análisis literal', es_tema_curricular: true },
+      { texto: 'Análisis inferencial', es_tema_curricular: true },
+      { texto: 'Análisis crítico', es_tema_curricular: true },
+      { texto: 'NIVEL LITERAL', es_tema_curricular: false },
+      { texto: 'Estructura colonial', es_tema_curricular: false },
+      { texto: 'Identidad criolla', es_tema_curricular: false },
+      { texto: 'Cambio climático', es_tema_curricular: false },
+      { texto: 'Remesas familiares', es_tema_curricular: false },
+      { texto: 'Realismo mágico', es_tema_curricular: false },
+      { texto: 'Cosmovisión maya', es_tema_curricular: false },
+    ],
+  })
+  const { cliente: clienteLenguaje } = fakeOpenAI([respuestaContaminadaClasificada])
+  const temasLenguaje = await extraerTemasConModelo(clienteLenguaje, 'contenido banco de ejercicios lenguaje mineduc', 'Lenguaje-Ejercicios-Mineduc.docx')
+  assert.deepEqual(temasLenguaje, ['Comprensión lectora', 'Análisis literal', 'Análisis inferencial', 'Análisis crítico'])
+  assert.ok(!temasLenguaje.includes('Estructura colonial'))
+  assert.ok(!temasLenguaje.includes('NIVEL LITERAL'))
 
   // temasLLMCacheKey: distingue por documento y longitud de contenido, para
   // no reusar el resultado de un documento distinto que coincida en nombre.
@@ -32,7 +70,9 @@ async function main() {
 
   // extraerTemasConModelo: primera llamada real al modelo (mock), y
   // confirma que devuelve los temas extraídos del JSON.
-  const { cliente: cliente1, getLlamadas: llamadas1 } = fakeOpenAI(['{"temas": ["Aritmética", "Geometría"]}'])
+  const { cliente: cliente1, getLlamadas: llamadas1 } = fakeOpenAI([
+    JSON.stringify({ items: [{ texto: 'Aritmética', es_tema_curricular: true }, { texto: 'Geometría', es_tema_curricular: true }] }),
+  ])
   const temas1 = await extraerTemasConModelo(cliente1, 'contenido de prueba único 1', 'Doc-Prueba-1.docx')
   assert.deepEqual(temas1, ['Aritmética', 'Geometría'])
   assert.equal(llamadas1(), 1)
@@ -48,14 +88,16 @@ async function main() {
 
   // Un documento con NOMBRE o CONTENIDO distinto no debe reusar el caché
   // del documento anterior.
-  const { cliente: cliente2, getLlamadas: llamadas2 } = fakeOpenAI(['{"temas": ["Célula", "Genética"]}'])
+  const { cliente: cliente2, getLlamadas: llamadas2 } = fakeOpenAI([
+    JSON.stringify({ items: [{ texto: 'Célula', es_tema_curricular: true }, { texto: 'Genética', es_tema_curricular: true }] }),
+  ])
   const temas2 = await extraerTemasConModelo(cliente2, 'contenido de prueba único 2 (mas largo)', 'Doc-Prueba-2.docx')
   assert.deepEqual(temas2, ['Célula', 'Genética'])
   assert.equal(llamadas2(), 1)
 
   // Documento genuinamente sin lista de temas (ej. banco de ejercicios):
   // el modelo debe poder admitirlo explícitamente sin que se invente nada.
-  const { cliente: cliente3 } = fakeOpenAI(['{"temas": []}'])
+  const { cliente: cliente3 } = fakeOpenAI(['{"items": []}'])
   const temas3 = await extraerTemasConModelo(cliente3, 'banco de ejercicios sin indice de temas', 'Banco-Ejercicios.docx')
   assert.deepEqual(temas3, [])
 
