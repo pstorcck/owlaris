@@ -1,12 +1,14 @@
 import assert from 'node:assert/strict'
-import { extraerTemasConModelo, parseTemasLLMResponse, temasLLMCacheKey } from '../src/lib/llmTopicExtraction'
+import { extraerTemasConModelo, parseTemasLLMResponse, recortarAntesDeBancoEjercicios, temasLLMCacheKey } from '../src/lib/llmTopicExtraction'
 
 function fakeOpenAI(respuestas: string[]) {
   let llamadas = 0
+  const contenidosEnviados: string[] = []
   const cliente = {
     chat: {
       completions: {
-        create: async () => {
+        create: async (params: { messages: { role: string; content: string }[] }) => {
+          contenidosEnviados.push(params.messages[params.messages.length - 1].content)
           const contenido = respuestas[Math.min(llamadas, respuestas.length - 1)]
           llamadas += 1
           return { choices: [{ message: { content: contenido } }] }
@@ -14,7 +16,11 @@ function fakeOpenAI(respuestas: string[]) {
       },
     },
   }
-  return { cliente: cliente as unknown as Parameters<typeof extraerTemasConModelo>[0], getLlamadas: () => llamadas }
+  return {
+    cliente: cliente as unknown as Parameters<typeof extraerTemasConModelo>[0],
+    getLlamadas: () => llamadas,
+    getContenidosEnviados: () => contenidosEnviados,
+  }
 }
 
 async function main() {
@@ -62,6 +68,64 @@ async function main() {
   assert.deepEqual(temasLenguaje, ['Comprensión lectora', 'Análisis literal', 'Análisis inferencial', 'Análisis crítico'])
   assert.ok(!temasLenguaje.includes('Estructura colonial'))
   assert.ok(!temasLenguaje.includes('NIVEL LITERAL'))
+
+  // Hallazgo real CRÍTICO (tercera vía, con evidencia real del documento
+  // fuente vía logs de diagnóstico): dos intentos de prompt no bastaron
+  // porque el modelo SÍ VE el "Banco de práctica integrado" (con sus
+  // "Texto 1: ...", "Texto 2: ..." de lecturas de otras materias) y lo
+  // generaliza como una lista de temas, sin importar la instrucción. La
+  // tercera vía recorta el documento ANTES de esa sección, para que el
+  // modelo nunca la vea. Se reproduce la estructura real exacta.
+  const documentoRealLenguaje = `Quinto Bachillerato — Ejercicios para Mineduc Lenguaje
+Contenido interno para ambiente de pruebas.
+
+Propósito del paquete
+
+Este paquete está diseñado para preparar práctica intensiva de Lenguaje para Quinto Bachillerato. El enfoque principal es comprensión lectora y análisis literal, inferencial y crítico a partir de textos breves.
+
+Reglas de uso del paquete
+
+Este paquete queda en versión alumno únicamente.
+
+Banco de práctica integrado
+
+NIVEL LITERAL
+
+Texto 1: "La teoría de la relatividad general, publicada por Einstein en 1915..."
+¿Qué confirmó el eclipse solar de 1919 según el texto?
+
+Texto 2: Marco Legal de la Educación en Guatemala
+Constitución Política de la República:
+
+Texto 3: El Corredor Seco y la Captación de Agua
+"El Corredor Seco de Guatemala es una de las regiones más vulnerables al cambio climático..."
+
+Texto 4: Remesas y Economía Familiar
+"Las remesas familiares se han convertido en el motor principal de la economía guatemalteca..."
+
+Texto 5: Miguel Ángel Asturias y el Realismo Mágico
+"Miguel Ángel Asturias, Premio Nobel de Literatura 1967..."`
+
+  assert.doesNotMatch(recortarAntesDeBancoEjercicios(documentoRealLenguaje), /Banco de pr[aá]ctica/i)
+  assert.doesNotMatch(recortarAntesDeBancoEjercicios(documentoRealLenguaje), /Texto \d+:/)
+  assert.match(recortarAntesDeBancoEjercicios(documentoRealLenguaje), /Propósito del paquete/)
+  assert.match(recortarAntesDeBancoEjercicios(documentoRealLenguaje), /comprensión lectora y análisis literal/)
+
+  const { cliente: clienteDocReal, getContenidosEnviados } = fakeOpenAI([
+    JSON.stringify({
+      items: [
+        { texto: 'Comprensión lectora', es_tema_curricular: true },
+        { texto: 'Análisis literal', es_tema_curricular: true },
+        { texto: 'Análisis inferencial', es_tema_curricular: true },
+        { texto: 'Análisis crítico', es_tema_curricular: true },
+      ],
+    }),
+  ])
+  const temasDocReal = await extraerTemasConModelo(clienteDocReal, documentoRealLenguaje, 'Quinto Bachillerato-Lenguaje-Ejercicios para Mineduc Lenguaje.docx')
+  assert.deepEqual(temasDocReal, ['Comprensión lectora', 'Análisis literal', 'Análisis inferencial', 'Análisis crítico'])
+  const contenidoEnviadoAlModelo = getContenidosEnviados()[0]
+  assert.doesNotMatch(contenidoEnviadoAlModelo, /Texto \d+:/, 'el modelo nunca debe ver el banco de ejercicios, para que no pueda confundirlo con temas')
+  assert.doesNotMatch(contenidoEnviadoAlModelo, /Banco de pr[aá]ctica/i)
 
   // temasLLMCacheKey: distingue por documento y longitud de contenido, para
   // no reusar el resultado de un documento distinto que coincida en nombre.

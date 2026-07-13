@@ -61,6 +61,25 @@ export function temasLLMCacheKey(documentoFuente: string | null, longitudConteni
   return `${documentoFuente || ''}::${longitudContenido}`
 }
 
+// Hallazgo real CRÍTICO (QA en vivo, 2026-07-13, tercera vía tras dos
+// intentos de prompt fallidos): con evidencia real del documento fuente
+// (logs de diagnóstico), se confirmó que Mineduc-Lenguaje tiene los temas
+// genuinos en una sección "Propósito del paquete" (prosa), seguida de
+// "Banco de práctica integrado" — una sección de lecturas de práctica
+// ("Texto 1: ...", "Texto 2: ...") con preguntas de opción múltiple sobre
+// temas de OTRAS materias (física, economía, historia). El modelo
+// generaliza el patrón "Texto N: Título" como si fuera una lista de temas,
+// sin importar cuántas veces se le pida que no lo haga. En vez de seguir
+// confiando en que el modelo se autocensure, se recorta el documento ANTES
+// de esa sección — el modelo nunca ve el banco de ejercicios, así que no
+// puede confundirlo con una lista de temas.
+const MARCADOR_BANCO_EJERCICIOS = /banco\s+de\s+(?:pr[aá]ctica|ejercicios)/i
+
+export function recortarAntesDeBancoEjercicios(contenido: string): string {
+  const match = MARCADOR_BANCO_EJERCICIOS.exec(contenido)
+  return match ? contenido.slice(0, match.index) : contenido
+}
+
 export async function extraerTemasConModelo(
   openaiClient: OpenAI,
   contenido: string,
@@ -70,6 +89,8 @@ export async function extraerTemasConModelo(
   const cached = cacheTemasLLM.get(cacheKey)
   if (cached && Date.now() - cached.timestamp < TEMAS_LLM_CACHE_TTL) return cached.topics
 
+  const contenidoRecortado = recortarAntesDeBancoEjercicios(contenido)
+
   try {
     const completion = await withOpenAIRetry(() => openaiClient.chat.completions.create({
       model: 'gpt-4o-mini',
@@ -78,7 +99,7 @@ export async function extraerTemasConModelo(
       response_format: { type: 'json_object' },
       messages: [
         { role: 'system', content: SYSTEM_PROMPT_EXTRAER_TEMAS },
-        { role: 'user', content: contenido.slice(0, 16000) },
+        { role: 'user', content: contenidoRecortado.slice(0, 16000) },
       ],
     }), { maxRetries: 1, baseDelayMs: 400 })
     const temas = parseTemasLLMResponse(completion.choices[0].message.content || '{}')
