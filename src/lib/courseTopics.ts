@@ -89,7 +89,7 @@ export function extractDeclaredTopicCount(content: string) {
 export type CourseTopicIndex = {
   topics: string[]
   declaredCount: number | null
-  source: 'tema_tutor_table' | 'topic_headings' | 'explicit_index' | 'list_items' | 'headings' | 'none'
+  source: 'tema_tutor_table' | 'topic_headings' | 'explicit_index' | 'list_items' | 'headings' | 'llm_fallback' | 'none'
   incomplete: boolean
 }
 

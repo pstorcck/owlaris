@@ -220,6 +220,34 @@ export function getSharePointFolderCandidates(
   return includeShared ? Array.from(new Set([...ownFolders, ...sharedFolders])) : ownFolders
 }
 
+// Hallazgo real (verificación en vivo, 2026-07-13): para un colegio
+// combinado ("Colegio Montano y Escolaris") getSharePointFolderCandidates
+// genera ~10 variantes de ortografía del nombre de carpeta, y el buscador
+// de contenido repetía la búsqueda COMPLETA (incluido un respaldo costoso
+// de listar hijos + búsqueda por texto, hasta ~7 llamadas de red más por
+// combinación) para cada combinación de colegio x grado. Cuando una materia
+// realmente no existe para un grado, esto agotaba las ~40 combinaciones
+// completas — cientos de llamadas seriales a Graph API — causando timeouts
+// reales en producción. Esta función resuelve, UNA sola vez, cuáles de las
+// variantes candidatas existen de verdad (probándolas en paralelo mediante
+// el predicado inyectado, para no acoplar esta lógica a Microsoft Graph ni
+// a fetch), y solo esas se usan para el resto de la búsqueda — en vez de
+// las ~10 variantes de ortografía, la mayoría inexistentes. Devuelve TODAS
+// las variantes existentes (no solo la primera) para no romper el caso,
+// aunque improbable, de que más de una sea real; si ninguna candidata
+// existe, devuelve la lista original sin filtrar como respaldo seguro.
+export async function resolverCarpetasExistentes(
+  candidatos: string[],
+  existe: (candidato: string) => Promise<boolean>
+): Promise<string[]> {
+  if (candidatos.length <= 1) return candidatos
+  const resultados = await Promise.all(
+    candidatos.map(async (candidato) => ({ candidato, existe: await existe(candidato) }))
+  )
+  const reales = resultados.filter((r) => r.existe).map((r) => r.candidato)
+  return reales.length > 0 ? reales : candidatos
+}
+
 export function includeSharedPrograms(input: ColegioSharePointInput) {
   return isMontanoEscolarisSchool(input)
 }
