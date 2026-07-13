@@ -414,17 +414,17 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
     setSugerencias(prev => {
       if (prev.length === 0) return prev
       return idiomaIngles ? [
+        { icon: '▤', text: 'Class topics' },
         { icon: '✦', text: 'Explain with an example' },
         { icon: '◈', text: 'I want to practice' },
         { icon: '◇', text: 'Summarize the topic' },
         { icon: '↺', text: "Let's review my mistakes" },
-        { icon: '▤', text: 'Class topics' },
       ] : [
+        { icon: '▤', text: 'Temas de esta materia' },
         { icon: '✦', text: 'Explícame con un ejemplo' },
         { icon: '◈', text: 'Quiero practicar' },
         { icon: '◇', text: 'Resume el tema' },
         { icon: '↺', text: 'Revisemos mis errores' },
-        { icon: '▤', text: 'Temas de esta materia' },
       ]
     })
   }, [idiomaIngles])
@@ -665,17 +665,17 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
       // Sugerencias solo cuando está activo
       if (data.nuevo_estado === 'activo' || estadoChat === 'activo') {
         setSugerencias(idiomaActivo ? [
+          { icon: '▤', text: 'Class topics' },
           { icon: '✦', text: 'Explain with an example' },
           { icon: '◈', text: 'I want to practice' },
           { icon: '◇', text: 'Summarize the topic' },
           { icon: '↺', text: "Let's review my mistakes" },
-          { icon: '▤', text: 'Class topics' },
         ] : [
+          { icon: '▤', text: 'Temas de esta materia' },
           { icon: '✦', text: 'Explícame con un ejemplo' },
           { icon: '◈', text: 'Quiero practicar' },
           { icon: '◇', text: 'Resume el tema' },
           { icon: '↺', text: 'Revisemos mis errores' },
-          { icon: '▤', text: 'Temas de esta materia' },
         ])
       }
     } catch (e) {
