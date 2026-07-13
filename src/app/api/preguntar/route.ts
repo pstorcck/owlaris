@@ -106,6 +106,7 @@ import {
 } from '@/lib/tutorContext'
 import { withOpenAIRetry, withRetry } from '@/lib/openaiRetry'
 import { extraerTemasConModelo } from '@/lib/llmTopicExtraction'
+import { traducirTemasAIngles } from '@/lib/topicTranslation'
 import { calcularCostoUSD } from '@/lib/openaiCost'
 import { registrarAlertaTecnica } from '@/lib/technicalAlerts'
 import { clasificarErrorTecnico, construirContextoErrorTecnico, mensajeErrorTecnico } from '@/lib/technicalErrors'
@@ -2251,6 +2252,16 @@ export async function POST(req: NextRequest) {
         if (temasLLM.length > 0) {
           index = { topics: temasLLM, declaredCount: null, source: 'llm_fallback', incomplete: false }
         }
+      }
+      // Hallazgo real (QA en vivo, 2026-07-13): con el toggle en inglés, el
+      // texto envolvente ya se traducía pero los temas mismos venían
+      // directo del documento oficial (siempre en español) sin traducir.
+      // Se traducen aquí, cacheados por lista exacta de temas (ver
+      // topicTranslation.ts), para no repetir la llamada al modelo en cada
+      // pregunta sobre el mismo documento.
+      if (idiomaIngles && index.topics.length > 0) {
+        const temasIngles = await traducirTemasAIngles(openai, index.topics)
+        index = { ...index, topics: temasIngles }
       }
       const respuesta = buildCourseTopicListResponse({
         index,
