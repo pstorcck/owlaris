@@ -29,6 +29,31 @@ export function isProbablyTopic(value: string) {
   if (/[?¿]/.test(cleaned)) return false
   if (/^(explica|resuelve|calcula|responde|describe|analiza|identifica|menciona|define|desarrolla|justifica|practica|escribe|dibuja|completa|observa|investiga)\b/.test(normalized)) return false
   if (/^(explain|solve|calculate|answer|describe|analyze|identify|define|discuss|justify|practice|write|draw|complete|observe|investigate)\b/.test(normalized)) return false
+  // Hallazgo real CRÍTICO (QA en vivo, 2026-07-14, eScholaris Algebra 1):
+  // "Temas de esta materia" devolvió una mezcla de rutas de archivo
+  // ("Sources/.../Common Core Math source card.md"), referencias a otros
+  // recursos internos ("Brandbook eScholaris", "Local eScholaris Common
+  // Core mathematics base matrix") y reglas de cómo debe enseñar el tutor
+  // ("No mezclar este curso con otros marcos curriculares", "Diagnosticar
+  // primero qué entiende el estudiante") como si fueran temas del curso —
+  // el documento fuente es una lista numerada de configuración/política
+  // interna, no un índice de temas, y el respaldo de línea numerada no
+  // distingue eso de un tema real. Dos señales nuevas: una ruta de
+  // archivo (contiene una extensión de documento conocida, o "Sources/"
+  // al inicio) nunca es un tema; y una instrucción en infinitivo dirigida
+  // al tutor ("Diagnosticar...", "Explicar...", "No crear...") tampoco lo
+  // es — los temas reales son frases nominales (nombran un concepto), no
+  // verbos de acción al inicio.
+  if (/\.(?:md|pdf|docx?|xlsx?|pptx?|csv|txt)\b/i.test(cleaned)) return false
+  if (/^sources\//i.test(normalized) || /^`?sources\//i.test(cleaned)) return false
+  if ((cleaned.match(/\//g) || []).length >= 2) return false
+  // "eScholaris" es el nombre de la plataforma/programa, no un tema
+  // curricular — una línea que lo menciona describe un recurso interno
+  // (ej. "Local eScholaris Common Core mathematics base matrix"), nunca
+  // el nombre de un concepto o habilidad que se enseña.
+  if (/escholaris/.test(normalized)) return false
+  if (/^no\s+[a-z]+(?:ar|er|ir)\b/.test(normalized)) return false
+  if (/^(diagnosticar|explicar|pedir|dar|mezclar|crear|usar|evitar|mantener|mostrar|permitir|seguir|resolver|calcular|responder|describir|analizar|identificar|mencionar|definir|desarrollar|justificar|practicar|escribir|dibujar|completar|observar|investigar)\b/.test(normalized)) return false
   // Hallazgo real (sexta verificación, 2026-07-13): el respaldo de línea
   // suelta (para índices que perdieron su viñeta/número vía mammoth)
   // empezó a tratar la línea de metadata "Cantidad de temas: N" como si

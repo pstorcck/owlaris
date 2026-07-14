@@ -528,6 +528,39 @@ Cantidad de temas: 6
     assert.equal(extractStandardMentionedInHistory(historialSimulado), null)
   })
 
+  // Hallazgo real CRÍTICO (QA en vivo, 2026-07-14, eScholaris Algebra 1,
+  // Grado 9): "Temas de esta materia" devolvió una mezcla de rutas de
+  // archivo, referencias a otros recursos internos y reglas de cómo debe
+  // enseñar el tutor como si fueran temas del curso. Se reproduce la
+  // estructura real exacta reportada (documento .md con una lista
+  // numerada de configuración interna, no un índice de temas real).
+  test('extractCourseTopicIndex no confunde rutas de archivo ni instrucciones de política interna con temas reales', () => {
+    const contenidoAlgebra1 = `
+Fuente: Owlaris - Algebra 1.md
+
+1. \`Sources/01_Programas y Colegios/eScholaris/Common Core Math source card.md\`
+2. \`Sources/01_Programas y Colegios/eScholaris/Kip response - standards and scope decisions 2026-06-29.md\`
+3. \`Sources/01_Programas y Colegios/eScholaris/Paquete completo de curso eScholaris.md\`
+4. \`Sources/01_Programas y Colegios/eScholaris/Brandbook eScholaris.md\`
+5. Local eScholaris Common Core mathematics base matrix
+6. No mezclar este curso con otros marcos curriculares
+7. No crear una versión distinta del contenido para pacing acelerado o regular
+8. Diagnosticar primero qué entiende el estudiante
+9. Explicar con lenguaje claro, ejemplo corto y pregunta de comprobación
+10. Pedir pasos, verificación y significado contextual
+11. Expresiones algebraicas
+12. Ecuaciones lineales de una variable
+`
+    const indice = extractCourseTopicIndex(contenidoAlgebra1)
+    assert.ok(!indice.topics.some((t) => /\.md\b/i.test(t)), 'no debe incluir rutas de archivo .md como tema')
+    assert.ok(!indice.topics.some((t) => /^sources\//i.test(t)), 'no debe incluir rutas que empiecen con Sources/')
+    assert.ok(!indice.topics.some((t) => /^no\s+(mezclar|crear)/i.test(t)), 'no debe incluir instrucciones de negación ("No mezclar...", "No crear...")')
+    assert.ok(!indice.topics.some((t) => /^(diagnosticar|explicar|pedir)\b/i.test(t)), 'no debe incluir instrucciones en infinitivo dirigidas al tutor')
+    assert.ok(!indice.topics.some((t) => /escholaris/i.test(t)), 'no debe incluir referencias a recursos internos con el nombre de la plataforma')
+    assert.ok(indice.topics.includes('Expresiones algebraicas'), 'los temas reales sí deben conservarse')
+    assert.ok(indice.topics.includes('Ecuaciones lineales de una variable'), 'los temas reales sí deben conservarse')
+  })
+
   if (failures.length > 0) {
     console.error(`course-topic-navigation smoke failed: ${failures.length}/${total}`)
     for (const failure of failures) {
