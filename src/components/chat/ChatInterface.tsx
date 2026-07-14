@@ -1607,20 +1607,6 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
             </button>
           </div>
 
-          {(nombreAlumno || gradoAlumno || materiaAlumno) && (
-            <>
-              <div className="o-sidebar-divider" />
-              <div>
-                <p className="o-sidebar-section-title">{idiomaIngles ? 'Current session' : 'Sesión actual'}</p>
-                <div style={{display:'flex',flexDirection:'column',gap:'7px'}}>
-                  {nombreAlumno && <div className="o-sidebar-status">👤 {nombreAlumno}</div>}
-                  {gradoAlumno  && <div className="o-sidebar-status">🎓 {gradoAlumno}</div>}
-                  {materiaAlumno && <div className="o-sidebar-status">📚 {materiaAlumno}</div>}
-                </div>
-              </div>
-            </>
-          )}
-
           <div className="o-sidebar-divider" />
           <div>
             <p className="o-sidebar-section-title">{idiomaIngles ? 'Language' : 'Idioma'}</p>
@@ -1644,6 +1630,20 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
               {idiomaIngles ? '🇪🇸 Español' : '🇬🇧 English'}
             </button>
           </div>
+
+          {(nombreAlumno || gradoAlumno || materiaAlumno) && (
+            <>
+              <div className="o-sidebar-divider" />
+              <div>
+                <p className="o-sidebar-section-title">{idiomaIngles ? 'Current session' : 'Sesión actual'}</p>
+                <div style={{display:'flex',flexDirection:'column',gap:'7px'}}>
+                  {nombreAlumno && <div className="o-sidebar-status">👤 {nombreAlumno}</div>}
+                  {gradoAlumno  && <div className="o-sidebar-status">🎓 {gradoAlumno}</div>}
+                  {materiaAlumno && <div className="o-sidebar-status">📚 {materiaAlumno}</div>}
+                </div>
+              </div>
+            </>
+          )}
 
           <div style={{flex:1}} />
 
