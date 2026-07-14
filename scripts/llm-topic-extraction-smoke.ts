@@ -38,6 +38,24 @@ async function main() {
     ['Trigonometría']
   )
 
+  // Hallazgo real (QA 2026-07-14, Prim4mate7.docx): el modelo marcó
+  // "es_tema_curricular: true" para una oración explicativa completa (con
+  // viñetas internas y más de 12 palabras) en vez de un tema real —
+  // parseTemasLLMResponse no debe confiar solo en esa bandera, debe aplicar
+  // el mismo filtro determinístico (isProbablyTopic) que ya protege al
+  // respaldo estructural.
+  const respuestaConOracionExplicativa = JSON.stringify({
+    items: [
+      { texto: 'Sistema de numeración maya', es_tema_curricular: true },
+      { texto: 'Un punto (●) vale 1• Una barra (—) vale 5• Un caracol o concha representa el 0', es_tema_curricular: true },
+      { texto: 'Sistema de numeración romano', es_tema_curricular: true },
+    ],
+  })
+  assert.deepEqual(
+    parseTemasLLMResponse(respuestaConOracionExplicativa),
+    ['Sistema de numeración maya', 'Sistema de numeración romano']
+  )
+
   // Hallazgo real CRÍTICO (QA en vivo, 2026-07-13): un documento de
   // Lenguaje (banco de ejercicios de comprensión lectora) devolvió los 4
   // temas genuinos de comprensión SEGUIDOS de títulos de lecturas de otras
@@ -169,6 +187,20 @@ Texto 5: Miguel Ángel Asturias y el Realismo Mágico
   const { cliente: cliente4 } = fakeOpenAI(['no es json valido'])
   const temas4 = await extraerTemasConModelo(cliente4, 'contenido con respuesta malformada', 'Doc-Malformado.docx')
   assert.deepEqual(temas4, [])
+
+  // Hallazgo real (QA 2026-07-14, Estadística Descriptiva): un documento de
+  // 27432 caracteres (sin marcador de banco de ejercicios) se cortaba a
+  // 16000 caracteres ANTES de que el modelo pudiera ver el resto —
+  // devolvía 0 temas aunque el documento sí tuviera un índice real más
+  // adelante. El modelo debe recibir contenido mucho más allá de ese
+  // límite viejo.
+  const contenidoLargoSinBanco = 'Introducción sin temas todavía. '.repeat(1000) + 'Tema real al final del documento.'
+  assert.ok(contenidoLargoSinBanco.length > 16000, 'el contenido de prueba debe superar el límite viejo para ser una prueba real')
+  const { cliente: cliente5, getContenidosEnviados: getContenidosEnviados5 } = fakeOpenAI(['{"items": []}'])
+  await extraerTemasConModelo(cliente5, contenidoLargoSinBanco, 'Doc-Largo.docx')
+  const contenidoEnviado5 = getContenidosEnviados5()[0]
+  assert.ok(contenidoEnviado5.length > 16000, 'el modelo debe recibir más de los 16000 caracteres del límite viejo')
+  assert.match(contenidoEnviado5, /Tema real al final del documento/, 'el final del documento no debe quedar cortado antes de llegar al modelo')
 
   console.log('llm-topic-extraction smoke passed')
 }

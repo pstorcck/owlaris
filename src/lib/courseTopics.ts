@@ -16,7 +16,7 @@ function cleanTopic(value: string) {
     .trim()
 }
 
-function isProbablyTopic(value: string) {
+export function isProbablyTopic(value: string) {
   const cleaned = cleanTopic(value)
   if (cleaned.length < 3 || cleaned.length > 130) return false
   const normalized = normalizeText(cleaned)

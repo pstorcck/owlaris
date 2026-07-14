@@ -1,5 +1,6 @@
 import type OpenAI from 'openai'
 import { withOpenAIRetry } from './openaiRetry'
+import { isProbablyTopic } from './courseTopics'
 
 // Hallazgo real CRÍTICO (verificación en vivo, 2026-07-13): cada documento
 // curricular real (CNB/Mineduc) usa su propia estructura — tablas con
@@ -39,6 +40,15 @@ const SYSTEM_PROMPT_EXTRAER_TEMAS =
   'Para CADA candidato, marca "es_tema_curricular" en true SOLO si es una habilidad, competencia o contenido que se enseña explícitamente (ej. "Comprensión inferencial", "Fracciones algebraicas"). Marca false si es el TÍTULO de una lectura, pasaje, texto o ejercicio usado solo como material (ej. "La teoría de la relatividad general", "El Protocolo de Montreal", "Indicadores económicos de Guatemala") — estos títulos NUNCA son temas de la materia, incluso si el documento los usa como encabezado de cada ejercicio y aunque traten sobre ciencias, economía o historia dentro de una materia de lenguaje/lectura. Marca false también en fragmentos de encabezado del documento que no sean en sí un tema (ej. "NIVEL LITERAL" en mayúsculas como rótulo de sección). ' +
   'Si el documento no contiene ningún tema curricular real (por ejemplo, si es solo un banco de ejercicios o lecturas), responde {"items": []}.'
 
+// Hallazgo real (QA 2026-07-14, Prim4mate7.docx): aunque el modelo marcara
+// "es_tema_curricular: true", devolvió una oración explicativa completa
+// ("Un punto (●) vale 1• Una barra (—) vale 5• Un caracol o concha
+// representa el 0") como si fuera un tema — el esquema por ítem redujo los
+// falsos positivos de títulos de lectura, pero no protege contra que el
+// modelo confunda una oración larga/con viñetas internas por un tema. Se
+// reutiliza el mismo filtro determinístico (isProbablyTopic) que ya
+// protege al respaldo estructural, para no confiar solo en el juicio del
+// modelo para esta clase de error.
 export function parseTemasLLMResponse(raw: string): string[] {
   try {
     const parsed = JSON.parse(raw)
@@ -52,6 +62,7 @@ export function parseTemasLLMResponse(raw: string): string[] {
         (item as { es_tema_curricular?: unknown }).es_tema_curricular === true
       )
       .map((item: { texto: string }) => item.texto.trim())
+      .filter((texto: string) => isProbablyTopic(texto))
   } catch {
     return []
   }
@@ -92,6 +103,13 @@ export async function extraerTemasConModelo(
   const contenidoRecortado = recortarAntesDeBancoEjercicios(contenido)
 
   try {
+    // Hallazgo real (QA 2026-07-14, Estadística Descriptiva): el corte a
+    // 16000 caracteres cortaba el documento (27432 caracteres, sin ningún
+    // marcador de banco de ejercicios) antes de que el modelo pudiera ver
+    // la sección real de temas, y devolvía 0 temas aun con contenido
+    // legítimo disponible. gpt-4o-mini soporta contexto de sobra para un
+    // documento curricular completo — se sube el límite para dejar de
+    // cortar documentos reales antes de que el modelo los vea.
     const completion = await withOpenAIRetry(() => openaiClient.chat.completions.create({
       model: 'gpt-4o-mini',
       max_tokens: 700,
@@ -99,7 +117,7 @@ export async function extraerTemasConModelo(
       response_format: { type: 'json_object' },
       messages: [
         { role: 'system', content: SYSTEM_PROMPT_EXTRAER_TEMAS },
-        { role: 'user', content: contenidoRecortado.slice(0, 16000) },
+        { role: 'user', content: contenidoRecortado.slice(0, 60000) },
       ],
     }), { maxRetries: 1, baseDelayMs: 400 })
     const temas = parseTemasLLMResponse(completion.choices[0].message.content || '{}')

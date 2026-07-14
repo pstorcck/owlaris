@@ -106,7 +106,7 @@ import {
   stripUnapprovedExternalResources,
 } from '@/lib/tutorContext'
 import { withOpenAIRetry, withRetry } from '@/lib/openaiRetry'
-import { extraerTemasConModelo, recortarAntesDeBancoEjercicios } from '@/lib/llmTopicExtraction'
+import { extraerTemasConModelo } from '@/lib/llmTopicExtraction'
 import { traducirTemasAIngles } from '@/lib/topicTranslation'
 import { calcularCostoUSD } from '@/lib/openaiCost'
 import { registrarAlertaTecnica } from '@/lib/technicalAlerts'
@@ -2342,19 +2342,7 @@ export async function POST(req: NextRequest) {
 
       let index = extractCourseTopicIndex(contenidoCurricular)
       if (index.topics.length === 0) {
-        // DIAGNOSTICO TEMPORAL (QA 2026-07-14): investigando por qué
-        // "temas de esta materia" volvió a fallar para documentos que ya
-        // habían funcionado antes vía el respaldo LLM (ej. Estadística
-        // Descriptiva) — se quita en cuanto se identifique la causa real.
-        console.log('DIAG_TEMAS', JSON.stringify({
-          documentoFuente,
-          longitudContenido: contenidoCurricular.length,
-          contieneMarcadorBanco: /banco\s+de\s+(?:pr[aá]ctica|ejercicios)/i.test(contenidoCurricular),
-          longitudTrasRecorte: recortarAntesDeBancoEjercicios(contenidoCurricular).length,
-          previewInicio: contenidoCurricular.slice(0, 400),
-        }))
         const temasLLM = await extraerTemasConModelo(openai, contenidoCurricular, documentoFuente)
-        console.log('DIAG_TEMAS_LLM_RESULTADO', JSON.stringify({ documentoFuente, cantidadTemas: temasLLM.length, temas: temasLLM }))
         if (temasLLM.length > 0) {
           index = { topics: temasLLM, declaredCount: null, source: 'llm_fallback', incomplete: false }
         }
