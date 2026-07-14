@@ -12,9 +12,9 @@ import { verificarLimiteFrecuencia } from '@/lib/rateLimit'
 import { isExplicitTableRequest, looksLikeMarkdownTable, sanitizeChatFormatting } from '@/lib/chatFormatting'
 import { detectarMateriaDesdeTexto, isLanguageSwitchRequest, materiaActualEnSistemaCNB, normalizarMateria } from '@/lib/materiaDetection'
 import { isExplicitCourseSwitchRequest } from '@/lib/courseSwitchDetection'
-import { isReviewMistakesRequest, primeraOperacionValida, temaMasFrecuente } from '@/lib/mistakeReview'
+import { detectarPatronErrores, isReviewMistakesRequest, primeraOperacionValida } from '@/lib/mistakeReview'
 import { limpiarTemaGeneral } from '@/lib/temaGeneral'
-import { buildTemaActivoInstruction, detectActiveTopic, detectExplicitTopicSwitch } from '@/lib/activeTopicGuard'
+import { buildTemaActivoInstruction, detectActiveTopic, detectExplicitTopicSwitch, detectGenericTopicChangeRequest } from '@/lib/activeTopicGuard'
 import { ventanaHoyGuatemala } from '@/lib/fechaGuatemala'
 import {
   buildAreaPresenceResponse,
@@ -1719,11 +1719,24 @@ export async function POST(req: NextRequest) {
           ? "I don't see enough recent mistakes in this session yet to find a clear pattern. Let's keep practicing and I will point them out as they come up."
           : 'Todavía no veo suficientes errores recientes en esta sesión para encontrar un patrón claro. Sigamos practicando y te los señalaré en cuanto aparezcan.'
       } else {
-        const patron = temaMasFrecuente(errores)
+        // Hallazgo real (QA 2026-07-14): "Noté un patrón: la mayoría de tus
+        // errores recientes fueron en X" se decía con un SOLO error
+        // registrado — un solo dato nunca es "la mayoría" de nada. Solo se
+        // habla de patrón/mayoría cuando el tema realmente se repite Y
+        // representa más de la mitad de los errores con tema; con un único
+        // error, o con temas que no se repiten, se describe el hecho tal
+        // cual, sin inventar una tendencia que no existe.
+        const patronDetectado = detectarPatronErrores(errores)
         const opMasReciente = primeraOperacionValida(errores)
-        const patronLine = patron
+        const esPatronReal = !!patronDetectado && patronDetectado.conteo >= 2 && patronDetectado.conteo > patronDetectado.totalConTema / 2
+        const patron = patronDetectado?.tema || null
+        const patronLine = esPatronReal
           ? (idiomaIngles ? `I noticed a pattern: most of your recent mistakes were around ${patron}.` : `Noté un patrón: la mayoría de tus errores recientes fueron en ${patron}.`)
-          : (idiomaIngles ? `You've had ${errores.length} recent mistakes.` : `Has tenido ${errores.length} errores recientes.`)
+          : patron
+            ? (errores.length === 1
+              ? (idiomaIngles ? `You had one recent mistake, around ${patron}.` : `Tuviste un error reciente, en ${patron}.`)
+              : (idiomaIngles ? `You've had ${errores.length} recent mistakes; the most recent was around ${patron}.` : `Has tenido ${errores.length} errores recientes; el más reciente fue en ${patron}.`))
+            : (idiomaIngles ? `You've had ${errores.length} recent mistakes.` : `Has tenido ${errores.length} errores recientes.`)
 
         if (materiaNumerica && opMasReciente && isSafeCanonicalOperation(opMasReciente)) {
           const hint = buildGuidedMathHint(opMasReciente, idiomaIngles)
@@ -2720,8 +2733,9 @@ export async function POST(req: NextRequest) {
       if (indiceParaTemaActivo.topics.length > 1) {
         const temaActivoDetectado = detectActiveTopic(historial, indiceParaTemaActivo.topics)
         const cambioDeTema = detectExplicitTopicSwitch(pregunta, indiceParaTemaActivo.topics, temaActivoDetectado)
+        const cambioGenerico = !cambioDeTema.detectado && detectGenericTopicChangeRequest(pregunta)
         const temaParaInstruccion = cambioDeTema.detectado ? cambioDeTema.temaMencionado : temaActivoDetectado
-        contextoContenido += buildTemaActivoInstruction({ temaActivo: temaParaInstruccion, cambioExplicito: cambioDeTema.detectado, idiomaIngles })
+        contextoContenido += buildTemaActivoInstruction({ temaActivo: temaParaInstruccion, cambioExplicito: cambioDeTema.detectado, cambioGenerico, idiomaIngles })
       }
     }
 

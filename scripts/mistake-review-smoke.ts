@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import {
+  detectarPatronErrores,
   isReviewMistakesRequest,
   primeraOperacionValida,
   temaMasFrecuente,
@@ -30,6 +31,36 @@ function main() {
   assert.equal(primeraOperacionValida(errores), '62-13')
   assert.equal(temaMasFrecuente([]), null)
   assert.equal(primeraOperacionValida([{ tema_detectado: 'x', operacion_canonica: null }]), null)
+
+  // Hallazgo real (QA 2026-07-14): "Noté un patrón: la mayoría de tus
+  // errores recientes fueron en X" se decía incluso con UN SOLO error
+  // registrado — un solo dato nunca es "la mayoría" de nada.
+  // detectarPatronErrores expone el conteo real para que quien arme el
+  // mensaje pueda decidir si de verdad hay un patrón.
+  const unSoloError = [{ tema_detectado: 'Suma y resta', operacion_canonica: '39+15' }]
+  const patronUnSolo = detectarPatronErrores(unSoloError)
+  assert.deepEqual(patronUnSolo, { tema: 'Suma y resta', conteo: 1, totalConTema: 1 })
+  // conteo=1 no es una mayoría real — quien consuma esto no debe decir
+  // "la mayoría de tus errores" con un solo dato.
+  assert.equal(patronUnSolo!.conteo >= 2 && patronUnSolo!.conteo > patronUnSolo!.totalConTema / 2, false)
+
+  const patronReal = detectarPatronErrores(errores)
+  assert.deepEqual(patronReal, { tema: 'Suma y resta', conteo: 2, totalConTema: 3 })
+  // conteo=2 de 3 SÍ es una mayoría real (más de la mitad).
+  assert.equal(patronReal!.conteo >= 2 && patronReal!.conteo > patronReal!.totalConTema / 2, true)
+
+  // Errores sin ninguna repetición (cada tema aparece una sola vez) tampoco
+  // es un patrón real, aunque haya varios errores en total.
+  const sinRepeticion = [
+    { tema_detectado: 'Suma y resta', operacion_canonica: '39+15' },
+    { tema_detectado: 'Fracciones', operacion_canonica: '1/2+1/3' },
+    { tema_detectado: 'Ecuaciones', operacion_canonica: 'x+5=12' },
+  ]
+  const patronSinRepeticion = detectarPatronErrores(sinRepeticion)
+  assert.equal(patronSinRepeticion!.conteo, 1)
+  assert.equal(patronSinRepeticion!.conteo > patronSinRepeticion!.totalConTema / 2, false)
+
+  assert.equal(detectarPatronErrores([]), null)
 
   // El enfoque derivado del error real debe coincidir con el tipo de
   // operación fallada, no con una palabra clave que el alumno deba repetir.

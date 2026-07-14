@@ -89,12 +89,38 @@ export function detectExplicitTopicSwitch(
   return { detectado: false, temaMencionado: null }
 }
 
+// Hallazgo real (QA 2026-07-14): "cambiemos de tema" (sin decir a cuál) no
+// disparaba detectExplicitTopicSwitch porque esa función exige nombrar un
+// tema concreto de la lista — así que el candado de tema seguía forzando
+// "no cambies de tema", y el modelo terminaba dando OTRO ejercicio del
+// MISMO tema en vez de cambiar de verdad. Esta lista reconoce la intención
+// genérica de cambiar (sin tema nombrado) para poder soltar el candado y
+// pedirle al alumno cuál tema quiere, en vez de ignorarlo.
+const FRASES_CAMBIO_GENERICO = [
+  'cambiemos de tema', 'cambiar de tema', 'cambia de tema', 'quiero cambiar de tema',
+  'veamos otro tema', 'otro tema', 'algo mas', 'otra cosa', 'hablemos de otra cosa',
+  'change topic', 'change the topic', 'switch topics', 'switch the topic',
+  'something else', 'a different topic', 'move on',
+]
+
+export function detectGenericTopicChangeRequest(pregunta: string): boolean {
+  const normalizado = normalizeText(pregunta)
+  if (!normalizado) return false
+  return FRASES_CAMBIO_GENERICO.some((frase) => normalizado.includes(frase))
+}
+
 export function buildTemaActivoInstruction(input: {
   temaActivo: string | null
   cambioExplicito: boolean
+  cambioGenerico?: boolean
   idiomaIngles?: boolean
 }): string {
-  const { temaActivo, cambioExplicito, idiomaIngles } = input
+  const { temaActivo, cambioExplicito, cambioGenerico, idiomaIngles } = input
+  if (cambioGenerico && !cambioExplicito) {
+    return idiomaIngles
+      ? "\n\nBACKEND NOTE: the student asked to change topics without naming a new one. Do NOT just give another exercise from the same topic — ask which topic from this subject's official list they'd like to work on next, or offer a short list of options."
+      : '\n\nNOTA BACKEND: el alumno pidió cambiar de tema sin decir a cuál. NO le des simplemente otro ejercicio del mismo tema — pregúntale cuál tema del índice oficial de esta materia quiere trabajar ahora, u ofrécele una lista breve de opciones.'
+  }
   if (!temaActivo) return ''
   if (cambioExplicito) {
     return idiomaIngles

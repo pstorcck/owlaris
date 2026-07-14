@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { buildTemaActivoInstruction, detectActiveTopic, detectExplicitTopicSwitch } from '../src/lib/activeTopicGuard'
+import { buildTemaActivoInstruction, detectActiveTopic, detectExplicitTopicSwitch, detectGenericTopicChangeRequest } from '../src/lib/activeTopicGuard'
 
 function main() {
   const temasMate = [
@@ -94,6 +94,33 @@ function main() {
 
   const instruccionIngles = buildTemaActivoInstruction({ temaActivo: 'Fractions', cambioExplicito: false, idiomaIngles: true })
   assert.match(instruccionIngles, /active declared topic/i)
+
+  // Hallazgo real (QA 2026-07-14): "cambiemos de tema" (sin decir a cuál)
+  // no nombra ningún tema de la lista, así que detectExplicitTopicSwitch
+  // correctamente no lo detecta como cambio — pero antes eso significaba
+  // que el candado de tema seguía forzando "no cambies", y el modelo daba
+  // otro ejercicio del MISMO tema en vez de cambiar de verdad.
+  // detectGenericTopicChangeRequest debe reconocer esta intención genérica
+  // por separado.
+  assert.equal(detectGenericTopicChangeRequest('cambiemos de tema'), true)
+  assert.equal(detectGenericTopicChangeRequest('Cambiemos de tema, por favor'), true)
+  assert.equal(detectGenericTopicChangeRequest('quiero cambiar de tema'), true)
+  assert.equal(detectGenericTopicChangeRequest("let's change topics"), true)
+  assert.equal(detectGenericTopicChangeRequest('no entiendo este paso, me explicas de nuevo'), false)
+  // Un cambio que SÍ nombra el tema nuevo (ej. "cambiemos a razones
+  // trigonométricas") no es "genérico" — eso ya lo resuelve
+  // detectExplicitTopicSwitch por su cuenta, con el tema concreto.
+  assert.equal(detectGenericTopicChangeRequest('cambiemos a razones trigonométricas'), false)
+
+  // buildTemaActivoInstruction con cambioGenerico=true (y cambioExplicito
+  // false) debe instruir a preguntar cuál tema, NO a seguir con el activo.
+  const instruccionCambioGenerico = buildTemaActivoInstruction({
+    temaActivo: 'Productos notables, factorización y fracciones algebraicas',
+    cambioExplicito: false,
+    cambioGenerico: true,
+  })
+  assert.match(instruccionCambioGenerico, /pidió cambiar de tema sin decir a cuál/i)
+  assert.doesNotMatch(instruccionCambioGenerico, /no cambies a otro tema/i)
 
   console.log('active-topic-guard smoke passed')
 }
