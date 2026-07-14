@@ -363,6 +363,52 @@ Intenta nuevamente, ¿cuánto es el impuesto?`
     false
   )
 
+  // Hallazgo real CRÍTICO (QA 100 pruebas, 2026-07-14, cuenta Paul): dos
+  // ejercicios de fracciones con contexto de "pizza" (resta simple, y
+  // multiplicación seguida de resta) marcaron respuestas correctas como
+  // incorrectas de forma repetida y determinística, incluso mostrando el
+  // procedimiento completo. La causa: un problema con 2+ fracciones
+  // DISTINTAS separadas por prosa ("tienes 3/4 de pizza... comes 1/4...
+  // ¿cuánto te queda?") no tiene una expresión matemática literal
+  // combinada en el texto — inferCanonicalOperationFromText solo une
+  // números separados por operadores, así que agarraba SOLO la última
+  // fracción aislada ("1/4" = 0.25) como si fuera la operación completa,
+  // en vez de la operación real (3/4-1/4 = 0.5). Una etiqueta [OP:] del
+  // modelo con esa misma falla (una sola fracción, o fracciones
+  // incompletas) tampoco debía colarse solo porque sus dígitos sueltos
+  // aparecen en el texto.
+  assert.equal(
+    inferCanonicalOperationFromText('Tienes 3/4 de una pizza. Te comes 1/4. ¿Cuánto te queda?'),
+    null,
+    'con 2+ fracciones distintas separadas por prosa, no debe inventar una operación parcial'
+  )
+  assert.equal(
+    opCoincideConTexto('1/4', 'Tienes 3/4 de una pizza. Te comes 1/4. ¿Cuánto te queda?'),
+    false,
+    'una etiqueta con solo UNA de las dos fracciones del problema no debe aceptarse como coincidente'
+  )
+  assert.equal(
+    opCoincideConTexto('3/4-1/4', 'Tienes 3/4 de una pizza. Te comes 1/4. ¿Cuánto te queda?'),
+    true,
+    'una etiqueta que sí incluye AMBAS fracciones completas debe aceptarse'
+  )
+  // Un problema con una sola fracción (o una expresión que sí combina las
+  // fracciones en una sola expresión matemática literal) no debe verse
+  // afectado — el fix es específico a fracciones separadas sin combinar.
+  assert.equal(inferCanonicalOperationFromText('¿Cuánto es 3/4 + 1/2?'), '3/4+1/2')
+  assert.equal(inferCanonicalOperationFromText('Tienes 3/4 de pizza, ¿cuánto es eso en decimal?'), '3/4')
+  assert.equal(opCoincideConTexto('3/4', 'Tienes 3/4 de pizza, ¿cuánto es eso en decimal?'), true)
+
+  // El caso real completo: con la operación bien combinada, la respuesta
+  // correcta del alumno (0.5) debe evaluarse como correcta, no como
+  // incorrecta repetida.
+  const evaluacionPizza = await handleMathEvaluation(
+    'Tienes 3/4 de una pizza. Te comes 1/4. ¿Cuánto te queda?\n[OP: 3/4-1/4]',
+    '0.5',
+    false
+  )
+  assert.equal(evaluacionPizza?.estado, 'correcto')
+
   // Hallazgo real CRÍTICO (rondas anteriores, sin corregir hasta esta
   // verificación): un problema de aplicación en prosa ("tenía 150 y gastó
   // 40, ¿cuánto le queda?") no tenía ningún respaldo determinístico —

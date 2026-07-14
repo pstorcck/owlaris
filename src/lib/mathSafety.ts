@@ -230,17 +230,54 @@ export function extractCanonicalOperation(texto: string): string | null {
 // coincidencia, aunque el 2 y el 17 no tenían relación alguna con el
 // problema real. Se exige ahora que TODOS los números de la etiqueta
 // aparezcan en el texto visible (.every), no solo uno.
+// Hallazgo real CRÍTICO (QA 100 pruebas, 2026-07-14): al normalizar una
+// operación canónica se quitan los espacios ("3/4 - 1/4" -> "3/4-1/4"), así
+// que un "-" que es el OPERADOR de resta queda pegado al número siguiente
+// exactamente igual que un signo negativo genuino ("-5"). El regex anterior
+// (sin distinguir el caso) leía "3/4-1/4" como los dígitos [3, 4, -1, 4] —
+// el "1" real de la segunda fracción se convertía en "-1", que nunca
+// aparece en el texto visible de un problema en prosa (que jamás tiene
+// números negativos), así que una etiqueta [OP:] con resta CORRECTA se
+// rechazaba como "no coincide con el texto" por este error de parseo, no
+// por estar realmente mal. Un "-" inmediatamente después de un dígito o de
+// ")" siempre es el operador de resta, nunca un signo — se excluye ese
+// caso con un lookbehind negativo, dejando intacto el signo negativo
+// genuino (al inicio, o tras otro operador/paréntesis de apertura/"=").
 function extraerNumeros(texto: string): number[] {
-  const matches = String(texto || '').match(/-?\d+(?:\.\d+)?/g) || []
+  const matches = String(texto || '').match(/(?<![\d).])-?\d+(?:\.\d+)?/g) || []
   return matches.map(Number)
 }
+
+// Usado tanto por opCoincideConTexto como por inferCanonicalOperationFromText
+// para detectar fracciones "a/b" completas (no solo dígitos sueltos) — ver
+// hallazgo real (QA 100 pruebas, 2026-07-14) documentado en ambos lugares.
+// Mismo lookbehind que extraerNumeros: sin él, "3/4-1/4" (resta de dos
+// fracciones, sin espacios tras normalizeOperation) se leía como las
+// fracciones ["3/4", "-1/4"] en vez de ["3/4", "1/4"] — el "-" operador de
+// resta se confundía con el signo de la segunda fracción.
+const FRACCION_TOKEN = /(?<![\d).])-?\d+\s*\/\s*-?\d+/g
 
 export function opCoincideConTexto(op: string | null, textoVisible: string): boolean {
   if (!op) return false
   const numerosOp = extraerNumeros(op)
   if (numerosOp.length === 0) return true
   const numerosTexto = new Set(extraerNumeros(textoVisible))
-  return numerosOp.every((n) => numerosTexto.has(n))
+  if (!numerosOp.every((n) => numerosTexto.has(n))) return false
+
+  // Hallazgo real CRÍTICO (QA 100 pruebas, 2026-07-14): un problema con 2+
+  // fracciones DISTINTAS ("3/4 de pizza... comes 1/4...") puede tener una
+  // etiqueta [OP:] cuyos dígitos individuales sí aparecen todos en el texto
+  // (el check de arriba pasa) pero que en realidad no incorpora alguna de
+  // esas fracciones como fracción completa — el check de dígitos sueltos no
+  // lo detecta porque aplana cada fracción en dígitos independientes. Se
+  // exige además que cada fracción COMPLETA mencionada en el texto aparezca,
+  // como fracción, dentro de la operación etiquetada.
+  const fraccionesTexto = Array.from(new Set(Array.from(textoVisible.matchAll(FRACCION_TOKEN)).map((m) => m[0].replace(/\s+/g, ''))))
+  if (fraccionesTexto.length >= 2) {
+    const fraccionesOp = new Set(Array.from(op.matchAll(FRACCION_TOKEN)).map((m) => m[0].replace(/\s+/g, '')))
+    if (!fraccionesTexto.every((fraccion) => fraccionesOp.has(fraccion))) return false
+  }
+  return true
 }
 
 function normalizeOperation(op: string): string {
@@ -755,25 +792,6 @@ export async function handleMathEvaluation(
 
   logEvaluation({ op, correctAnswer, studentAnswer, studentN, estado, pasoIntermedio: !!pasoIntermedio, guardActivado, procedimientoMostrado })
 
-  // DIAGNOSTICO TEMPORAL (QA 100 pruebas, 2026-07-14): ejercicios de
-  // fracciones con contexto de "pizza" (resta simple, y multiplicación
-  // seguida de resta) marcaron respuestas correctas como incorrectas de
-  // forma repetida y determinística. logEvaluation() no loguea en
-  // producción (NODE_ENV === 'production'), así que no hay evidencia real
-  // de qué operación canónica ([OP: ...]) quedó mal etiquetada o mal
-  // inferida — se quita en cuanto se identifique la causa real con
-  // evidencia de logs de producción.
-  if (op.includes('/')) {
-    console.log('DIAG_FRACCION', JSON.stringify({
-      tutorQuestion: tutorQuestion.slice(0, 500),
-      op,
-      correctAnswer,
-      studentAnswer: studentAnswer.slice(0, 300),
-      studentN,
-      estado,
-    }))
-  }
-
   return { estado, feedback, correctAnswer, op, guardActivado, pasoIntermedio: !!pasoIntermedio, procedimientoMostrado }
 }
 
@@ -926,6 +944,29 @@ export function inferCanonicalOperationFromText(text: string): string | null {
   const expressions = Array.from(normalized.matchAll(/-?\d+(?:\.\d+)?(?:\s*(?:[+\-*/^])\s*-?\d+(?:\.\d+)?){1,4}/g))
   const expression = expressions.length > 0 ? expressions[expressions.length - 1] : null
   if (!expression) return null
+
+  // Hallazgo real CRÍTICO (QA 100 pruebas, 2026-07-14): un problema de
+  // fracciones con contexto de "pizza" y dos fracciones distintas separadas
+  // por prosa (ej. "tienes 3/4 de pizza... comes 1/4... ¿cuánto te queda?")
+  // no tiene una expresión matemática literal combinada en el texto — este
+  // patrón "expressions" solo une números separados por operadores y
+  // espacios, así que nunca conecta las dos fracciones a través de la
+  // prosa entre ellas, y termina agarrando SOLO la última fracción aislada
+  // ("1/4") como si fuera la operación completa. Eso calculaba una
+  // "respuesta correcta" totalmente distinta a la real (0.25 en vez de
+  // 0.5), y una respuesta del alumno matemáticamente correcta se marcaba
+  // incorrecta de forma repetida y determinística, con la misma pista cada
+  // vez. En vez de intentar adivinar cómo combinar fracciones separadas
+  // por prosa arbitraria (frágil), se prefiere no inventar: si el texto
+  // completo tiene 2+ fracciones DISTINTAS y la expresión elegida no las
+  // incluye todas, se rechaza la inferencia (null) en vez de confiar en un
+  // fragmento incompleto — el llamador cae a "no puedo verificarlo con
+  // seguridad" en vez de una respuesta confiada pero equivocada.
+  const fraccionesEnTexto = Array.from(new Set(Array.from(normalized.matchAll(FRACCION_TOKEN)).map((m) => m[0].replace(/\s+/g, ''))))
+  if (fraccionesEnTexto.length >= 2) {
+    const fraccionesEnExpresion = new Set(Array.from(expression[0].matchAll(FRACCION_TOKEN)).map((m) => m[0].replace(/\s+/g, '')))
+    if (!fraccionesEnTexto.every((fraccion) => fraccionesEnExpresion.has(fraccion))) return null
+  }
 
   const op = normalizeOperation(expression[0])
   return isSafeCanonicalOperation(op) ? op : null
