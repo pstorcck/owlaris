@@ -1812,7 +1812,18 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
                             if (esOlimpiadas) {
                               setMostrandoSubOlimpiadas(true)
                             } else if (!esActiva) {
-                              enviarPregunta(mat)
+                              // Hallazgo real (QA 2026-07-14): con
+                              // estadoChat ya en 'activo' (a media
+                              // conversación), enviar solo el nombre de la
+                              // materia caía en el flujo genérico de
+                              // pregunta académica de la materia ANTERIOR
+                              // — el backend nunca lo trataba como una
+                              // selección de materia porque ese camino
+                              // solo se activa con estado
+                              // 'esperando_materia'. Se fuerza ese estado
+                              // para que el clic realmente cambie de
+                              // materia, igual que la selección inicial.
+                              enviarPregunta(mat, { forceEstado: 'esperando_materia' })
                               setSidebarAbierto(false)
                             }
                           }}>
