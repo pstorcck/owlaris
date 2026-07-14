@@ -12,6 +12,7 @@ import {
   BookOpen,
   Calculator,
   CheckCircle2,
+  ChevronRight,
   Copy,
   Dumbbell,
   Feather,
@@ -36,7 +37,6 @@ import {
   Sparkles,
   Star,
   Trophy,
-  User,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -128,6 +128,68 @@ const SUGERENCIAS_EN: { icon: LucideIcon; text: string }[] = [
   { icon: CheckCircle2, text: 'Review what I did' },
   { icon: RefreshCw, text: 'Start from scratch' },
 ]
+
+// Rediseño premium (QA 2026-07-14): la lista de materias del sidebar pasó
+// de mostrarse solo al elegir materia por primera vez a ser una navegación
+// persistente (siempre visible) — se centralizan los mapas de color/ícono
+// por materia aquí para no reconstruirlos en cada iteración del .map.
+const MATERIA_COLORES: Record<string,string> = {
+  'Matemática':'linear-gradient(135deg,#7C3AED,#5B21B6)',
+  'Matematica':'linear-gradient(135deg,#7C3AED,#5B21B6)',
+  'Mathematics':'linear-gradient(135deg,#7C3AED,#5B21B6)',
+  'Física':'linear-gradient(135deg,#0EA5E9,#0284C7)',
+  'Physics':'linear-gradient(135deg,#0EA5E9,#0284C7)',
+  'Química':'linear-gradient(135deg,#10B981,#059669)',
+  'Chemistry':'linear-gradient(135deg,#10B981,#059669)',
+  'Biología':'linear-gradient(135deg,#22C55E,#16A34A)',
+  'Biology':'linear-gradient(135deg,#22C55E,#16A34A)',
+  'Historia':'linear-gradient(135deg,#F59E0B,#D97706)',
+  'History':'linear-gradient(135deg,#F59E0B,#D97706)',
+  'Español':'linear-gradient(135deg,#EF4444,#DC2626)',
+  'Spanish':'linear-gradient(135deg,#EF4444,#DC2626)',
+  'Ciencias Naturales':'linear-gradient(135deg,#14B8A6,#0D9488)',
+  'Natural Sciences':'linear-gradient(135deg,#14B8A6,#0D9488)',
+  'Mineduc - Lenguaje':'linear-gradient(135deg,#8B5CF6,#7C3AED)',
+  'Mineduc - Matemática':'linear-gradient(135deg,#6366F1,#4F46E5)',
+  'Mineduc - Language':'linear-gradient(135deg,#8B5CF6,#7C3AED)',
+  'Mineduc - Mathematics':'linear-gradient(135deg,#6366F1,#4F46E5)',
+}
+const MATERIA_ICONOS: Record<string,LucideIcon> = {
+  'Matemática':Calculator, 'Matematica':Calculator, 'Mathematics':Calculator,
+  'Física':FlaskConical, 'Physics':FlaskConical,
+  'Química':FlaskConical, 'Chemistry':FlaskConical,
+  'Biología':Leaf, 'Biology':Leaf,
+  'Historia':Landmark, 'History':Landmark,
+  'Español':BookOpen, 'Spanish':BookOpen,
+  'Ciencias Naturales':Leaf, 'Natural Sciences':Leaf,
+  'Mineduc - Lenguaje':BookOpen, 'Mineduc - Matemática':Calculator,
+  'Mineduc - Language':BookOpen, 'Mineduc - Mathematics':Calculator,
+}
+// Equivalencias ES/EN de una misma materia, para saber si la materia activa
+// (guardada por el backend, normalmente en español) es la misma que un
+// chip ya traducido al inglés — resaltar el chip correcto sin importar el
+// idioma del toggle.
+const MATERIA_EQUIVALENCIAS: Record<string,string> = {
+  'matematica':'matematica', 'mathematics':'matematica',
+  'fisica':'fisica', 'physics':'fisica',
+  'quimica':'quimica', 'chemistry':'quimica',
+  'biologia':'biologia', 'biology':'biologia',
+  'historia':'historia', 'history':'historia',
+  'espanol':'espanol', 'spanish':'espanol',
+  'ciencias naturales':'ciencias naturales', 'natural sciences':'ciencias naturales',
+  'mineduc - lenguaje':'mineduc lenguaje', 'mineduc - language':'mineduc lenguaje',
+  'mineduc - matematica':'mineduc matematica', 'mineduc - mathematics':'mineduc matematica',
+}
+function normalizarNombreMateria(s: string): string {
+  return s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim()
+}
+function mismaMateria(a: string, b: string): boolean {
+  if (!a || !b) return false
+  const na = normalizarNombreMateria(a)
+  const nb = normalizarNombreMateria(b)
+  if (na === nb) return true
+  return (MATERIA_EQUIVALENCIAS[na] || na) === (MATERIA_EQUIVALENCIAS[nb] || nb)
+}
 
 function renderSegmento(texto: string, key: number): React.ReactNode[] {
   const partes: React.ReactNode[] = []
@@ -1510,9 +1572,7 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
         .o-sidebar-reopen { position:fixed; top:18px; left:18px; width:38px; height:38px; border-radius:11px; border:1px solid rgba(109,40,217,.15); background:white; align-items:center; justify-content:center; cursor:pointer; z-index:60; box-shadow:0 2px 12px rgba(109,40,217,.12); transition:all .2s; }
         .o-sidebar-reopen:hover { background:#F3F0FF; }
         .o-sidebar-section-title { font-size:10px; font-weight:700; letter-spacing:1.1px; text-transform:uppercase; color:#B0A8D9; margin:2px 0 2px 4px; }
-        .o-sidebar-status { display:flex; align-items:center; gap:8px; background:rgba(109,40,217,.06); border:1px solid rgba(109,40,217,.1); border-radius:12px; padding:9px 12px; font-size:12px; font-weight:600; color:#5B21B6; }
         .o-sidebar-divider { height:1px; background:rgba(109,40,217,.08); margin:2px 0; flex-shrink:0; }
-        .o-sidebar-idioma { width:100%; justify-content:center; }
         .o-sidebar-reopen { display:none; }
         @media (min-width:960px) {
           .o-sidebar { position:sticky; top:0; height:100vh; transform:none; box-shadow:none; }
@@ -1689,52 +1749,33 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
             </button>
           </div>
 
+          {/* Tarjeta de perfil — reemplaza los badges de texto plano de
+              "Sesión actual" y el bloque duplicado que vivía al fondo del
+              sidebar (rediseño premium, QA 2026-07-14). */}
           <div className="o-sidebar-divider" />
-          <div>
-            <p className="o-sidebar-section-title">{idiomaIngles ? 'Language' : 'Idioma'}</p>
-            <button onClick={()=>{
-              setIdiomaIngles(!idiomaIngles)
-              if(modoConversacion) {
-                modoConversacionRef.current = false
-                setModoConversacion(false)
-                if (autoEscuchaTimeoutRef.current) { clearTimeout(autoEscuchaTimeoutRef.current); autoEscuchaTimeoutRef.current = null }
-                detenerReconocimientoVoz()
-                limpiarVAD()
-                if (grabando) { grabacionCanceladaRef.current = true; try { mediaRecorderRef.current?.stop() } catch { /* ya estaba detenida */ } setGrabando(false) }
-                reproduciendoRef.current = false
-                if (audioRef.current) { try { audioRef.current.pause() } catch { /* */ } }
-                if (typeof window !== 'undefined' && 'speechSynthesis' in window) window.speechSynthesis.cancel()
-                setReproduciendo(false)
-              }
-            }}
-              className="o-sidebar-idioma"
-              style={{background:idiomaIngles?'linear-gradient(135deg,#1d4ed8,#1e40af)':'#F3F0FF',border:idiomaIngles?'none':'1px solid rgba(109,40,217,.2)',borderRadius:'10px',padding:'9px 12px',fontSize:'12px',fontWeight:700,color:idiomaIngles?'white':'#7C3AED',cursor:'pointer',display:'flex',alignItems:'center',gap:'6px',transition:'all .2s'}}>
-              {idiomaIngles ? '🇪🇸 Español' : '🇬🇧 English'}
-            </button>
+          <div style={{display:'flex',alignItems:'center',gap:'10px'}}>
+            <div style={{width:'38px',height:'38px',borderRadius:'50%',background:'linear-gradient(135deg,#7C3AED,#0EA5E9)',display:'flex',alignItems:'center',justifyContent:'center',boxShadow:'0 4px 12px rgba(109,40,217,.3)',flexShrink:0}}>
+              <span style={{fontSize:'13px',fontWeight:700,color:'white'}}>{iniciales}</span>
+            </div>
+            <div style={{minWidth:0}}>
+              <p style={{fontSize:'13px',fontWeight:700,color:'#1E1B4B',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{nombreAlumno || usuario.nombre_completo.split(' ')[0]}</p>
+              <p style={{fontSize:'11px',color:'#9490B8',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{[gradoAlumno, usuario.colegio?.nombre].filter(Boolean).join(' • ')}</p>
+              <div style={{display:'flex',alignItems:'center',gap:'5px',marginTop:'2px'}}>
+                <span style={{width:'6px',height:'6px',borderRadius:'50%',background:'#22C55E',display:'inline-block',flexShrink:0}}/>
+                <span style={{fontSize:'10px',color:'#16A34A',fontWeight:600}}>{idiomaIngles ? 'Active session' : 'Sesión activa'}</span>
+              </div>
+            </div>
           </div>
 
-          {(nombreAlumno || gradoAlumno || materiaAlumno) && (
+          {/* Lista de materias — pedido explícito del usuario (QA
+              2026-07-14): siempre visible, no solo al elegir por primera
+              vez, para poder cambiar de materia en cualquier momento con
+              un clic (no solo mediante "Cambiar grado"). */}
+          {chipsMateria.length > 0 && (
             <>
               <div className="o-sidebar-divider" />
               <div>
-                <p className="o-sidebar-section-title">{idiomaIngles ? 'Current session' : 'Sesión actual'}</p>
-                <div style={{display:'flex',flexDirection:'column',gap:'7px'}}>
-                  {nombreAlumno && <div className="o-sidebar-status"><User size={13} style={{flexShrink:0}}/><span>{nombreAlumno}</span></div>}
-                  {gradoAlumno  && <div className="o-sidebar-status"><GraduationCap size={13} style={{flexShrink:0}}/><span>{gradoAlumno}</span></div>}
-                  {materiaAlumno && <div className="o-sidebar-status"><BookOpen size={13} style={{flexShrink:0}}/><span>{materiaAlumno}</span></div>}
-                </div>
-              </div>
-            </>
-          )}
-
-          {/* Selector de materia — pedido explícito del usuario (QA
-              2026-07-14): debe vivir en el sidebar desde el inicio, debajo
-              de la sesión actual, no en el footer sobre el input. */}
-          {(estadoChat === 'esperando_materia' || estadoChat === 'esperando_materia_olimpiadas') && chipsMateria.length > 0 && (
-            <>
-              <div className="o-sidebar-divider" />
-              <div>
-                <p className="o-sidebar-section-title">{idiomaIngles ? 'Choose a subject' : 'Elige una materia'}</p>
+                <p className="o-sidebar-section-title">{idiomaIngles ? 'Subjects' : 'Materias'}</p>
                 {!mostrandoSubOlimpiadas ? (
                   <div style={{display:'flex',flexDirection:'column',gap:'6px'}}>
                     {chipsMateria
@@ -1746,44 +1787,12 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
                       .filter(mat => !(mat.includes('Conversar') || mat.includes('Conversation') || mat.includes('»')))
                       .map((mat, i) => {
                       const esOlimpiadas = mat.toLowerCase().includes('olimpiadas') || mat.toLowerCase().includes('olympiad')
-                      const esIngles = mat.includes('Conversar') || mat.includes('Conversation') || mat.includes('»')
-                      const colores: Record<string,string> = {
-                        'Matemática':'linear-gradient(135deg,#7C3AED,#5B21B6)',
-                        'Matematica':'linear-gradient(135deg,#7C3AED,#5B21B6)',
-                        'Mathematics':'linear-gradient(135deg,#7C3AED,#5B21B6)',
-                        'Física':'linear-gradient(135deg,#0EA5E9,#0284C7)',
-                        'Physics':'linear-gradient(135deg,#0EA5E9,#0284C7)',
-                        'Química':'linear-gradient(135deg,#10B981,#059669)',
-                        'Chemistry':'linear-gradient(135deg,#10B981,#059669)',
-                        'Biología':'linear-gradient(135deg,#22C55E,#16A34A)',
-                        'Biology':'linear-gradient(135deg,#22C55E,#16A34A)',
-                        'Historia':'linear-gradient(135deg,#F59E0B,#D97706)',
-                        'History':'linear-gradient(135deg,#F59E0B,#D97706)',
-                        'Español':'linear-gradient(135deg,#EF4444,#DC2626)',
-                        'Spanish':'linear-gradient(135deg,#EF4444,#DC2626)',
-                        'Ciencias Naturales':'linear-gradient(135deg,#14B8A6,#0D9488)',
-                        'Natural Sciences':'linear-gradient(135deg,#14B8A6,#0D9488)',
-                        'Mineduc - Lenguaje':'linear-gradient(135deg,#8B5CF6,#7C3AED)',
-                        'Mineduc - Matemática':'linear-gradient(135deg,#6366F1,#4F46E5)',
-                        'Mineduc - Language':'linear-gradient(135deg,#8B5CF6,#7C3AED)',
-                        'Mineduc - Mathematics':'linear-gradient(135deg,#6366F1,#4F46E5)',
-                      }
-                      const iconos: Record<string,LucideIcon> = {
-                        'Matemática':Calculator, 'Matematica':Calculator, 'Mathematics':Calculator,
-                        'Física':FlaskConical, 'Physics':FlaskConical,
-                        'Química':FlaskConical, 'Chemistry':FlaskConical,
-                        'Biología':Leaf, 'Biology':Leaf,
-                        'Historia':Landmark, 'History':Landmark,
-                        'Español':BookOpen, 'Spanish':BookOpen,
-                        'Ciencias Naturales':Leaf, 'Natural Sciences':Leaf,
-                        'Mineduc - Lenguaje':BookOpen, 'Mineduc - Matemática':Calculator,
-                        'Mineduc - Language':BookOpen, 'Mineduc - Mathematics':Calculator,
-                      }
-                      const bg = esIngles ? 'linear-gradient(135deg,#1d4ed8,#1e40af)' : esOlimpiadas ? 'linear-gradient(135deg,#d97706,#b45309)' : (colores[mat] || 'linear-gradient(135deg,#7C3AED,#5B21B6)')
-                      const IconMateria = esIngles ? Mic : esOlimpiadas ? Trophy : (iconos[mat] || GraduationCap)
+                      const esActiva = !esOlimpiadas && mismaMateria(mat, materiaAlumno)
+                      const bg = esOlimpiadas ? 'linear-gradient(135deg,#d97706,#b45309)' : (MATERIA_COLORES[mat] || 'linear-gradient(135deg,#7C3AED,#5B21B6)')
+                      const IconMateria = esOlimpiadas ? Trophy : (MATERIA_ICONOS[mat] || GraduationCap)
                       return (
                         <button key={i} className="o-chip"
-                          style={{
+                          style={esActiva ? {
                             width: '100%',
                             justifyContent: 'flex-start',
                             background: bg,
@@ -1791,27 +1800,28 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
                             border: 'none',
                             fontWeight: 600,
                             boxShadow: '0 4px 12px rgba(0,0,0,.15)',
+                          } : {
+                            width: '100%',
+                            justifyContent: 'flex-start',
+                            background: 'white',
+                            color: '#1E1B4B',
+                            border: '1px solid rgba(109,40,217,.1)',
+                            fontWeight: 500,
                           }}
                           onClick={() => {
                             if (esOlimpiadas) {
                               setMostrandoSubOlimpiadas(true)
-                            } else if (esIngles) {
-                              iniciarConversacionIngles()
-                              setSidebarAbierto(false)
-                            } else {
+                            } else if (!esActiva) {
                               enviarPregunta(mat)
                               setSidebarAbierto(false)
                             }
                           }}>
-                          <IconMateria size={15} style={{flexShrink:0}}/><span>{mat}</span>
+                          <IconMateria size={15} color={esActiva ? 'white' : '#7C3AED'} style={{flexShrink:0}}/>
+                          <span style={{flex:1,textAlign:'left'}}>{mat}</span>
+                          {!esActiva && <ChevronRight size={14} color="#C4BEDD" style={{flexShrink:0}}/>}
                         </button>
                       )
                     })}
-                    <button className="o-chip"
-                      style={{width:'100%',justifyContent:'flex-start',background:'#F3F0FF',color:'#9490B8',border:'1px solid rgba(109,40,217,.08)',fontWeight:500}}
-                      onClick={() => setMostrandoGrados(true)}>
-                      <GraduationCap size={15} style={{flexShrink:0}}/><span>{idiomaIngles ? 'Change grade' : 'Cambiar grado'}</span>
-                    </button>
                   </div>
                 ) : (
                   <div style={{display:'flex',flexDirection:'column',gap:'6px'}}>
@@ -1868,16 +1878,42 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
 
           <div style={{flex:1}} />
 
+          {/* AJUSTES — agrupa Idioma y Cambiar grado (antes sueltos en
+              secciones separadas); rediseño premium, QA 2026-07-14. */}
           <div className="o-sidebar-divider" />
-          <div style={{display:'flex',alignItems:'center',gap:'10px'}}>
-            <div style={{width:'34px',height:'34px',borderRadius:'50%',background:'linear-gradient(135deg,#7C3AED,#0EA5E9)',display:'flex',alignItems:'center',justifyContent:'center',boxShadow:'0 4px 12px rgba(109,40,217,.3)',flexShrink:0}}>
-              <span style={{fontSize:'12px',fontWeight:700,color:'white'}}>{iniciales}</span>
-            </div>
-            <div style={{minWidth:0}}>
-              <p style={{fontSize:'13px',fontWeight:600,color:'#1E1B4B',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{usuario.nombre_completo.split(' ')[0]}</p>
-              <p style={{fontSize:'10px',color:'#9490B8',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{usuario.colegio?.nombre}</p>
+          <div>
+            <p className="o-sidebar-section-title">{idiomaIngles ? 'Settings' : 'Ajustes'}</p>
+            <div style={{display:'flex',flexDirection:'column',gap:'6px'}}>
+              <button onClick={()=>{
+                setIdiomaIngles(!idiomaIngles)
+                if(modoConversacion) {
+                  modoConversacionRef.current = false
+                  setModoConversacion(false)
+                  if (autoEscuchaTimeoutRef.current) { clearTimeout(autoEscuchaTimeoutRef.current); autoEscuchaTimeoutRef.current = null }
+                  detenerReconocimientoVoz()
+                  limpiarVAD()
+                  if (grabando) { grabacionCanceladaRef.current = true; try { mediaRecorderRef.current?.stop() } catch { /* ya estaba detenida */ } setGrabando(false) }
+                  reproduciendoRef.current = false
+                  if (audioRef.current) { try { audioRef.current.pause() } catch { /* */ } }
+                  if (typeof window !== 'undefined' && 'speechSynthesis' in window) window.speechSynthesis.cancel()
+                  setReproduciendo(false)
+                }
+              }}
+                className="o-chip"
+                style={{width:'100%',justifyContent:'flex-start',background:'white',color:'#1E1B4B',border:'1px solid rgba(109,40,217,.1)',fontWeight:500}}>
+                <Globe size={15} color="#7C3AED" style={{flexShrink:0}}/>
+                <span style={{flex:1,textAlign:'left'}}>{idiomaIngles ? 'Language' : 'Idioma'}</span>
+                <span style={{fontSize:'11px',color:'#9490B8',fontWeight:600}}>{idiomaIngles ? 'English' : 'Español'}</span>
+              </button>
+              <button className="o-chip"
+                style={{width:'100%',justifyContent:'flex-start',background:'white',color:'#1E1B4B',border:'1px solid rgba(109,40,217,.1)',fontWeight:500}}
+                onClick={() => setMostrandoGrados(true)}>
+                <GraduationCap size={15} color="#7C3AED" style={{flexShrink:0}}/><span>{idiomaIngles ? 'Change grade' : 'Cambiar grado'}</span>
+              </button>
             </div>
           </div>
+
+          <div className="o-sidebar-divider" />
           <button onClick={cerrarSesion} style={{width:'100%',background:'#F3F0FF',border:'1px solid rgba(109,40,217,.15)',borderRadius:'10px',padding:'9px 13px',fontSize:'12px',fontWeight:500,color:'#7C3AED',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',gap:'6px',fontFamily:"'Plus Jakarta Sans',sans-serif"}}>
             <LogOut size={14}/><span>{idiomaIngles ? 'Log out' : 'Salir'}</span>
           </button>
