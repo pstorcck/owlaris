@@ -17,6 +17,7 @@ import {
   Feather,
   FileText,
   FlaskConical,
+  Flame,
   Footprints,
   Globe,
   GraduationCap,
@@ -33,6 +34,7 @@ import {
   RotateCcw,
   Send,
   Sparkles,
+  Star,
   Trophy,
   User,
   type LucideIcon,
@@ -246,6 +248,7 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
   const [cargando, setCargando]         = useState(false)
   const [error, setError]               = useState('')
   const [sugerencias, setSugerencias]   = useState<{icon:LucideIcon;text:string}[]>([])
+  const [progresoEstudiante, setProgresoEstudiante] = useState<{racha:number;puntos:number}>({racha:0,puntos:0})
   const [expandido, setExpandido]       = useState<string | null>(null)
   const [generandoPDF, setGenerandoPDF]       = useState(false)
   const [reportePdfListo, setReportePdfListo] = useState(false)
@@ -469,6 +472,21 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
     // Sin grado guardado: abrir modal de grados automáticamente
     if (!gradoGuardado) setMostrandoGrados(true)
   }, [gradoGuardado, idiomaIngles, usuario.nombre_completo])
+
+  // Rediseño premium (instructivo 2026-07-14): racha de días activos y
+  // puntos para el header del chat — se piden una vez al activarse la
+  // materia, con datos reales (ver /api/progreso-estudiante).
+  useEffect(() => {
+    if (estadoChat !== 'activo') return
+    fetch('/api/progreso-estudiante')
+      .then(res => res.json())
+      .then(data => {
+        if (typeof data.racha_dias_activos === 'number' && typeof data.puntos === 'number') {
+          setProgresoEstudiante({ racha: data.racha_dias_activos, puntos: data.puntos })
+        }
+      })
+      .catch(() => {})
+  }, [estadoChat])
 
   // Traducir chips cuando cambia idioma
   useEffect(() => {
@@ -1481,6 +1499,12 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
         .o-sidebar-overlay { position:fixed; inset:0; background:rgba(15,10,40,.4); backdrop-filter:blur(2px); z-index:65; animation:oFadeIn .2s ease; }
         @keyframes oFadeIn { from{opacity:0} to{opacity:1} }
         .o-topbar-mobile { display:flex; align-items:center; gap:12px; padding:12px 18px; background:rgba(255,255,255,.9); backdrop-filter:blur(20px); border-bottom:1px solid rgba(109,40,217,.08); position:sticky; top:0; z-index:40; }
+        .o-chat-header { display:flex; align-items:center; gap:16px; flex-wrap:wrap; padding:14px 20px; background:rgba(255,255,255,.85); backdrop-filter:blur(20px); border-bottom:1px solid rgba(109,40,217,.08); }
+        .o-chat-header-materia { font-family:'Syne',sans-serif; font-size:17px; font-weight:700; color:#1E1B4B; letter-spacing:-.3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+        .o-chat-header-sub { font-size:12px; color:#9490B8; font-weight:500; margin-top:1px; }
+        .o-chat-stat { display:flex; align-items:center; gap:5px; background:rgba(109,40,217,.05); border:1px solid rgba(109,40,217,.08); border-radius:10px; padding:6px 10px; }
+        .o-chat-stat span { font-size:13px; font-weight:700; color:#1E1B4B; }
+        .o-chat-stat small { font-size:10px; color:#9490B8; font-weight:600; white-space:nowrap; }
         .o-hamburger { width:38px; height:38px; border-radius:11px; border:1px solid rgba(109,40,217,.15); background:#F3F0FF; display:flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0; transition:all .2s; }
         .o-hamburger:hover { background:#EAE3FF; }
         .o-sidebar-reopen { position:fixed; top:18px; left:18px; width:38px; height:38px; border-radius:11px; border:1px solid rgba(109,40,217,.15); background:white; align-items:center; justify-content:center; cursor:pointer; z-index:60; box-shadow:0 2px 12px rgba(109,40,217,.12); transition:all .2s; }
@@ -1873,6 +1897,31 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
             <p style={{fontFamily:"'Syne',sans-serif",fontSize:'15px',fontWeight:700,color:'#1E1B4B'}}>Owlaris</p>
             {materiaAlumno && <span className="estado-badge" style={{marginLeft:'auto',display:'inline-flex',alignItems:'center',gap:'5px'}}><BookOpen size={12}/>{materiaAlumno}</span>}
           </div>
+
+          {/* Rediseño premium (instructivo 2026-07-14): racha de días
+              activos y puntos, calculados con datos reales de
+              interacciones (ver /api/progreso-estudiante) — no valores
+              decorativos inventados. */}
+          {estadoChat === 'activo' && materiaAlumno && (
+            <div className="o-chat-header">
+              <div style={{minWidth:0}}>
+                <p className="o-chat-header-materia">{materiaAlumno}</p>
+                <p className="o-chat-header-sub">{gradoAlumno}{gradoAlumno ? ' • ' : ''}{idiomaIngles ? 'Learning session' : 'Sesión de aprendizaje'}</p>
+              </div>
+              <div style={{marginLeft:'auto',display:'flex',gap:'16px',alignItems:'center',flexShrink:0}}>
+                <div className="o-chat-stat">
+                  <Flame size={15} color="#F97316"/>
+                  <span>{progresoEstudiante.racha}</span>
+                  <small>{idiomaIngles ? 'day streak' : 'días activos'}</small>
+                </div>
+                <div className="o-chat-stat">
+                  <Star size={15} color="#EAB308"/>
+                  <span>{progresoEstudiante.puntos}</span>
+                  <small>{idiomaIngles ? 'points' : 'puntos'}</small>
+                </div>
+              </div>
+            </div>
+          )}
 
         {/* Mensajes */}
         <main style={{flex:1,overflowY:'auto',padding:'28px 16px'}} className="scrollbar-hide">
