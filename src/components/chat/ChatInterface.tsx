@@ -7,6 +7,36 @@ import { useRouter } from 'next/navigation'
 import type { Usuario, Materia, MensajeChat } from '@/types'
 import { sanitizarTextoPdf } from '@/lib/pdfText'
 import { buildWelcomeMessage } from '@/lib/pedagogicalGuard'
+import {
+  ArrowLeft,
+  BookOpen,
+  Calculator,
+  CheckCircle2,
+  Copy,
+  Dumbbell,
+  Feather,
+  FileText,
+  FlaskConical,
+  Footprints,
+  Globe,
+  GraduationCap,
+  Landmark,
+  Leaf,
+  Lightbulb,
+  ListChecks,
+  LogOut,
+  Menu,
+  Mic,
+  PanelLeftClose,
+  PanelLeftOpen,
+  RefreshCw,
+  RotateCcw,
+  Send,
+  Sparkles,
+  Trophy,
+  User,
+  type LucideIcon,
+} from 'lucide-react'
 
 interface Props {
   usuario: Usuario
@@ -69,32 +99,32 @@ type WindowWithSpeechTools = Window & {
 // Instrucciones del 13 de julio — "Opciones de ayuda" nuevas conviven con
 // las acciones rápidas ya existentes (no las reemplazan). Se centralizan
 // aquí en vez de repetirlas en los dos lugares donde se setea sugerencias.
-const SUGERENCIAS_ES = [
-  { icon: '▤', text: 'Temas de esta materia' },
-  { icon: '✦', text: 'Explícame con un ejemplo' },
-  { icon: '◈', text: 'Quiero practicar' },
-  { icon: '◇', text: 'Resume el tema' },
-  { icon: '↺', text: 'Revisemos mis errores' },
-  { icon: '✳', text: 'Dame una pista' },
-  { icon: '‣', text: 'Explícame el primer paso' },
-  { icon: '⧉', text: 'Ponme un ejemplo parecido' },
-  { icon: '◒', text: 'Explícamelo más fácil' },
-  { icon: '✓', text: 'Revisa lo que hice' },
-  { icon: '⟲', text: 'Empieza desde cero' },
+const SUGERENCIAS_ES: { icon: LucideIcon; text: string }[] = [
+  { icon: ListChecks, text: 'Temas de esta materia' },
+  { icon: Sparkles, text: 'Explícame con un ejemplo' },
+  { icon: Dumbbell, text: 'Quiero practicar' },
+  { icon: FileText, text: 'Resume el tema' },
+  { icon: RotateCcw, text: 'Revisemos mis errores' },
+  { icon: Lightbulb, text: 'Dame una pista' },
+  { icon: Footprints, text: 'Explícame el primer paso' },
+  { icon: Copy, text: 'Ponme un ejemplo parecido' },
+  { icon: Feather, text: 'Explícamelo más fácil' },
+  { icon: CheckCircle2, text: 'Revisa lo que hice' },
+  { icon: RefreshCw, text: 'Empieza desde cero' },
 ]
 
-const SUGERENCIAS_EN = [
-  { icon: '▤', text: 'Class topics' },
-  { icon: '✦', text: 'Explain with an example' },
-  { icon: '◈', text: 'I want to practice' },
-  { icon: '◇', text: 'Summarize the topic' },
-  { icon: '↺', text: "Let's review my mistakes" },
-  { icon: '✳', text: 'Give me a hint' },
-  { icon: '‣', text: 'Explain the first step' },
-  { icon: '⧉', text: 'Give me a similar example' },
-  { icon: '◒', text: 'Explain it more simply' },
-  { icon: '✓', text: 'Review what I did' },
-  { icon: '⟲', text: 'Start from scratch' },
+const SUGERENCIAS_EN: { icon: LucideIcon; text: string }[] = [
+  { icon: ListChecks, text: 'Class topics' },
+  { icon: Sparkles, text: 'Explain with an example' },
+  { icon: Dumbbell, text: 'I want to practice' },
+  { icon: FileText, text: 'Summarize the topic' },
+  { icon: RotateCcw, text: "Let's review my mistakes" },
+  { icon: Lightbulb, text: 'Give me a hint' },
+  { icon: Footprints, text: 'Explain the first step' },
+  { icon: Copy, text: 'Give me a similar example' },
+  { icon: Feather, text: 'Explain it more simply' },
+  { icon: CheckCircle2, text: 'Review what I did' },
+  { icon: RefreshCw, text: 'Start from scratch' },
 ]
 
 function renderSegmento(texto: string, key: number): React.ReactNode[] {
@@ -215,7 +245,7 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
   const [pregunta, setPregunta]         = useState('')
   const [cargando, setCargando]         = useState(false)
   const [error, setError]               = useState('')
-  const [sugerencias, setSugerencias]   = useState<{icon:string;text:string}[]>([])
+  const [sugerencias, setSugerencias]   = useState<{icon:LucideIcon;text:string}[]>([])
   const [expandido, setExpandido]       = useState<string | null>(null)
   const [generandoPDF, setGenerandoPDF]       = useState(false)
   const [reportePdfListo, setReportePdfListo] = useState(false)
@@ -1614,9 +1644,7 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
             este botón flotante para volver a mostrarlo. */}
         {sidebarColapsado && (
           <button className="o-sidebar-reopen" onClick={()=>setSidebarColapsado(false)} aria-label={idiomaIngles ? 'Show sidebar' : 'Mostrar menú'}>
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#6D28D9" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <rect x="3" y="4" width="18" height="16" rx="3"/><line x1="9" y1="4" x2="9" y2="20"/>
-            </svg>
+            <PanelLeftOpen size={16} color="#6D28D9"/>
           </button>
         )}
         <aside className={`o-sidebar${sidebarAbierto ? ' abierto' : ''}${sidebarColapsado ? ' colapsado' : ''}`}>
@@ -1633,9 +1661,7 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
             <button className="o-hamburger" style={{marginLeft:'auto'}}
               onClick={()=>{ setSidebarAbierto(false); setSidebarColapsado(true) }}
               aria-label={idiomaIngles ? 'Hide sidebar' : 'Ocultar menú'}>
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#6D28D9" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="3" y="4" width="18" height="16" rx="3"/><line x1="9" y1="4" x2="9" y2="20"/>
-              </svg>
+              <PanelLeftClose size={16} color="#6D28D9"/>
             </button>
           </div>
 
@@ -1669,9 +1695,9 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
               <div>
                 <p className="o-sidebar-section-title">{idiomaIngles ? 'Current session' : 'Sesión actual'}</p>
                 <div style={{display:'flex',flexDirection:'column',gap:'7px'}}>
-                  {nombreAlumno && <div className="o-sidebar-status">👤 {nombreAlumno}</div>}
-                  {gradoAlumno  && <div className="o-sidebar-status">🎓 {gradoAlumno}</div>}
-                  {materiaAlumno && <div className="o-sidebar-status">📚 {materiaAlumno}</div>}
+                  {nombreAlumno && <div className="o-sidebar-status"><User size={13} style={{flexShrink:0}}/><span>{nombreAlumno}</span></div>}
+                  {gradoAlumno  && <div className="o-sidebar-status"><GraduationCap size={13} style={{flexShrink:0}}/><span>{gradoAlumno}</span></div>}
+                  {materiaAlumno && <div className="o-sidebar-status"><BookOpen size={13} style={{flexShrink:0}}/><span>{materiaAlumno}</span></div>}
                 </div>
               </div>
             </>
@@ -1718,7 +1744,19 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
                         'Mineduc - Language':'linear-gradient(135deg,#8B5CF6,#7C3AED)',
                         'Mineduc - Mathematics':'linear-gradient(135deg,#6366F1,#4F46E5)',
                       }
+                      const iconos: Record<string,LucideIcon> = {
+                        'Matemática':Calculator, 'Matematica':Calculator, 'Mathematics':Calculator,
+                        'Física':FlaskConical, 'Physics':FlaskConical,
+                        'Química':FlaskConical, 'Chemistry':FlaskConical,
+                        'Biología':Leaf, 'Biology':Leaf,
+                        'Historia':Landmark, 'History':Landmark,
+                        'Español':BookOpen, 'Spanish':BookOpen,
+                        'Ciencias Naturales':Leaf, 'Natural Sciences':Leaf,
+                        'Mineduc - Lenguaje':BookOpen, 'Mineduc - Matemática':Calculator,
+                        'Mineduc - Language':BookOpen, 'Mineduc - Mathematics':Calculator,
+                      }
                       const bg = esIngles ? 'linear-gradient(135deg,#1d4ed8,#1e40af)' : esOlimpiadas ? 'linear-gradient(135deg,#d97706,#b45309)' : (colores[mat] || 'linear-gradient(135deg,#7C3AED,#5B21B6)')
+                      const IconMateria = esIngles ? Mic : esOlimpiadas ? Trophy : (iconos[mat] || GraduationCap)
                       return (
                         <button key={i} className="o-chip"
                           style={{
@@ -1741,20 +1779,20 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
                               setSidebarAbierto(false)
                             }
                           }}>
-                          {esIngles ? '🎙️ ' : esOlimpiadas ? '🏆 ' : ''}{mat}
+                          <IconMateria size={15} style={{flexShrink:0}}/><span>{mat}</span>
                         </button>
                       )
                     })}
                     <button className="o-chip"
                       style={{width:'100%',justifyContent:'flex-start',background:'#F3F0FF',color:'#9490B8',border:'1px solid rgba(109,40,217,.08)',fontWeight:500}}
                       onClick={() => setMostrandoGrados(true)}>
-                      {idiomaIngles ? 'Change grade' : 'Cambiar grado'}
+                      <GraduationCap size={15} style={{flexShrink:0}}/><span>{idiomaIngles ? 'Change grade' : 'Cambiar grado'}</span>
                     </button>
                   </div>
                 ) : (
                   <div style={{display:'flex',flexDirection:'column',gap:'6px'}}>
-                    <p style={{fontSize:'11px',color:'#b45309',fontWeight:600,marginBottom:'4px'}}>
-                      {idiomaIngles ? '🏆 Science Olympiad — choose subject:' : '🏆 Olimpiadas de Ciencias — elige materia:'}
+                    <p style={{fontSize:'11px',color:'#b45309',fontWeight:600,marginBottom:'4px',display:'flex',alignItems:'center',gap:'6px'}}>
+                      <Trophy size={13}/><span>{idiomaIngles ? 'Science Olympiad — choose subject:' : 'Olimpiadas de Ciencias — elige materia:'}</span>
                     </p>
                     {['Matemática','Biología','Física','Química','Ciencias Naturales'].map(sub => (
                       <button key={sub} className="o-chip"
@@ -1766,7 +1804,7 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
                     <button className="o-chip"
                       style={{width:'100%',justifyContent:'flex-start',background:'#F3F0FF',color:'#6D28D9',border:'1px solid rgba(109,40,217,.12)'}}
                       onClick={() => setMostrandoSubOlimpiadas(false)}>
-                      {idiomaIngles ? '← Back' : '← Regresar'}
+                      <ArrowLeft size={15} style={{flexShrink:0}}/><span>{idiomaIngles ? 'Back' : 'Regresar'}</span>
                     </button>
                   </div>
                 )}
@@ -1786,7 +1824,7 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
                   {sugerencias.map((s,i)=>(
                     <button key={i} className="o-chip" style={{width:'100%',justifyContent:'flex-start',whiteSpace:'normal',textAlign:'left'}}
                       onClick={()=>{ enviarPregunta(s.text); setSidebarAbierto(false) }}>
-                      <span style={{color:'#7C3AED',fontSize:'14px',flexShrink:0}}>{s.icon}</span><span>{s.text}</span>
+                      <s.icon size={15} color="#7C3AED" style={{flexShrink:0}}/><span>{s.text}</span>
                     </button>
                   ))}
                   <button className="o-chip"
@@ -1797,7 +1835,7 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
                       setMateriaAlumno('')
                       setSidebarAbierto(false)
                     }}>
-                    {idiomaIngles ? '← Menu' : '← Menú'}
+                    <ArrowLeft size={15} style={{flexShrink:0}}/><span>{idiomaIngles ? 'Menu' : 'Menú'}</span>
                   </button>
                 </div>
               </div>
@@ -1817,7 +1855,7 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
             </div>
           </div>
           <button onClick={cerrarSesion} style={{width:'100%',background:'#F3F0FF',border:'1px solid rgba(109,40,217,.15)',borderRadius:'10px',padding:'9px 13px',fontSize:'12px',fontWeight:500,color:'#7C3AED',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',gap:'6px',fontFamily:"'Plus Jakarta Sans',sans-serif"}}>
-            <span>↩</span><span>{idiomaIngles ? 'Log out' : 'Salir'}</span>
+            <LogOut size={14}/><span>{idiomaIngles ? 'Log out' : 'Salir'}</span>
           </button>
         </aside>
 
@@ -1825,7 +1863,7 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
           {/* Barra superior solo en mobile — el sidebar reemplaza la barra de botones en desktop */}
           <div className="o-topbar-mobile">
             <button className="o-hamburger" onClick={()=>setSidebarAbierto(true)} aria-label="Menu">
-              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#6D28D9" strokeWidth="2.2" strokeLinecap="round"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+              <Menu size={17} color="#6D28D9"/>
             </button>
             <div className="o-avatar-ring" style={{width:'28px',height:'28px'}}>
               <div style={{background:'white',borderRadius:'50%',width:'24px',height:'24px',display:'flex',alignItems:'center',justifyContent:'center'}}>
@@ -1833,7 +1871,7 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
               </div>
             </div>
             <p style={{fontFamily:"'Syne',sans-serif",fontSize:'15px',fontWeight:700,color:'#1E1B4B'}}>Owlaris</p>
-            {materiaAlumno && <span className="estado-badge" style={{marginLeft:'auto'}}>📚 {materiaAlumno}</span>}
+            {materiaAlumno && <span className="estado-badge" style={{marginLeft:'auto',display:'inline-flex',alignItems:'center',gap:'5px'}}><BookOpen size={12}/>{materiaAlumno}</span>}
           </div>
 
         {/* Mensajes */}
@@ -1907,9 +1945,7 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
                 style={{flex:1,background:'transparent',border:'none',outline:'none',resize:'none',fontSize:'14px',color:'#1E1B4B',lineHeight:'1.6',fontFamily:"'Plus Jakarta Sans',sans-serif",fontWeight:400}}
               />
               <button onClick={()=>enviarPregunta()} disabled={cargando||!pregunta.trim()} className="o-send">
-                <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="white" strokeWidth={2.2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/>
-                </svg>
+                <Send size={18} color="white"/>
               </button>
             </div>
             <p style={{fontSize:'10px',color:'#D4D0EE',textAlign:'center',marginTop:'8px',letterSpacing:'.4px',fontWeight:500}}>
