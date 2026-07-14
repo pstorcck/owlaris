@@ -141,6 +141,26 @@ Cantidad de temas: 5
     assert.doesNotMatch(indiceTabla.topics.join(' '), /Elemento auditado|Competencias oficiales de grado/)
   })
 
+  // Hallazgo real (QA 2026-07-14, Prim4mate7.docx / 4to Primaria
+  // Matemática): sin tabla, encabezados "Tema N:" ni sección de índice
+  // explícita, el respaldo final de línea numerada/con viñeta (sin gate
+  // de sección) capturó como "tema" una línea que en realidad explica la
+  // numeración maya con varios datos encadenados — no es un título de
+  // tema. Debe descartarse por tener un "•" embebido y por ser
+  // demasiado larga (más de 12 palabras), no un nombre corto de
+  // concepto.
+  test('extractCourseTopicIndex no confunde una línea numerada explicativa (con "•" embebido) con un tema real', () => {
+    const contenidoConLineaExplicativa = [
+      'Matemática - Cuarto Primaria',
+      'Sistema de numeración maya',
+      '1. Un punto (●) vale 1• Una barra (—) vale 5• Un caracol o concha representa el 0',
+      '2. Practica escribiendo los números del 1 al 20 usando puntos y barras.',
+    ].join('\n')
+    const indiceConLineaExplicativa = extractCourseTopicIndex(contenidoConLineaExplicativa)
+    assert.equal(indiceConLineaExplicativa.topics.length, 0, 'no debe capturar la línea explicativa como tema')
+    assert.doesNotMatch(indiceConLineaExplicativa.topics.join(' '), /Un punto|Una barra|caracol/)
+  })
+
   test('extractCourseTopicIndex no confunde la sección "Cobertura oficial" (solo metadatos, sin tabla de temas) con un índice real', () => {
     const contenidoSoloMetadatos = [
       'Estadística Descriptiva - Quinto Bachillerato',

@@ -27,8 +27,8 @@ function isProbablyTopic(value: string) {
   // instrucciones de práctica ("1. ¿Cuánto es...? 2. Explica...") se leía
   // como si fuera un menú de temas seleccionable por número.
   if (/[?¿]/.test(cleaned)) return false
-  if (/^(explica|resuelve|calcula|responde|describe|analiza|identifica|menciona|define|desarrolla|justifica)\b/.test(normalized)) return false
-  if (/^(explain|solve|calculate|answer|describe|analyze|identify|define|discuss|justify)\b/.test(normalized)) return false
+  if (/^(explica|resuelve|calcula|responde|describe|analiza|identifica|menciona|define|desarrolla|justifica|practica|escribe|dibuja|completa|observa|investiga)\b/.test(normalized)) return false
+  if (/^(explain|solve|calculate|answer|describe|analyze|identify|define|discuss|justify|practice|write|draw|complete|observe|investigate)\b/.test(normalized)) return false
   // Hallazgo real (sexta verificación, 2026-07-13): el respaldo de línea
   // suelta (para índices que perdieron su viñeta/número vía mammoth)
   // empezó a tratar la línea de metadata "Cantidad de temas: N" como si
@@ -38,6 +38,17 @@ function isProbablyTopic(value: string) {
   if (/\btemas?\s+de\s+ciclo\s+completo\b/.test(normalized)) return false
   if (/\bcurso\s+tiene\s+\d+\s+temas\b/.test(normalized)) return false
   if (/^\d+\s+(?:temas|topics)\b/.test(normalized)) return false
+  // Hallazgo real (QA 2026-07-14, Prim4mate7.docx): el respaldo de línea
+  // numerada/con viñeta (sin estar dentro de ninguna sección de índice)
+  // capturó "Un punto (●) vale 1• Una barra (—) vale 5• Un caracol o
+  // concha representa el 0" como si fuera un tema — es una explicación de
+  // varios datos encadenados (numeración maya), no un título de tema. Un
+  // "•" en medio del texto (no al inicio, ya recortado por cleanTopic)
+  // señala varios ítems pegados en una sola línea, y un conteo de
+  // palabras alto es otra señal de que es una oración explicativa y no un
+  // nombre corto de concepto/habilidad.
+  if (cleaned.includes('•')) return false
+  if (cleaned.split(/\s+/).filter(Boolean).length > 12) return false
   return /[a-zA-ZáéíóúÁÉÍÓÚñÑ]/.test(cleaned)
 }
 
