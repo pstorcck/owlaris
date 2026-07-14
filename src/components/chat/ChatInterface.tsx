@@ -1645,6 +1645,36 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
             </>
           )}
 
+          {/* Acciones rápidas — antes vivían en una fila horizontal sobre el
+              input; pedido explícito del usuario (QA 2026-07-14): deben ir
+              en el sidebar, debajo de la materia activa. */}
+          {sugerencias.length>0 && estadoChat==='activo' && (
+            <>
+              <div className="o-sidebar-divider" />
+              <div>
+                <p className="o-sidebar-section-title">{idiomaIngles ? 'Quick actions' : 'Acciones rápidas'}</p>
+                <div style={{display:'flex',flexDirection:'column',gap:'6px'}}>
+                  {sugerencias.map((s,i)=>(
+                    <button key={i} className="o-chip" style={{width:'100%',justifyContent:'flex-start',whiteSpace:'normal',textAlign:'left'}}
+                      onClick={()=>{ enviarPregunta(s.text); setSidebarAbierto(false) }}>
+                      <span style={{color:'#7C3AED',fontSize:'14px',flexShrink:0}}>{s.icon}</span><span>{s.text}</span>
+                    </button>
+                  ))}
+                  <button className="o-chip"
+                    style={{width:'100%',justifyContent:'flex-start',background:'#F3F0FF',color:'#9490B8',border:'1px solid rgba(109,40,217,.08)',fontWeight:500}}
+                    onClick={() => {
+                      setEstadoChat('esperando_materia')
+                      setSugerencias([])
+                      setMateriaAlumno('')
+                      setSidebarAbierto(false)
+                    }}>
+                    {idiomaIngles ? '← Menu' : '← Menú'}
+                  </button>
+                </div>
+              </div>
+            </>
+          )}
+
           <div style={{flex:1}} />
 
           <div className="o-sidebar-divider" />
@@ -1827,32 +1857,9 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
               </div>
             )}
 
-            {sugerencias.length>0&&estadoChat==='activo'&&(
-              <div style={{position:'relative',marginBottom:'10px'}}>
-                <div style={{display:'flex',gap:'8px',overflowX:'auto'}} className="scrollbar-hide">
-                  {sugerencias.map((s,i)=>(
-                    <button key={i} className="o-chip" onClick={()=>enviarPregunta(s.text)}>
-                      <span style={{color:'#7C3AED',fontSize:'14px'}}>{s.icon}</span><span>{s.text}</span>
-                    </button>
-                  ))}
-                  <button className="o-chip"
-                    style={{background:'#F3F0FF',color:'#9490B8',border:'1px solid rgba(109,40,217,.08)',fontWeight:500}}
-                    onClick={() => {
-                      setEstadoChat('esperando_materia')
-                      setSugerencias([])
-                      setMateriaAlumno('')
-                    }}>
-                    {idiomaIngles ? '← Menu' : '← Menú'}
-                  </button>
-                </div>
-                {/* Hallazgo real (QA 2026-07-14): el scrollbar está oculto
-                    (scrollbar-hide) a propósito por estética, pero eso deja
-                    sin ninguna pista visual de que hay más chips fuera de
-                    pantalla — con 11 chips en la fila, el alumno solo veía
-                    los primeros 5 y no sabía que podía deslizar. */}
-                <div style={{position:'absolute',top:0,right:0,bottom:0,width:'32px',pointerEvents:'none',background:'linear-gradient(to right, rgba(248,247,255,0), rgba(248,247,255,.95))'}} />
-              </div>
-            )}
+            {/* Las acciones rápidas viven en el sidebar (debajo de la
+                materia activa), no aquí sobre el input — pedido explícito
+                del usuario (QA 2026-07-14). */}
             <div className="o-input-wrap" style={{display:'flex',gap:'10px',alignItems:'flex-end',padding:'10px 14px'}}>
               <textarea ref={inputRef} value={pregunta}
                 onChange={e=>setPregunta(e.target.value)}
