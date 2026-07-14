@@ -1667,6 +1667,103 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
             </>
           )}
 
+          {/* Selector de materia — pedido explícito del usuario (QA
+              2026-07-14): debe vivir en el sidebar desde el inicio, debajo
+              de la sesión actual, no en el footer sobre el input. */}
+          {(estadoChat === 'esperando_materia' || estadoChat === 'esperando_materia_olimpiadas') && chipsMateria.length > 0 && (
+            <>
+              <div className="o-sidebar-divider" />
+              <div>
+                <p className="o-sidebar-section-title">{idiomaIngles ? 'Choose a subject' : 'Elige una materia'}</p>
+                {!mostrandoSubOlimpiadas ? (
+                  <div style={{display:'flex',flexDirection:'column',gap:'6px'}}>
+                    {chipsMateria
+                      // El modo "Conversar en Inglés" (voz continua) se
+                      // esconde temporalmente: el alumno reportó que quedó
+                      // peor que antes. La función sigue en el código para
+                      // poder arreglarla sin rehacer todo, pero no debe
+                      // poder alcanzarse desde la UI mientras tanto.
+                      .filter(mat => !(mat.includes('Conversar') || mat.includes('Conversation') || mat.includes('»')))
+                      .map((mat, i) => {
+                      const esOlimpiadas = mat.toLowerCase().includes('olimpiadas') || mat.toLowerCase().includes('olympiad')
+                      const esIngles = mat.includes('Conversar') || mat.includes('Conversation') || mat.includes('»')
+                      const colores: Record<string,string> = {
+                        'Matemática':'linear-gradient(135deg,#7C3AED,#5B21B6)',
+                        'Matematica':'linear-gradient(135deg,#7C3AED,#5B21B6)',
+                        'Mathematics':'linear-gradient(135deg,#7C3AED,#5B21B6)',
+                        'Física':'linear-gradient(135deg,#0EA5E9,#0284C7)',
+                        'Physics':'linear-gradient(135deg,#0EA5E9,#0284C7)',
+                        'Química':'linear-gradient(135deg,#10B981,#059669)',
+                        'Chemistry':'linear-gradient(135deg,#10B981,#059669)',
+                        'Biología':'linear-gradient(135deg,#22C55E,#16A34A)',
+                        'Biology':'linear-gradient(135deg,#22C55E,#16A34A)',
+                        'Historia':'linear-gradient(135deg,#F59E0B,#D97706)',
+                        'History':'linear-gradient(135deg,#F59E0B,#D97706)',
+                        'Español':'linear-gradient(135deg,#EF4444,#DC2626)',
+                        'Spanish':'linear-gradient(135deg,#EF4444,#DC2626)',
+                        'Ciencias Naturales':'linear-gradient(135deg,#14B8A6,#0D9488)',
+                        'Natural Sciences':'linear-gradient(135deg,#14B8A6,#0D9488)',
+                        'Mineduc - Lenguaje':'linear-gradient(135deg,#8B5CF6,#7C3AED)',
+                        'Mineduc - Matemática':'linear-gradient(135deg,#6366F1,#4F46E5)',
+                        'Mineduc - Language':'linear-gradient(135deg,#8B5CF6,#7C3AED)',
+                        'Mineduc - Mathematics':'linear-gradient(135deg,#6366F1,#4F46E5)',
+                      }
+                      const bg = esIngles ? 'linear-gradient(135deg,#1d4ed8,#1e40af)' : esOlimpiadas ? 'linear-gradient(135deg,#d97706,#b45309)' : (colores[mat] || 'linear-gradient(135deg,#7C3AED,#5B21B6)')
+                      return (
+                        <button key={i} className="o-chip"
+                          style={{
+                            width: '100%',
+                            justifyContent: 'flex-start',
+                            background: bg,
+                            color: 'white',
+                            border: 'none',
+                            fontWeight: 600,
+                            boxShadow: '0 4px 12px rgba(0,0,0,.15)',
+                          }}
+                          onClick={() => {
+                            if (esOlimpiadas) {
+                              setMostrandoSubOlimpiadas(true)
+                            } else if (esIngles) {
+                              iniciarConversacionIngles()
+                              setSidebarAbierto(false)
+                            } else {
+                              enviarPregunta(mat)
+                              setSidebarAbierto(false)
+                            }
+                          }}>
+                          {esIngles ? '🎙️ ' : esOlimpiadas ? '🏆 ' : ''}{mat}
+                        </button>
+                      )
+                    })}
+                    <button className="o-chip"
+                      style={{width:'100%',justifyContent:'flex-start',background:'#F3F0FF',color:'#9490B8',border:'1px solid rgba(109,40,217,.08)',fontWeight:500}}
+                      onClick={() => setMostrandoGrados(true)}>
+                      {idiomaIngles ? 'Change grade' : 'Cambiar grado'}
+                    </button>
+                  </div>
+                ) : (
+                  <div style={{display:'flex',flexDirection:'column',gap:'6px'}}>
+                    <p style={{fontSize:'11px',color:'#b45309',fontWeight:600,marginBottom:'4px'}}>
+                      {idiomaIngles ? '🏆 Science Olympiad — choose subject:' : '🏆 Olimpiadas de Ciencias — elige materia:'}
+                    </p>
+                    {['Matemática','Biología','Física','Química','Ciencias Naturales'].map(sub => (
+                      <button key={sub} className="o-chip"
+                        style={{width:'100%',justifyContent:'flex-start',background:'linear-gradient(135deg,#d97706,#b45309)',color:'white',border:'none',fontWeight:600}}
+                        onClick={() => { setMostrandoSubOlimpiadas(false); enviarPregunta('Olimpiadas - ' + sub); setSidebarAbierto(false) }}>
+                        {sub}
+                      </button>
+                    ))}
+                    <button className="o-chip"
+                      style={{width:'100%',justifyContent:'flex-start',background:'#F3F0FF',color:'#6D28D9',border:'1px solid rgba(109,40,217,.12)'}}
+                      onClick={() => setMostrandoSubOlimpiadas(false)}>
+                      {idiomaIngles ? '← Back' : '← Regresar'}
+                    </button>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+
           {/* Acciones rápidas — antes vivían en una fila horizontal sobre el
               input; pedido explícito del usuario (QA 2026-07-14): deben ir
               en el sidebar, debajo de la materia activa. */}
@@ -1789,99 +1886,9 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
         {/* Footer */}
         <div ref={footerRef} style={{background:'rgba(248,247,255,.95)',backdropFilter:'blur(20px)',borderTop:'1px solid rgba(109,40,217,.08)',padding:'12px 16px 20px',boxShadow:'0 -4px 24px rgba(109,40,217,.06)'}}>
           <div style={{maxWidth:'800px',margin:'0 auto'}}>
-            {/* CHIPS DE MATERIAS */}
-            {(estadoChat === 'esperando_materia' || estadoChat === 'esperando_materia_olimpiadas') && chipsMateria.length > 0 && (
-              <div style={{marginBottom:'12px'}}>
-                <p style={{fontSize:'11px',color:'#9490B8',fontWeight:600,marginBottom:'8px',letterSpacing:'.3px',textTransform:'uppercase'}}>
-                  {idiomaIngles ? 'Choose a subject:' : 'Elige una materia:'}
-                </p>
-                {!mostrandoSubOlimpiadas ? (
-                  <div style={{display:'flex',gap:'8px',flexWrap:'wrap'}}>
-                    {chipsMateria
-                      // El modo "Conversar en Inglés" (voz continua) se
-                      // esconde temporalmente: el alumno reportó que quedó
-                      // peor que antes. La función sigue en el código para
-                      // poder arreglarla sin rehacer todo, pero no debe
-                      // poder alcanzarse desde la UI mientras tanto.
-                      .filter(mat => !(mat.includes('Conversar') || mat.includes('Conversation') || mat.includes('»')))
-                      .map((mat, i) => {
-                      const esOlimpiadas = mat.toLowerCase().includes('olimpiadas') || mat.toLowerCase().includes('olympiad')
-                      const esIngles = mat.includes('Conversar') || mat.includes('Conversation') || mat.includes('»')
-                      const colores: Record<string,string> = {
-                        'Matemática':'linear-gradient(135deg,#7C3AED,#5B21B6)',
-                        'Matematica':'linear-gradient(135deg,#7C3AED,#5B21B6)',
-                        'Mathematics':'linear-gradient(135deg,#7C3AED,#5B21B6)',
-                        'Física':'linear-gradient(135deg,#0EA5E9,#0284C7)',
-                        'Physics':'linear-gradient(135deg,#0EA5E9,#0284C7)',
-                        'Química':'linear-gradient(135deg,#10B981,#059669)',
-                        'Chemistry':'linear-gradient(135deg,#10B981,#059669)',
-                        'Biología':'linear-gradient(135deg,#22C55E,#16A34A)',
-                        'Biology':'linear-gradient(135deg,#22C55E,#16A34A)',
-                        'Historia':'linear-gradient(135deg,#F59E0B,#D97706)',
-                        'History':'linear-gradient(135deg,#F59E0B,#D97706)',
-                        'Español':'linear-gradient(135deg,#EF4444,#DC2626)',
-                        'Spanish':'linear-gradient(135deg,#EF4444,#DC2626)',
-                        'Ciencias Naturales':'linear-gradient(135deg,#14B8A6,#0D9488)',
-                        'Natural Sciences':'linear-gradient(135deg,#14B8A6,#0D9488)',
-                        'Mineduc - Lenguaje':'linear-gradient(135deg,#8B5CF6,#7C3AED)',
-                        'Mineduc - Matemática':'linear-gradient(135deg,#6366F1,#4F46E5)',
-                        'Mineduc - Language':'linear-gradient(135deg,#8B5CF6,#7C3AED)',
-                        'Mineduc - Mathematics':'linear-gradient(135deg,#6366F1,#4F46E5)',
-                      }
-                      const bg = esIngles ? 'linear-gradient(135deg,#1d4ed8,#1e40af)' : esOlimpiadas ? 'linear-gradient(135deg,#d97706,#b45309)' : (colores[mat] || 'linear-gradient(135deg,#7C3AED,#5B21B6)')
-                      return (
-                        <button key={i} className="o-chip"
-                          style={{
-                            background: bg,
-                            color: 'white',
-                            border: 'none',
-                            fontWeight: 600,
-                            boxShadow: '0 4px 12px rgba(0,0,0,.15)',
-                          }}
-                          onClick={() => {
-                            if (esOlimpiadas) {
-                              setMostrandoSubOlimpiadas(true)
-                            } else if (esIngles) {
-                              iniciarConversacionIngles()
-                            } else {
-                              enviarPregunta(mat)
-                            }
-                          }}>
-                          {esIngles ? '🎙️ ' : esOlimpiadas ? '🏆 ' : ''}{mat}
-                        </button>
-                      )
-                    })}
-                    <button className="o-chip"
-                      style={{background:'#F3F0FF',color:'#9490B8',border:'1px solid rgba(109,40,217,.08)',fontWeight:500}}
-                      onClick={() => setMostrandoGrados(true)}>
-                      {idiomaIngles ? 'Change grade' : 'Cambiar grado'}
-                    </button>
-                  </div>
-                ) : (
-                  <div style={{display:'flex',gap:'8px',flexWrap:'wrap'}}>
-                    <p style={{width:'100%',fontSize:'11px',color:'#b45309',fontWeight:600,marginBottom:'4px'}}>
-                      {idiomaIngles ? '🏆 Science Olympiad — choose subject:' : '🏆 Olimpiadas de Ciencias — elige materia:'}
-                    </p>
-                    {['Matemática','Biología','Física','Química','Ciencias Naturales'].map(sub => (
-                      <button key={sub} className="o-chip"
-                        style={{background:'linear-gradient(135deg,#d97706,#b45309)',color:'white',border:'none',fontWeight:600}}
-                        onClick={() => { setMostrandoSubOlimpiadas(false); enviarPregunta('Olimpiadas - ' + sub) }}>
-                        {sub}
-                      </button>
-                    ))}
-                    <button className="o-chip"
-                      style={{background:'#F3F0FF',color:'#6D28D9',border:'1px solid rgba(109,40,217,.12)'}}
-                      onClick={() => setMostrandoSubOlimpiadas(false)}>
-                      {idiomaIngles ? '← Back' : '← Regresar'}
-                    </button>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Las acciones rápidas viven en el sidebar (debajo de la
-                materia activa), no aquí sobre el input — pedido explícito
-                del usuario (QA 2026-07-14). */}
+            {/* El selector de materia y las acciones rápidas viven en el
+                sidebar (debajo de la sesión actual), no aquí sobre el
+                input — pedido explícito del usuario (QA 2026-07-14). */}
             <div className="o-input-wrap" style={{display:'flex',gap:'10px',alignItems:'flex-end',padding:'10px 14px'}}>
               <textarea ref={inputRef} value={pregunta}
                 onChange={e=>setPregunta(e.target.value)}
