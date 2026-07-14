@@ -58,6 +58,7 @@ import {
   type ColegioSharePointInput,
 } from '@/lib/sharepointFolders'
 import {
+  buildCorrectAnswerWithNextExercise,
   buildGuidedMathHint,
   extractAndCleanOperation,
   handleMathEvaluation,
@@ -2149,10 +2150,16 @@ export async function POST(req: NextRequest) {
           ? 'You have built a strong streak, so I will raise the challenge a little.'
           : 'Ya llevas una buena racha, así que voy a subir un poco el reto.'
         : ''
+      // Hallazgo real (QA 2026-07-14): la plantilla genérica anterior aquí
+      // ("Tu respuesta está bien. Vamos con un ejercicio distinto.")
+      // reemplazaba por completo el refuerzo pedagógico de
+      // evaluacionProtocolo.feedback ("Lo resolviste tú... ya sabes cómo
+      // encontrarla otra vez") cada vez que había un siguiente ejercicio en
+      // cola — el caso más común tras responder bien durante la práctica.
+      // El refuerzo del instructivo del 13 de julio nunca se veía en ese
+      // flujo. Se centraliza en buildCorrectAnswerWithNextExercise.
       const respuestaCorrectaConSiguiente = siguienteEjercicio
-        ? idiomaIngles
-          ? `Correct. Your answer is right. Let's try a different exercise now.${avisoSubida ? '\n\n' + avisoSubida : ''}\n\n${siguienteEjercicio.text}`
-          : `¡Correcto! Tu respuesta está bien. Vamos con un ejercicio distinto.${avisoSubida ? '\n\n' + avisoSubida : ''}\n\n${siguienteEjercicio.text}`
+        ? buildCorrectAnswerWithNextExercise(siguienteEjercicio.text, avisoSubida, idiomaIngles)
         : evaluacionProtocolo.feedback
       const respuesta = esRespuestaCorrecta
         ? respuestaCorrectaConSiguiente

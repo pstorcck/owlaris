@@ -532,6 +532,20 @@ function generatePedagogicalFeedback(
   }
 }
 
+// Hallazgo real (QA 2026-07-14): preguntar/route.ts tenía su PROPIA plantilla
+// genérica ("Tu respuesta está bien. Vamos con un ejercicio distinto.") para
+// el caso más común tras una respuesta correcta — cuando hay un siguiente
+// ejercicio en cola — que reemplazaba por completo el refuerzo pedagógico de
+// generatePedagogicalFeedback ("Lo resolviste tú... ya sabes cómo
+// encontrarla otra vez"). Se centraliza aquí, junto al resto de las
+// plantillas de refuerzo, para que ambos casos (con y sin siguiente
+// ejercicio) usen el mismo mensaje.
+export function buildCorrectAnswerWithNextExercise(nextExerciseText: string, avisoSubida: string, idiomaIngles: boolean): string {
+  return idiomaIngles
+    ? `Correct. You solved it yourself — now you don't just have the answer, you know how to find it again. Let's try a different exercise.${avisoSubida ? '\n\n' + avisoSubida : ''}\n\n${nextExerciseText}`
+    : `¡Correcto! Lo resolviste tú. Ahora no solo tienes la respuesta: ya sabes cómo encontrarla otra vez. Vamos con un ejercicio distinto.${avisoSubida ? '\n\n' + avisoSubida : ''}\n\n${nextExerciseText}`
+}
+
 export function buildGuidedMathHint(op: string | null | undefined, idiomaIngles: boolean): string {
   const clean = normalizeOperation(op || '')
   if (clean.includes('=') && /x/i.test(clean)) {

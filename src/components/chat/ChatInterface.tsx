@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import type { Usuario, Materia, MensajeChat } from '@/types'
 import { sanitizarTextoPdf } from '@/lib/pdfText'
+import { buildWelcomeMessage } from '@/lib/pedagogicalGuard'
 
 interface Props {
   usuario: Usuario
@@ -412,13 +413,22 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
     // ejercicio pendiente se recupera igual si el alumno menciona la
     // materia). Se le avisa explícitamente de esto en vez de simular una
     // continuidad que la interfaz de chat no tiene.
-    const msg = gradoGuardado
+    //
+    // Hallazgo real (QA 2026-07-14): el mensaje de bienvenida exacto del
+    // instructivo del 13 de julio se había implementado como un corte
+    // determinístico en el backend (esBienvenida en preguntar/route.ts),
+    // pero ese código nunca se alcanza — este mensaje local, mostrado al
+    // montar el chat, es lo primero que ve el alumno y nunca pasa por el
+    // API. Se antepone aquí, una sola vez por sesión/chat (mismo guard de
+    // bienvenidaInicializadaRef de siempre).
+    const continuacion = gradoGuardado
       ? (idiomaIngles
           ? `Hi, ${nombre}! What subject are we studying today? If you already worked with me earlier today, this chat won't show that history, but I can pick up right where you left off if you tell me the subject and topic — or check "Today's report" for the full record.`
           : `¡Hola, ${nombre}! ¿Qué materia vamos a estudiar hoy? Si ya trabajaste conmigo antes hoy, este chat no muestra ese historial, pero puedo retomarlo si me dices la materia y el tema — o revisa "Reporte de hoy" para ver el registro completo.`)
       : (idiomaIngles
           ? `Hi, ${nombre}! I'm Owlaris, your academic tutor. First, select your grade.`
           : `¡Hola, ${nombre}! Soy Owlaris, tu tutor académico. Primero, selecciona tu grado.`)
+    const msg = `${buildWelcomeMessage(idiomaIngles)}\n\n${continuacion}`
     setMensajes([{
       id: 'bienvenida',
       rol: 'asistente',

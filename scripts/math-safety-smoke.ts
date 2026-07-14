@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import {
+  buildCorrectAnswerWithNextExercise,
   buildGuidedMathHint,
   handleMathEvaluation,
   inferCanonicalOperationFromText,
@@ -429,6 +430,23 @@ Intenta nuevamente, ¿cuánto es el impuesto?`
     '2*(4+8)',
     'inferRectangleWordProblem debe funcionar aunque looksLikeMathPracticePrompt sea false'
   )
+
+  // Hallazgo real (QA 2026-07-14): preguntar/route.ts tenía su propia
+  // plantilla genérica ("Tu respuesta está bien. Vamos con un ejercicio
+  // distinto.") para el caso con siguiente ejercicio en cola, que
+  // reemplazaba por completo el refuerzo pedagógico del instructivo del 13
+  // de julio ("Lo resolviste tú... ya sabes cómo encontrarla otra vez").
+  // Esta prueba fija el contrato del builder centralizado.
+  const siguienteEs = buildCorrectAnswerWithNextExercise('Intenta este ejercicio: 3*4. ¿Cuál es el resultado?', '', false)
+  assert.match(siguienteEs, /lo resolviste t[uú]/i)
+  assert.match(siguienteEs, /ya sabes c[oó]mo encontrarla otra vez/i)
+  assert.match(siguienteEs, /Intenta este ejercicio: 3\*4/)
+  assert.doesNotMatch(siguienteEs, /tu respuesta est[aá] bien\. vamos con un ejercicio distinto/i)
+  const siguienteEn = buildCorrectAnswerWithNextExercise('Try this exercise: 3*4. What is the result?', '', true)
+  assert.match(siguienteEn, /you solved it yourself/i)
+  assert.match(siguienteEn, /you know how to find it again/i)
+  const siguienteConAviso = buildCorrectAnswerWithNextExercise('Intenta 5+5.', 'Ya llevas una buena racha, así que voy a subir un poco el reto.', false)
+  assert.match(siguienteConAviso, /buena racha/i)
 
   console.log('math-safety smoke passed')
 }
