@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { resolverCarpetasExistentes } from '../src/lib/sharepointFolders'
+import { getSharedSubjectChipsForGrade, resolverCarpetasExistentes } from '../src/lib/sharepointFolders'
 
 async function main() {
   // Caso real (Colegio Montano y Escolaris, verificación en vivo
@@ -53,6 +53,22 @@ async function main() {
 
   const vacio = await resolverCarpetasExistentes([], async () => true)
   assert.deepEqual(vacio, [])
+
+  // Hallazgo real (QA 2026-07-14): "Olimpiadas de Ciencias" aparecía para
+  // 4to Primaria aunque el contenido de Olimpiadas no está pensado para
+  // ese nivel — debe verse desde Básico/Bachillerato en adelante, pero no
+  // en Primaria.
+  assert.deepEqual(getSharedSubjectChipsForGrade('4to Primaria'), [])
+  assert.deepEqual(getSharedSubjectChipsForGrade('5to Primaria'), [])
+  assert.deepEqual(getSharedSubjectChipsForGrade('6to Primaria'), [])
+  assert.deepEqual(getSharedSubjectChipsForGrade('1ero Básico'), ['Olimpiadas de Ciencias'])
+  assert.deepEqual(getSharedSubjectChipsForGrade('2do Básico'), ['Olimpiadas de Ciencias'])
+  assert.deepEqual(getSharedSubjectChipsForGrade('3ero Básico'), ['Mineduc - Lenguaje', 'Mineduc - Matemática', 'Olimpiadas de Ciencias'])
+  assert.deepEqual(getSharedSubjectChipsForGrade('4to Bachillerato'), ['Olimpiadas de Ciencias'])
+  assert.deepEqual(getSharedSubjectChipsForGrade('5to Bachillerato'), ['Mineduc - Lenguaje', 'Mineduc - Matemática', 'Olimpiadas de Ciencias'])
+  assert.deepEqual(getSharedSubjectChipsForGrade('Grado 8'), ['Olimpiadas de Ciencias'])
+  assert.deepEqual(getSharedSubjectChipsForGrade(''), [])
+  assert.deepEqual(getSharedSubjectChipsForGrade(null), [])
 
   console.log('sharepoint-carpetas-existentes smoke passed')
 }

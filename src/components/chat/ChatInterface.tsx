@@ -1842,7 +1842,17 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
                     {['Matemática','Biología','Física','Química','Ciencias Naturales'].map(sub => (
                       <button key={sub} className="o-chip"
                         style={{width:'100%',justifyContent:'flex-start',background:'linear-gradient(135deg,#d97706,#b45309)',color:'white',border:'none',fontWeight:600}}
-                        onClick={() => { setMostrandoSubOlimpiadas(false); enviarPregunta('Olimpiadas - ' + sub); setSidebarAbierto(false) }}>
+                        onClick={() => {
+                          setMostrandoSubOlimpiadas(false)
+                          // Mismo hallazgo que el clic de materia (QA
+                          // 2026-07-14): con estadoChat ya en 'activo' a
+                          // media conversación, hay que forzar
+                          // 'esperando_materia' o el backend trata el
+                          // mensaje como una pregunta de la materia
+                          // ANTERIOR en vez de un cambio de materia.
+                          enviarPregunta('Olimpiadas - ' + sub, { forceEstado: 'esperando_materia' })
+                          setSidebarAbierto(false)
+                        }}>
                         {sub}
                       </button>
                     ))}

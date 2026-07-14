@@ -25,6 +25,12 @@ export const GRADOS_ESCHOLARIS = [
   'Grado 12',
 ]
 const MINEDUC_GRADES = ['3ero Básico', '5to Bachillerato']
+// Hallazgo real (QA 2026-07-14): "Olimpiadas de Ciencias" aparecía para
+// cualquier grado con solo tener un nombre no vacío, incluida Primaria
+// (4to/5to/6to) — el contenido de Olimpiadas (fracciones algebraicas,
+// química, física) no está pensado para ese nivel, y sin carpeta propia
+// por grado el código cae a un banco genérico igual de inadecuado.
+const GRADOS_SIN_OLIMPIADAS = ['4to Primaria', '5to Primaria', '6to Primaria']
 
 function normalizeKey(value: string) {
   return value
@@ -264,7 +270,8 @@ export function getSharedSubjectChipsForGrade(grado?: string | null) {
     chips.push('Mineduc - Lenguaje')
     chips.push('Mineduc - Matemática')
   }
-  if (normalizedGrade) chips.push('Olimpiadas de Ciencias')
+  const esPrimariaSinOlimpiadas = GRADOS_SIN_OLIMPIADAS.some(g => normalizeSharePointKey(g) === normalizedGrade)
+  if (normalizedGrade && !esPrimariaSinOlimpiadas) chips.push('Olimpiadas de Ciencias')
   return chips
 }
 
