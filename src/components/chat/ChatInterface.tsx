@@ -254,6 +254,7 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
   }, [])
   const [idiomaIngles, setIdiomaIngles]       = useState(false)
   const [sidebarAbierto, setSidebarAbierto]   = useState(false)
+  const [sidebarColapsado, setSidebarColapsado] = useState(false)
   const [pendingMathId, setPendingMathId]     = useState<string | null>(null)
   const [modoConversacion, setModoConversacion] = useState(false)
   const [grabando, setGrabando]               = useState(false)
@@ -1442,13 +1443,18 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
         .o-topbar-mobile { display:flex; align-items:center; gap:12px; padding:12px 18px; background:rgba(255,255,255,.9); backdrop-filter:blur(20px); border-bottom:1px solid rgba(109,40,217,.08); position:sticky; top:0; z-index:40; }
         .o-hamburger { width:38px; height:38px; border-radius:11px; border:1px solid rgba(109,40,217,.15); background:#F3F0FF; display:flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0; transition:all .2s; }
         .o-hamburger:hover { background:#EAE3FF; }
+        .o-sidebar-reopen { position:fixed; top:18px; left:18px; width:38px; height:38px; border-radius:11px; border:1px solid rgba(109,40,217,.15); background:white; align-items:center; justify-content:center; cursor:pointer; z-index:60; box-shadow:0 2px 12px rgba(109,40,217,.12); transition:all .2s; }
+        .o-sidebar-reopen:hover { background:#F3F0FF; }
         .o-sidebar-section-title { font-size:10px; font-weight:700; letter-spacing:1.1px; text-transform:uppercase; color:#B0A8D9; margin:2px 0 2px 4px; }
         .o-sidebar-status { display:flex; align-items:center; gap:8px; background:rgba(109,40,217,.06); border:1px solid rgba(109,40,217,.1); border-radius:12px; padding:9px 12px; font-size:12px; font-weight:600; color:#5B21B6; }
         .o-sidebar-divider { height:1px; background:rgba(109,40,217,.08); margin:2px 0; flex-shrink:0; }
         .o-sidebar-idioma { width:100%; justify-content:center; }
+        .o-sidebar-reopen { display:none; }
         @media (min-width:960px) {
           .o-sidebar { position:sticky; top:0; height:100vh; transform:none; box-shadow:none; }
+          .o-sidebar.colapsado { width:0; padding:0; border:none; overflow:hidden; }
           .o-sidebar-overlay { display:none; }
+          .o-sidebar-reopen { display:flex; }
           .o-topbar-mobile { display:none; }
         }
         .bbl-tutor { background:white; border:1px solid rgba(109,40,217,.1); border-radius:4px 20px 20px 20px; box-shadow:0 2px 20px rgba(109,40,217,.08); position:relative; }
@@ -1591,7 +1597,19 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
         })()}
         {/* Sidebar — sustituye la barra de botones que antes iba sobre el chat */}
         {sidebarAbierto && <div className="o-sidebar-overlay" onClick={()=>setSidebarAbierto(false)} />}
-        <aside className={`o-sidebar${sidebarAbierto ? ' abierto' : ''}`}>
+        {/* Hallazgo real (QA 2026-07-14): la "X" del header del sidebar solo
+            cerraba el drawer móvil (sidebarAbierto) — en desktop el sidebar
+            es sticky con transform:none siempre, así que el botón no hacía
+            nada visible. Se agrega sidebarColapsado, real para desktop, con
+            este botón flotante para volver a mostrarlo. */}
+        {sidebarColapsado && (
+          <button className="o-sidebar-reopen" onClick={()=>setSidebarColapsado(false)} aria-label={idiomaIngles ? 'Show sidebar' : 'Mostrar menú'}>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#6D28D9" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="4" width="18" height="16" rx="3"/><line x1="9" y1="4" x2="9" y2="20"/>
+            </svg>
+          </button>
+        )}
+        <aside className={`o-sidebar${sidebarAbierto ? ' abierto' : ''}${sidebarColapsado ? ' colapsado' : ''}`}>
           <div style={{display:'flex',alignItems:'center',gap:'10px'}}>
             <div className="o-avatar-ring" style={{width:'40px',height:'40px',flexShrink:0}}>
               <div style={{background:'white',borderRadius:'50%',width:'36px',height:'36px',display:'flex',alignItems:'center',justifyContent:'center'}}>
@@ -1602,8 +1620,12 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
               <p style={{fontFamily:"'Syne',sans-serif",fontSize:'16px',fontWeight:700,color:'#1E1B4B',letterSpacing:'-0.4px'}}>Owlaris</p>
               <p style={{fontSize:'10px',color:'#9490B8',fontWeight:500}}>{idiomaIngles ? 'Your academic tutor' : 'Tu tutor académico'}</p>
             </div>
-            <button className="o-hamburger" style={{marginLeft:'auto'}} onClick={()=>setSidebarAbierto(false)} aria-label="Close menu">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6D28D9" strokeWidth="2.4" strokeLinecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+            <button className="o-hamburger" style={{marginLeft:'auto'}}
+              onClick={()=>{ setSidebarAbierto(false); setSidebarColapsado(true) }}
+              aria-label={idiomaIngles ? 'Hide sidebar' : 'Ocultar menú'}>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#6D28D9" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="4" width="18" height="16" rx="3"/><line x1="9" y1="4" x2="9" y2="20"/>
+              </svg>
             </button>
           </div>
 
