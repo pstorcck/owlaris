@@ -704,6 +704,16 @@ function resolverMateriaSeleccionada(texto: string, disponibles: string[], permi
   if (matchDirecto) return matchDirecto
 
   if (permitirOlimpiadas && /olimpiad|competencia/.test(entrada)) {
+    // Hallazgo real (QA 2026-07-14): cuando el sidebar ya envía la materia
+    // específica de una vez (ej. "Olimpiadas - Biología", al elegir
+    // directamente la sub-materia), este bloque solo miraba la palabra
+    // "olimpiadas" y volvía a preguntar "¿de cuál materia?" — ignorando
+    // que el mensaje YA la traía, obligando a un turno extra repitiendo lo
+    // que el alumno ya había elegido. normalizarMateria ya sabe reconocer
+    // el compuesto completo (ver materiaDetection.ts); se usa aquí antes
+    // de caer al genérico "__OLIMPIADAS__".
+    const materiaOlimpiadasEspecifica = normalizarMateria(texto)
+    if (materiaOlimpiadasEspecifica.startsWith('Olimpiadas - ')) return materiaOlimpiadasEspecifica
     const existeOlimpiadas = disponiblesCurriculares.some(m => normalizarClaveSeleccion(m).includes('olimpiadas'))
     if (existeOlimpiadas) return '__OLIMPIADAS__'
   }

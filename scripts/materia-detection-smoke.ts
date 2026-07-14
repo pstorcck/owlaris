@@ -105,6 +105,21 @@ function main() {
   assert.equal(isLanguageSwitchRequest('¿qué es la fotosíntesis?'), false)
   assert.equal(isLanguageSwitchRequest(''), false)
 
+  // Hallazgo real (QA 2026-07-14): al elegir "Olimpiadas" y luego
+  // "Biología" desde el sidebar, se envía el compuesto "Olimpiadas -
+  // Biología" de una sola vez — normalizarMateria debe reconocer la
+  // materia específica ya incluida en el texto, no solo la palabra
+  // "Olimpiadas" sola (eso hacía que preguntar/route.ts volviera a
+  // preguntar "¿de cuál materia?" pese a que el alumno ya la había
+  // elegido).
+  assert.equal(normalizarMateria('Olimpiadas - Biología'), 'Olimpiadas - Biología')
+  assert.equal(normalizarMateria('Olimpiadas - Matemática'), 'Olimpiadas - Matemática')
+  assert.equal(normalizarMateria('Olimpiadas - Física'), 'Olimpiadas - Física')
+  assert.equal(normalizarMateria('Olimpiadas - Química'), 'Olimpiadas - Química')
+  assert.equal(normalizarMateria('Olimpiadas - Ciencias Naturales'), 'Olimpiadas - Ciencias Naturales')
+  // Sin materia específica, sigue devolviendo el sentinel genérico.
+  assert.equal(normalizarMateria('Olimpiadas'), '__OLIMPIADAS__')
+
   console.log('materia-detection smoke passed')
 }
 
