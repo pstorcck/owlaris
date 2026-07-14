@@ -10,7 +10,7 @@ import { pareceIdiomaDistinto } from '@/lib/languageDetection'
 import { buscarStaffColegio, buscarSuperadmins, elegirFuenteDestinatariosAlerta, resolverDestinatariosAlerta, type DestinatarioAlerta } from '@/lib/alertaEmergencia'
 import { verificarLimiteFrecuencia } from '@/lib/rateLimit'
 import { isExplicitTableRequest, looksLikeMarkdownTable, sanitizeChatFormatting } from '@/lib/chatFormatting'
-import { detectarMateriaDesdeTexto, isLanguageSwitchRequest, materiaActualEnSistemaCNB, normalizarMateria } from '@/lib/materiaDetection'
+import { detectarMateriaDesdeTexto, isLanguageSwitchRequest, materiaActualEnSistemaCNB, normalizarMateria, resolverMateriaRealDisponible } from '@/lib/materiaDetection'
 import { isExplicitCourseSwitchRequest } from '@/lib/courseSwitchDetection'
 import { detectarPatronErrores, isReviewMistakesRequest, primeraOperacionValida } from '@/lib/mistakeReview'
 import { limpiarTemaGeneral } from '@/lib/temaGeneral'
@@ -1394,11 +1394,33 @@ export async function POST(req: NextRequest) {
     // agrega la misma exclusión aquí, en el camino que sí corre.
     if (estado === 'activo' && materia_id && materiaActualEnSistemaCNB(materia_id) && !isLanguageSwitchRequest(pregunta)) {
       const materiaDetectada = detectarMateriaDesdeTexto(pregunta)
-      if (materiaDetectada && materiaDetectada !== normalizarMateria(materia_id)) return NextResponse.json({ respuesta: 'Estamos en ' + materia_id + '. "' + pregunta.trim() + '" parece un tema de ' + materiaDetectada + '. ¿Quieres seguir con ' + materia_id + ' o cambiar a ' + materiaDetectada + '?', nuevo_estado: 'esperando_confirmacion_cambio_materia', materia_sugerida: materiaDetectada, tokens: 0 })
+      if (materiaDetectada && materiaDetectada !== normalizarMateria(materia_id)) {
+        // Hallazgo real (QA 100 pruebas, 2026-07-14): materiaDetectada es la
+        // categoría CNB genérica ("Biología") detectada por palabra clave —
+        // una cuenta eScholaris (Grado 8, cuenta Paul) no tiene una clase
+        // llamada literalmente "Biología" en ese grado (es "Science Grade
+        // 8"; "Biología" es exclusiva de Grado 10 ahí). Se resuelve contra
+        // la materia real disponible del alumno antes de ofrecerla.
+        const materiasDisponiblesParaAviso: string[] = Array.isArray(body.materias_disponibles) ? body.materias_disponibles : []
+        const materiaParaOfrecer = resolverMateriaRealDisponible(materiaDetectada, materiasDisponiblesParaAviso)
+        return NextResponse.json({ respuesta: 'Estamos en ' + materia_id + '. "' + pregunta.trim() + '" parece un tema de ' + materiaParaOfrecer + '. ¿Quieres seguir con ' + materia_id + ' o cambiar a ' + materiaParaOfrecer + '?', nuevo_estado: 'esperando_confirmacion_cambio_materia', materia_sugerida: materiaParaOfrecer, tokens: 0 })
+      }
     }
 
     if (estado === 'esperando_confirmacion_cambio_materia') {
-      const esAfirmativo = /^(si|sí|yes|s|claro|correcto|dale|ok|bueno|perfecto|va|vamos)/.test(pregunta.toLowerCase().trim())
+      // Hallazgo real CRÍTICO (QA 100 pruebas, 2026-07-14, bug ya reportado
+      // que seguía presente): la regex de afirmación no exigía límite de
+      // palabra, así que "sigamos con Math Grade 8" (confirmar quedarse en
+      // la materia ACTUAL, nombrándola) hacía match con el prefijo "si" de
+      // "sigamos" y se interpretaba como si el alumno hubiera confirmado el
+      // CAMBIO a la materia sugerida — justo lo opuesto de lo que pidió. Se
+      // agrega \b para que "si"/"s" solo cuenten como palabra completa, y
+      // además: si el mensaje nombra explícitamente la materia ACTUAL
+      // (materia_id), eso siempre significa "quiero seguir aquí", sin
+      // importar si además arranca con una palabra que suena afirmativa
+      // ("sí, sigamos con Math Grade 8" también debe quedarse, no cambiar).
+      const nombraMateriaActual = !!materia_id && pregunta.toLowerCase().includes(String(materia_id).toLowerCase())
+      const esAfirmativo = !nombraMateriaActual && /^(si|sí|yes|s|claro|correcto|dale|ok|bueno|perfecto|va|vamos)\b/.test(pregunta.toLowerCase().trim())
       const materiaSugerida = body.materia_sugerida || ''
       if (esAfirmativo && materiaSugerida) {
         Array.from(cacheContenido.keys()).forEach(key => { if (key.includes(materia_id)) cacheContenido.delete(key) })
@@ -2002,21 +2024,35 @@ export async function POST(req: NextRequest) {
             })
           }
 
-          const textoConOP = preguntaPendiente.respuesta + '\n[OP: ' + preguntaPendiente.operacion_canonica + ']'
-          evaluacionProtocolo = await handleMathEvaluation(textoConOP, pregunta, idiomaIngles, process.env.WOLFRAM_APP_ID)
-          // Si acertó el valor final: marcar como evaluada (best-effort, sin
-          // condicionar la respuesta al resultado de este update). Un intento
-          // previo de hacerlo compare-and-swap contra .eq('op_estado','pendiente')
-          // devolvía 0 filas incluso en peticiones solitarias sin ninguna
-          // concurrencia real, lo que bloqueaba el avance de la práctica para
-          // todos los alumnos — un daño mucho mayor que el caso raro de doble
-          // clic que ese guard intentaba prevenir.
-          if (evaluacionProtocolo && !evaluacionProtocolo.pasoIntermedio && (evaluacionProtocolo.estado === 'correcto' || evaluacionProtocolo.estado === 'equivalente')) {
-            await supabase.from('interacciones')
-              .update({ op_estado: 'evaluada', op_evaluada_en: new Date().toISOString(), op_respuesta_alumno: pregunta })
-              .eq('id', pendingMathId).eq('usuario_id', user.id)
+          // Hallazgo real (QA 100 pruebas, 2026-07-14): el chip "Resume el
+          // tema" caía aquí igual que cualquier otro mensaje mientras había
+          // un ejercicio pendiente — se evaluaba el texto literal "Resume el
+          // tema" como intento de respuesta a ESE ejercicio. normalizeStudentAnswer
+          // lo rechaza como número, así que quedaba "no_evaluable" y activaba
+          // la instrucción de backend "pide al alumno que escriba la
+          // operación", que pisaba por completo la nota de
+          // describeResumeTopicPolicyForPrompt (más abajo) y terminaba en un
+          // ejercicio nuevo no relacionado en vez de un resumen. Se excluye
+          // aquí igual que ya se excluye isPendingContextQuestion/isExerciseRecallRequest,
+          // para que el flujo llegue a la respuesta libre del modelo con la
+          // nota de resumen intacta.
+          if (!isResumeTopicChipRequest(pregunta)) {
+            const textoConOP = preguntaPendiente.respuesta + '\n[OP: ' + preguntaPendiente.operacion_canonica + ']'
+            evaluacionProtocolo = await handleMathEvaluation(textoConOP, pregunta, idiomaIngles, process.env.WOLFRAM_APP_ID)
+            // Si acertó el valor final: marcar como evaluada (best-effort, sin
+            // condicionar la respuesta al resultado de este update). Un intento
+            // previo de hacerlo compare-and-swap contra .eq('op_estado','pendiente')
+            // devolvía 0 filas incluso en peticiones solitarias sin ninguna
+            // concurrencia real, lo que bloqueaba el avance de la práctica para
+            // todos los alumnos — un daño mucho mayor que el caso raro de doble
+            // clic que ese guard intentaba prevenir.
+            if (evaluacionProtocolo && !evaluacionProtocolo.pasoIntermedio && (evaluacionProtocolo.estado === 'correcto' || evaluacionProtocolo.estado === 'equivalente')) {
+              await supabase.from('interacciones')
+                .update({ op_estado: 'evaluada', op_evaluada_en: new Date().toISOString(), op_respuesta_alumno: pregunta })
+                .eq('id', pendingMathId).eq('usuario_id', user.id)
+            }
+            // Si incorrecto: mantener pendiente — no actualizar, el frontend conserva el mismo ID
           }
-          // Si incorrecto: mantener pendiente — no actualizar, el frontend conserva el mismo ID
         } else {
           // El pending_math_interaction_id no encontró una fila válida (cambio de
           // materia, condición de carrera, ID desincronizado). Antes de rendirnos,

@@ -81,6 +81,42 @@ export function materiaActualEnSistemaCNB(materiaId: string): boolean {
   return Object.prototype.hasOwnProperty.call(TEMAS_POR_MATERIA, normalizarMateria(materiaId))
 }
 
+// Hallazgo real (QA 100 pruebas, 2026-07-14): el candado de tema sugiere
+// cambiar de materia usando la categoría CNB genérica que detectarMateriaDesdeTexto
+// devuelve por palabras clave (ej. "Biología") — pero una cuenta eScholaris
+// (contenido estilo EEUU) no tiene una clase llamada literalmente "Biología"
+// en Grado 8, sino "Science Grade 8" ("Biología" es exclusiva de Grado 10 en
+// esa cuenta). El aviso terminaba ofreciendo cambiar a una materia que no
+// existe para ese grado. Se resuelve la categoría CNB contra la lista real
+// de materias disponibles del alumno (ya sea por nombre exacto — cuentas
+// Mineduc que sí usan el nombre CNB literal — o por palabra clave típica de
+// nombre de clase eScholaris) antes de mostrarla u ofrecerla como cambio.
+// Si no hay ninguna coincidencia, se conserva la categoría genérica tal cual
+// (comportamiento anterior, sin regresión para cuentas sin esa lista).
+const CATEGORIA_A_PALABRAS_CLASE_MATERIA: Record<string, string[]> = {
+  'Física': ['science', 'físic', 'fisic'],
+  'Química': ['science', 'quím', 'quim', 'chem'],
+  'Biología': ['science', 'biolog'],
+  'Ciencias Naturales': ['science', 'natural'],
+  'Matemática': ['math', 'matem'],
+  'Historia': ['social studies', 'histor'],
+  'Español': ['spanish', 'español', 'espanol', 'language arts'],
+  'Inglés': ['english', 'ingl'],
+}
+
+export function resolverMateriaRealDisponible(categoriaDetectada: string, materiasDisponibles: string[]): string {
+  if (!Array.isArray(materiasDisponibles) || materiasDisponibles.length === 0) return categoriaDetectada
+  const exacta = materiasDisponibles.find((m) => normalizarMateria(m) === categoriaDetectada)
+  if (exacta) return exacta
+  const palabrasClave = CATEGORIA_A_PALABRAS_CLASE_MATERIA[categoriaDetectada] || []
+  if (palabrasClave.length === 0) return categoriaDetectada
+  const porPalabraClave = materiasDisponibles.find((m) => {
+    const normalizado = m.toLowerCase()
+    return palabrasClave.some((palabra) => normalizado.includes(palabra))
+  })
+  return porPalabraClave || categoriaDetectada
+}
+
 // Hallazgo real (instructivo de mejoras, ronda 2026-07-11), ítems 15-16: la
 // palabra "english" está en TEMAS_POR_MATERIA['Inglés'] para detectar cuando
 // un alumno quiere cambiar a la clase de Inglés, pero esa misma palabra

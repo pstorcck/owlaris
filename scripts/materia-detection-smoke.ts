@@ -4,6 +4,7 @@ import {
   isLanguageSwitchRequest,
   materiaActualEnSistemaCNB,
   normalizarMateria,
+  resolverMateriaRealDisponible,
   TEMAS_POR_MATERIA,
 } from '../src/lib/materiaDetection'
 
@@ -119,6 +120,37 @@ function main() {
   assert.equal(normalizarMateria('Olimpiadas - Ciencias Naturales'), 'Olimpiadas - Ciencias Naturales')
   // Sin materia específica, sigue devolviendo el sentinel genérico.
   assert.equal(normalizarMateria('Olimpiadas'), '__OLIMPIADAS__')
+
+  // Hallazgo real (QA 100 pruebas, 2026-07-14): el candado de tema
+  // ofrecía cambiar a "Biología" (categoría CNB genérica) para una cuenta
+  // eScholaris de Grado 8 cuya materia real disponible es "Science Grade
+  // 8" — "Biología" es exclusiva de Grado 10 en esa cuenta y no existe
+  // como opción real para el alumno. resolverMateriaRealDisponible debe
+  // preferir la materia real disponible sobre la categoría genérica.
+  assert.equal(
+    resolverMateriaRealDisponible('Biología', ['Math Grade 8', 'Science Grade 8', 'English Grade 8']),
+    'Science Grade 8'
+  )
+  assert.equal(
+    resolverMateriaRealDisponible('Física', ['Math Grade 10', 'Physical Science Grade 10']),
+    'Physical Science Grade 10'
+  )
+  assert.equal(
+    resolverMateriaRealDisponible('Matemática', ['Math Grade 8', 'Science Grade 8']),
+    'Math Grade 8'
+  )
+  // Cuenta Mineduc/CNB: la materia real disponible SÍ usa el nombre CNB
+  // literal — se prefiere la coincidencia exacta sobre la búsqueda por
+  // palabra clave.
+  assert.equal(
+    resolverMateriaRealDisponible('Biología', ['Matemática', 'Biología', 'Física']),
+    'Biología'
+  )
+  // Sin lista de materias disponibles (o sin ninguna coincidencia), se
+  // conserva la categoría genérica — mismo comportamiento que antes, sin
+  // regresión.
+  assert.equal(resolverMateriaRealDisponible('Biología', []), 'Biología')
+  assert.equal(resolverMateriaRealDisponible('Historia', ['Math Grade 8', 'Science Grade 8']), 'Historia')
 
   console.log('materia-detection smoke passed')
 }

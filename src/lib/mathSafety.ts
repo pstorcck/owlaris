@@ -755,6 +755,25 @@ export async function handleMathEvaluation(
 
   logEvaluation({ op, correctAnswer, studentAnswer, studentN, estado, pasoIntermedio: !!pasoIntermedio, guardActivado, procedimientoMostrado })
 
+  // DIAGNOSTICO TEMPORAL (QA 100 pruebas, 2026-07-14): ejercicios de
+  // fracciones con contexto de "pizza" (resta simple, y multiplicación
+  // seguida de resta) marcaron respuestas correctas como incorrectas de
+  // forma repetida y determinística. logEvaluation() no loguea en
+  // producción (NODE_ENV === 'production'), así que no hay evidencia real
+  // de qué operación canónica ([OP: ...]) quedó mal etiquetada o mal
+  // inferida — se quita en cuanto se identifique la causa real con
+  // evidencia de logs de producción.
+  if (op.includes('/')) {
+    console.log('DIAG_FRACCION', JSON.stringify({
+      tutorQuestion: tutorQuestion.slice(0, 500),
+      op,
+      correctAnswer,
+      studentAnswer: studentAnswer.slice(0, 300),
+      studentN,
+      estado,
+    }))
+  }
+
   return { estado, feedback, correctAnswer, op, guardActivado, pasoIntermedio: !!pasoIntermedio, procedimientoMostrado }
 }
 
