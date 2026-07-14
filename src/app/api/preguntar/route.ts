@@ -1393,7 +1393,7 @@ export async function POST(req: NextRequest) {
     // anterior: ese fix solo tocó código que route.ts no ejecuta. Se
     // agrega la misma exclusión aquí, en el camino que sí corre.
     if (estado === 'activo' && materia_id && materiaActualEnSistemaCNB(materia_id) && !isLanguageSwitchRequest(pregunta)) {
-      const materiaDetectada = detectarMateriaDesdeTexto(pregunta)
+      const materiaDetectada = detectarMateriaDesdeTexto(pregunta, normalizarMateria(materia_id))
       if (materiaDetectada && materiaDetectada !== normalizarMateria(materia_id)) {
         // Hallazgo real (QA 100 pruebas, 2026-07-14): materiaDetectada es la
         // categoría CNB genérica ("Biología") detectada por palabra clave —

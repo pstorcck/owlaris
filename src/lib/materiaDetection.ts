@@ -43,7 +43,15 @@ export const TEMAS_POR_MATERIA: Record<string, string[]> = {
   // lista sigue siendo suficientemente específico de Física.
   'Física': ['cinemática','cinematica','dinámica','dinamica','fuerza','movimiento','aceleración','aceleracion','energía','energia','calor','temperatura','ondas','luz','electricidad','magnetismo','gravedad','óptica','optica'],
   'Química': ['átomo','atomo','molécula','molecula','enlace','reacción','reaccion','tabla periódica','tabla periodica','ácido','acido','base','solución','solucion','oxidación','oxidacion','elemento','compuesto','estequiometría'],
-  'Biología': ['célula','celula','fotosíntesis','fotosintesis','adn','genética','genetica','gen','genes','herencia','alelo','alelos','rasgo','rasgos','evolución','evolucion','ecosistema','ecosistemas','ecología','ecologia','biodiversidad','organismo','organismos','proteína','proteina','mitosis','meiosis','respiración celular','anatomía','anatomia','fisiología','fisiologia','reproducción','reproduccion','adaptación','adaptacion'],
+  // Hallazgo real (QA en vivo, 2026-07-14, cuenta Paul): un ejercicio
+  // genuino de Biología sobre el método científico ("¿cómo afecta la
+  // cantidad de agua diaria al crecimiento de una planta de frijol?" —
+  // respondiendo directamente a lo que el tutor acababa de pedir) se
+  // detectó como "Ciencias Naturales" solo porque "planta" y "crecimiento"
+  // no estaban en la lista de Biología, pero sí en la de Ciencias
+  // Naturales — la biología de plantas (crecimiento, germinación, etc.)
+  // es contenido central de Biología, no exclusivo de Ciencias Naturales.
+  'Biología': ['célula','celula','fotosíntesis','fotosintesis','adn','genética','genetica','gen','genes','herencia','alelo','alelos','rasgo','rasgos','evolución','evolucion','ecosistema','ecosistemas','ecología','ecologia','biodiversidad','organismo','organismos','proteína','proteina','mitosis','meiosis','respiración celular','anatomía','anatomia','fisiología','fisiologia','reproducción','reproduccion','adaptación','adaptacion','planta','plantas','crecimiento','germinación','germinacion','semilla','semillas','raíz','raiz','raíces','raices','tallo','tallos'],
   'Historia': ['guerra','revolución','revolucion','independencia','civilización','civilizacion','colonia','conquista','maya','azteca','inca','república','republica','democracia','feudalismo'],
   'Español': ['gramática','gramatica','sintaxis','ortografía','ortografia','redacción','redaccion','literatura','poesía','poesia','narración','narracion','verbo','sustantivo','adjetivo','párrafo','parrafo'],
   'Inglés': ['vocabulary','grammar','verb','tense','sentence','reading','writing','speaking','listening','english'],
@@ -54,8 +62,27 @@ function escapeRegExp(value: string) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
-export function detectarMateriaDesdeTexto(texto: string): string | null {
+function coincideConMateria(t: string, materia: string): boolean {
+  const temas = TEMAS_POR_MATERIA[materia]
+  if (!temas) return false
+  return temas.some((tema) => {
+    const temaNorm = tema.replace(/á/g,'a').replace(/é/g,'e').replace(/í/g,'i').replace(/ó/g,'o').replace(/ú/g,'u')
+    return new RegExp(`\\b${escapeRegExp(temaNorm)}\\b`).test(t)
+  })
+}
+
+// Hallazgo real (QA en vivo, 2026-07-14): las listas de palabras clave de
+// materias con dominio superpuesto (Biología / Ciencias Naturales) nunca
+// van a estar completamente libres de solapamiento — es whack-a-mole
+// agregar una palabra a la vez. Como defensa general (no solo para este
+// caso puntual), si el mensaje TAMBIÉN coincide con las palabras clave de
+// la materia ACTIVA, no se trata como señal clara de cambio: la materia
+// activa ya cubre razonablemente el mensaje, así que no vale la pena
+// interrumpir con una pregunta de "¿quieres cambiar?" por una ambigüedad
+// de vocabulario compartido.
+export function detectarMateriaDesdeTexto(texto: string, materiaActual?: string | null): string | null {
   const t = texto.toLowerCase().replace(/á/g,'a').replace(/é/g,'e').replace(/í/g,'i').replace(/ó/g,'o').replace(/ú/g,'u')
+  if (materiaActual && coincideConMateria(t, materiaActual)) return null
   for (const [materia, temas] of Object.entries(TEMAS_POR_MATERIA)) {
     for (const tema of temas) {
       const temaNorm = tema.replace(/á/g,'a').replace(/é/g,'e').replace(/í/g,'i').replace(/ó/g,'o').replace(/ú/g,'u')

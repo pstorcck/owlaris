@@ -53,11 +53,12 @@ function main() {
   // en SU PROPIA materia, no en otra por colisión de substring — este mismo
   // escaneo encontró el bug real de "revolución" (Historia) confundida con
   // "evolución" (Biología) por un match de substring sin límite de palabra.
-  // "ecosistema" y "biodiversidad" son excepciones conocidas y aceptadas:
-  // aparecen tal cual en Biología Y en Ciencias Naturales (temas
-  // legítimamente compartidos, no un error de substring), así que gana la
+  // "ecosistema", "biodiversidad" y "planta" son excepciones conocidas y
+  // aceptadas: aparecen tal cual en Biología Y en Ciencias Naturales
+  // (temas legítimamente compartidos, no un error de substring — ver
+  // hallazgo real de "planta"/"crecimiento" más abajo), así que gana la
   // primera materia en orden de declaración.
-  const EXCEPCIONES_CONOCIDAS = new Set(['ecosistema', 'biodiversidad'])
+  const EXCEPCIONES_CONOCIDAS = new Set(['ecosistema', 'biodiversidad', 'planta'])
   for (const [materiaEsperada, temas] of Object.entries(TEMAS_POR_MATERIA)) {
     for (const tema of temas) {
       if (EXCEPCIONES_CONOCIDAS.has(tema)) continue
@@ -151,6 +152,43 @@ function main() {
   // regresión.
   assert.equal(resolverMateriaRealDisponible('Biología', []), 'Biología')
   assert.equal(resolverMateriaRealDisponible('Historia', ['Math Grade 8', 'Science Grade 8']), 'Historia')
+
+  // Hallazgo real (QA en vivo, 2026-07-14, cuenta Paul): en Biology
+  // (Grado 10), tras un ejercicio sobre "preguntas científicas, evidencia
+  // y modelos", el tutor pidió un ejemplo de pregunta científica — el
+  // alumno respondió con un ejemplo genuino de Biología ("¿cómo afecta la
+  // cantidad de agua diaria al crecimiento de una planta de frijol
+  // durante cuatro semanas?"), y el candado de materia lo marcó como un
+  // tema de "Ciencias Naturales" en vez de reconocerlo como Biología —
+  // "planta"/"crecimiento" no estaban en la lista de Biología, solo en la
+  // de Ciencias Naturales. Con las palabras agregadas, debe detectarse
+  // como Biología (no dispara el candado).
+  assert.equal(
+    detectarMateriaDesdeTexto('¿Cómo afecta la cantidad de agua diaria al crecimiento de una planta de frijol durante cuatro semanas?'),
+    'Biología'
+  )
+  assert.equal(
+    detectarMateriaDesdeTexto('¿Cómo afecta la cantidad de agua diaria al crecimiento de una planta de frijol durante cuatro semanas?', 'Biología'),
+    null,
+    'coincide también con la materia activa (Biología) — no debe verse como cambio'
+  )
+
+  // Defensa general (no solo este caso puntual): si el mensaje coincide
+  // con palabras clave de la materia ACTIVA, detectarMateriaDesdeTexto no
+  // debe devolver una materia distinta, aunque el mensaje TAMBIÉN
+  // coincida con el vocabulario de otra materia con dominio superpuesto.
+  assert.equal(
+    detectarMateriaDesdeTexto('quiero hablar de la nutrición de las plantas y el ecosistema', 'Ciencias Naturales'),
+    null,
+    'coincide con Ciencias Naturales (materia activa) — no debe ofrecer cambio aunque también toque vocabulario de Biología'
+  )
+  // Sin materia activa que coincida, el comportamiento normal de detección
+  // sigue funcionando igual que antes (sin regresión).
+  assert.equal(
+    detectarMateriaDesdeTexto('quiero entender la revolución francesa', 'Biología'),
+    'Historia',
+    'un cambio real de materia (que no coincide con la activa) debe seguir detectándose'
+  )
 
   console.log('materia-detection smoke passed')
 }
