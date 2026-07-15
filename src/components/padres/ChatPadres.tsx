@@ -99,8 +99,26 @@ export default function ChatPadres({ usuario }: Props) {
     <>
       <style suppressHydrationWarning>{`
         * { box-sizing: border-box; margin: 0; padding: 0; }
-        .padres-root { min-height: 100vh; background: #F5F7FA; font-family: system-ui, -apple-system, sans-serif; display: flex; flex-direction: column; }
+        .padres-root { min-height: 100vh; background: #F5F7FA; font-family: system-ui, -apple-system, sans-serif; display: flex; flex-direction: row; }
+        .p-main { flex: 1; min-width: 0; display: flex; flex-direction: column; min-height: 100vh; }
+        .p-sidebar { width: 260px; flex-shrink: 0; background: white; border-right: 1px solid rgba(44,62,107,.08); padding: 20px 16px; display: flex; flex-direction: column; gap: 4px; min-height: 100vh; position: sticky; top: 0; }
+        .p-sidebar-logo { display: flex; align-items: center; gap: 10px; padding: 4px 4px 12px; }
+        .p-sidebar-logo img { width: 32px; height: 32px; object-fit: contain; }
+        .p-sidebar-logo .p-logo-text { color: #1A2744; }
+        .p-sidebar-logo .p-logo-sub { color: #94A3B8; }
+        .p-sidebar-divider { height: 1px; background: rgba(44,62,107,.08); margin: 12px 0; }
+        .p-perfil-card { display: flex; align-items: center; gap: 10px; padding: 4px; }
+        .p-perfil-avatar { width: 38px; height: 38px; border-radius: 50%; flex-shrink: 0; background: linear-gradient(135deg,#2C3E6B,#3D5A9E); color: white; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 700; }
+        .p-perfil-nombre { font-size: 13px; font-weight: 700; color: #1A2744; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .p-perfil-colegio { font-size: 11px; color: #94A3B8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .p-sidebar-titulo { font-size: 11px; font-weight: 600; letter-spacing: .5px; text-transform: uppercase; color: #94A3B8; margin: 0 4px 10px; }
+        .p-sidebar-sugerencia { width: 100%; text-align: left; background: #F5F7FA; border: 1px solid rgba(44,62,107,.1); border-radius: 10px; padding: 9px 12px; font-size: 12px; font-weight: 500; color: #2C3E6B; cursor: pointer; font-family: inherit; transition: all .15s; }
+        .p-sidebar-sugerencia:hover { background: #EEF2FF; border-color: #5B8DB8; }
+        .btn-salir-sidebar { width: 100%; background: #F5F7FA; border: 1px solid rgba(44,62,107,.12); border-radius: 10px; padding: 10px 14px; font-size: 12px; font-weight: 600; color: #2C3E6B; cursor: pointer; font-family: inherit; }
+        .btn-salir-sidebar:hover { background: #EEF2FF; }
+        @media (max-width: 860px) { .p-sidebar { display: none; } }
         .p-header { background: #2C3E6B; padding: 0 24px; height: 64px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 10; box-shadow: 0 2px 20px rgba(44,62,107,.3); }
+        @media (min-width: 861px) { .p-header { display: none; } }
         .p-logo { display: flex; align-items: center; gap: 12px; }
         .p-logo img { width: 36px; height: 36px; object-fit: contain; }
         .p-logo-text { font-size: 18px; font-weight: 700; color: white; letter-spacing: -0.3px; }
@@ -137,6 +155,42 @@ export default function ChatPadres({ usuario }: Props) {
       `}</style>
 
       <div className="padres-root">
+        <aside className="p-sidebar">
+          <div className="p-sidebar-logo">
+            <img src="/buho.png" alt="Owlaris"/>
+            <div>
+              <div className="p-logo-text">Owlaris</div>
+              <div className="p-logo-sub">Para padres de familia</div>
+            </div>
+          </div>
+
+          <div className="p-sidebar-divider"/>
+
+          <div className="p-perfil-card">
+            <div className="p-perfil-avatar">{usuario.nombre_completo[0].toUpperCase()}</div>
+            <div style={{minWidth:0}}>
+              <p className="p-perfil-nombre">{usuario.nombre_completo}</p>
+              <p className="p-perfil-colegio">{usuario.colegio?.nombre}</p>
+            </div>
+          </div>
+
+          <div className="p-sidebar-divider"/>
+
+          <div>
+            <p className="p-sidebar-titulo">Preguntas frecuentes</p>
+            <div style={{display:'flex',flexDirection:'column',gap:'6px'}}>
+              {SUGERENCIAS.map((s,i) => (
+                <button key={i} className="p-sidebar-sugerencia" onClick={()=>enviar(s)}>{s}</button>
+              ))}
+            </div>
+          </div>
+
+          <div style={{flex:1}}/>
+
+          <button className="btn-salir-sidebar" onClick={cerrarSesion}>Salir</button>
+        </aside>
+
+        <div className="p-main">
         <header className="p-header">
           <div className="p-logo">
             <img src="/buho.png" alt="Owlaris"/>
@@ -218,6 +272,7 @@ export default function ChatPadres({ usuario }: Props) {
             </button>
           </div>
         </footer>
+        </div>
       </div>
     </>
   )
