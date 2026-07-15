@@ -138,18 +138,66 @@ export function construirIndiceVideos(entradas: EntradaVideo[]): string {
   return entradas.map((e) => `- ${e.titulo}: ${e.url}`).join('\n')
 }
 
+// Hallazgo real (QA en vivo, 2026-07-15): con la puntuación simple de
+// puntuarRelevancia (solo cuenta palabras que coinciden, sin pesarlas), el
+// MISMO video se recomendó para dos preguntas distintas ("cómo apoyar a mi
+// hijo en matemáticas" y "qué hábitos de estudio recomiendas") — palabras
+// genéricas que aparecen en casi todos los videos del catálogo ("hijo",
+// "estudio", "aprender") empataban u opacaban a palabras realmente
+// específicas de la pregunta ("matemáticas"), y el empate se resolvía
+// siempre a favor del mismo video (el primero en orden original). Se
+// pondera cada coincidencia por qué tan RARA es esa palabra en el conjunto
+// completo de secciones (entre menos secciones la contengan, más significa
+// esa coincidencia — el mismo principio de TF-IDF, simplificado), y se
+// premia mucho más una coincidencia en el TÍTULO (señal mucho más
+// confiable que una coincidencia perdida en medio de una transcripción
+// larga).
+function puntuarConPesoYTitulo(
+  seccionNormalizada: { titulo: string; texto: string },
+  palabrasPregunta: string[],
+  frecuenciaDocumento: Record<string, number>,
+  totalSecciones: number
+): number {
+  let puntaje = 0
+  for (const palabra of palabrasPregunta) {
+    const frecuencia = frecuenciaDocumento[palabra] || 0
+    if (frecuencia === 0) continue
+    // Entre más secciones contienen la palabra, menos discrimina — una
+    // palabra presente en TODAS las secciones no aporta ninguna señal.
+    const peso = Math.log((totalSecciones + 1) / frecuencia)
+    if (seccionNormalizada.titulo.includes(palabra)) puntaje += peso * 4
+    else if (seccionNormalizada.texto.includes(palabra)) puntaje += peso
+  }
+  return puntaje
+}
+
 // Selecciona las secciones más relevantes a la pregunta dentro de un
 // presupuesto de caracteres — sin pregunta útil (o sin ninguna coincidencia
 // real), conserva el comportamiento anterior de tomar desde el principio,
 // en vez de devolver nada.
-export function seleccionarRelevantes<T extends { texto: string }>(
+export function seleccionarRelevantes<T extends { titulo: string; texto: string }>(
   secciones: T[],
   pregunta: string,
   presupuestoCaracteres: number
 ): T[] {
-  const puntuadas = secciones
-    .map((seccion, indice) => ({ seccion, indice, puntaje: puntuarRelevancia(seccion.texto, pregunta) }))
-    .sort((a, b) => b.puntaje - a.puntaje || a.indice - b.indice)
+  const palabrasPregunta = Array.from(new Set(palabrasClave(pregunta)))
+  const normalizadas = secciones.map((s) => ({ titulo: normalizeText(s.titulo), texto: normalizeText(s.texto) }))
+
+  let puntuadas: { seccion: T; indice: number; puntaje: number }[]
+  if (palabrasPregunta.length === 0) {
+    puntuadas = secciones.map((seccion, indice) => ({ seccion, indice, puntaje: 0 }))
+  } else {
+    const frecuenciaDocumento: Record<string, number> = {}
+    for (const palabra of palabrasPregunta) {
+      frecuenciaDocumento[palabra] = normalizadas.filter((n) => n.titulo.includes(palabra) || n.texto.includes(palabra)).length
+    }
+    puntuadas = secciones.map((seccion, indice) => ({
+      seccion,
+      indice,
+      puntaje: puntuarConPesoYTitulo(normalizadas[indice], palabrasPregunta, frecuenciaDocumento, secciones.length),
+    }))
+  }
+  puntuadas = puntuadas.sort((a, b) => b.puntaje - a.puntaje || a.indice - b.indice)
 
   // Sin ninguna coincidencia real, "puntuadas" ya queda ordenado por índice
   // original (todos los puntajes son 0) — se conserva el comportamiento

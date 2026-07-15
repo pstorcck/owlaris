@@ -137,6 +137,38 @@ Repetido.
   const sinCoincidencias = seleccionarRelevantes(secciones, 'algo completamente no relacionado xyz', 10000)
   assert.equal(sinCoincidencias[0].titulo, 'Nutrición')
 
+  // Hallazgo real (QA en vivo, 2026-07-15): con puntuación simple (contar
+  // coincidencias sin pesarlas), el MISMO video se recomendó para "cómo
+  // apoyar a mi hijo en matemáticas" y "qué hábitos de estudio
+  // recomiendas" — palabras genéricas presentes en casi todos los videos
+  // ("hijo", "estudio", "aprender") empataban con la palabra realmente
+  // específica de la pregunta ("matemáticas"), y el empate siempre lo
+  // ganaba el mismo video (el primero en orden original). Se reproduce esa
+  // estructura: un catálogo donde la mayoría de los videos comparten
+  // vocabulario genérico de crianza, pero solo UNO habla específicamente
+  // de matemáticas.
+  const catalogoConGenericos = [
+    { titulo: 'Cómo aprender eficazmente: técnicas para mejorar tu memoria', texto: 'Ayuda a tu hijo a mejorar sus hábitos de estudio y aprender de forma eficaz cada día.' },
+    { titulo: 'Hábitos de sueño para tu hijo', texto: 'Un buen descanso ayuda a tu hijo a rendir mejor en el estudio y a aprender con más facilidad.' },
+    { titulo: 'La comunicación con tu hijo adolescente', texto: 'Hablar con tu hijo sobre sus emociones fortalece la relación y ayuda en su desarrollo.' },
+    { titulo: 'Matemáticas sin miedo: cómo acompañar a tu hijo', texto: 'Estrategias concretas para ayudar a tu hijo con las matemáticas en casa, paso a paso.' },
+  ]
+  const relevantesMatematicas = seleccionarRelevantes(catalogoConGenericos, '¿cómo puedo apoyar a mi hijo en matemáticas?', 10000)
+  assert.equal(
+    relevantesMatematicas[0].titulo,
+    'Matemáticas sin miedo: cómo acompañar a tu hijo',
+    'el video específico de matemáticas debe ganar sobre los genéricos que solo comparten vocabulario común de crianza'
+  )
+  // Una pregunta distinta (hábitos de estudio, sin mencionar matemáticas)
+  // NO debe recomendar el mismo video de matemáticas — debe preferir el
+  // que realmente habla de hábitos de estudio.
+  const relevantesHabitos = seleccionarRelevantes(catalogoConGenericos, '¿qué hábitos de estudio recomiendas?', 10000)
+  assert.notEqual(
+    relevantesHabitos[0].titulo,
+    'Matemáticas sin miedo: cómo acompañar a tu hijo',
+    'una pregunta sobre hábitos de estudio no debe recomendar el video de matemáticas'
+  )
+
   console.log('padres-contenido smoke passed')
 }
 
