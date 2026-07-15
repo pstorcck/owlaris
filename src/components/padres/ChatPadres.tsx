@@ -119,7 +119,7 @@ export default function ChatPadres({ usuario }: Props) {
         @media (max-width: 860px) { .p-sidebar { display: none; } }
         .p-header { background: #2C3E6B; padding: 0 24px; height: 64px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 10; box-shadow: 0 2px 20px rgba(44,62,107,.3); }
         @media (min-width: 861px) { .p-header { display: none; } }
-        @media (min-width: 861px) { .p-sugerencias-movil { display: none; } }
+        @media (min-width: 861px) { .p-sugerencias.p-sugerencias-movil { display: none; } }
         .p-logo { display: flex; align-items: center; gap: 12px; }
         .p-logo img { width: 36px; height: 36px; object-fit: contain; }
         .p-logo-text { font-size: 18px; font-weight: 700; color: white; letter-spacing: -0.3px; }
