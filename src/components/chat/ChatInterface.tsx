@@ -1800,6 +1800,8 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
                             border: 'none',
                             fontWeight: 600,
                             boxShadow: '0 4px 12px rgba(0,0,0,.15)',
+                            whiteSpace: 'normal',
+                            textAlign: 'left',
                           } : {
                             width: '100%',
                             justifyContent: 'flex-start',
@@ -1807,6 +1809,8 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
                             color: '#1E1B4B',
                             border: '1px solid rgba(109,40,217,.1)',
                             fontWeight: 500,
+                            whiteSpace: 'normal',
+                            textAlign: 'left',
                           }}
                           onClick={() => {
                             if (esOlimpiadas) {
