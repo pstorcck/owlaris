@@ -533,6 +533,29 @@ Intenta nuevamente, ¿cuánto es el impuesto?`
   assert.equal(linealNegativa?.estado, 'incorrecto')
   assert.match(linealNegativa?.feedback || '', /coeficiente de x es negativo/i)
 
+  // Hallazgo real CRÍTICO (QA en vivo, 2026-07-16, segunda ronda): el tutor
+  // pidió el PASO intermedio de una cuadrática ("¿cuál es la operación para
+  // encontrar las raíces?" — el discriminante), cuya etiqueta [OP:] no tiene
+  // "x" (solo el cálculo del discriminante). El alumno se adelantó y
+  // respondió directamente con las raíces finales CORRECTAS de la ecuación
+  // completa (3x^2+6x-9=0 → x=-3, x=1) — antes se comparaban contra el
+  // discriminante (144), nunca podían coincidir, y la pista mostrada era de
+  // "multiplicar potencias" (chequeo de exponentes, completamente ajeno),
+  // repitiéndose sin salida pese a que la respuesta era correcta.
+  const pasoDiscriminantePrompt = 'Resuelve la ecuación cuadrática: 3x^2 + 6x - 9 = 0. Recuerda identificar a, b y c primero, y luego calcular el discriminante. ¿Cuál es la operación que debes realizar para encontrar las raíces de esta ecuación? Escribe la operación que usarías. [OP: 6^2-4*3*-9]'
+  const raicesAdelantadasBoxed = await handleMathEvaluation(pasoDiscriminantePrompt, '\\boxed{x=-3 \\quad \\text{y} \\quad x=1}', false)
+  assert.equal(raicesAdelantadasBoxed?.estado, 'correcto', 'debe reconocer las raíces finales correctas aunque se pidiera el paso del discriminante')
+  assert.doesNotMatch(raicesAdelantadasBoxed?.feedback || '', /multiplicar potencias/i)
+
+  const raicesAdelantadasTexto = await handleMathEvaluation(pasoDiscriminantePrompt, 'x = -3 y x = 1', false)
+  assert.equal(raicesAdelantadasTexto?.estado, 'correcto')
+
+  // Si el alumno de verdad responde el PASO pedido (el discriminante, 144),
+  // debe seguir calificándose contra ese paso — sin verse afectado por el
+  // nuevo camino (que solo activa cuando el alumno escribe "x = valor").
+  const respuestaAlPasoReal = await handleMathEvaluation(pasoDiscriminantePrompt, '144', false)
+  assert.equal(respuestaAlPasoReal?.estado, 'correcto')
+
   console.log('math-safety smoke passed')
 }
 

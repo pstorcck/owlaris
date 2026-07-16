@@ -903,6 +903,34 @@ export async function handleMathEvaluation(
     return evaluateQuadraticEquation(op, raicesCuadraticas, tutorQuestion, studentAnswer, idiomaIngles)
   }
 
+  // Hallazgo real CRÍTICO (QA en vivo, 2026-07-16): con una ecuación
+  // cuadrática, el tutor a veces pide primero un PASO intermedio ("¿cuál es
+  // la operación para encontrar las raíces?" — el discriminante), y la
+  // etiqueta [OP:] corresponde a ESE paso (ej. "6^2-4*3*-9", sin "x"), no a
+  // la ecuación completa. Si el alumno se adelanta y responde directamente
+  // con las raíces finales ("x = -3 y x = 1"), comparar contra el
+  // discriminante nunca puede coincidir — y la pista mostrada terminaba
+  // siendo de "multiplicar potencias" (el chequeo de exponentes, ajeno por
+  // completo), repitiéndose sin salida aunque la respuesta del alumno fuera
+  // correcta. Si el alumno escribió explícitamente "x = valor" y el paso
+  // etiquetado no tiene "x", se busca la ecuación COMPLETA en el enunciado
+  // visible y se califica contra sus raíces reales en su lugar.
+  const valoresRaicesAlumno = extractAllVariableAssignments(studentAnswer)
+  if (valoresRaicesAlumno.length > 0 && !/x/i.test(normalizeOperation(op))) {
+    const { visibleText } = extractAndCleanOperation(tutorQuestion)
+    const ecuacionCompleta = inferCanonicalOperationFromText(visibleText)
+    if (ecuacionCompleta && ecuacionCompleta.includes('=') && /x/i.test(ecuacionCompleta)) {
+      const raicesEcuacionCompleta = solveQuadraticEquation(ecuacionCompleta)
+      if (raicesEcuacionCompleta) {
+        return evaluateQuadraticEquation(ecuacionCompleta, raicesEcuacionCompleta, tutorQuestion, studentAnswer, idiomaIngles)
+      }
+      const raizLinealCompleta = solveOperation(ecuacionCompleta)
+      if (raizLinealCompleta !== null) {
+        return evaluateQuadraticEquation(ecuacionCompleta, [raizLinealCompleta], tutorQuestion, studentAnswer, idiomaIngles)
+      }
+    }
+  }
+
   let correctAnswer = solveOperation(op)
 
   if (correctAnswer === null && wolframAppId) {
