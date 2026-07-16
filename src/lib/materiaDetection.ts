@@ -53,7 +53,16 @@ export const TEMAS_POR_MATERIA: Record<string, string[]> = {
   // es contenido central de Biología, no exclusivo de Ciencias Naturales.
   'Biología': ['célula','celula','fotosíntesis','fotosintesis','adn','genética','genetica','gen','genes','herencia','alelo','alelos','rasgo','rasgos','evolución','evolucion','ecosistema','ecosistemas','ecología','ecologia','biodiversidad','organismo','organismos','proteína','proteina','mitosis','meiosis','respiración celular','anatomía','anatomia','fisiología','fisiologia','reproducción','reproduccion','adaptación','adaptacion','planta','plantas','crecimiento','germinación','germinacion','semilla','semillas','raíz','raiz','raíces','raices','tallo','tallos'],
   'Historia': ['guerra','revolución','revolucion','independencia','civilización','civilizacion','colonia','conquista','maya','azteca','inca','república','republica','democracia','feudalismo'],
-  'Español': ['gramática','gramatica','sintaxis','ortografía','ortografia','redacción','redaccion','literatura','poesía','poesia','narración','narracion','verbo','sustantivo','adjetivo','párrafo','parrafo'],
+  // Hallazgo real (QA en vivo, 2026-07-16, cuenta Paul): el alumno seleccionó
+  // el tema oficial "Signo lingüístico, funciones, dialectos y paralenguaje"
+  // directamente de la lista de temas que Owlaris acababa de mostrarle para
+  // "Comunicación y Lenguaje Idioma Español" — pero como esa lista no tenía
+  // ninguna palabra de vocabulario lingüístico ("lingüístico", "paralenguaje",
+  // "dialecto") que coincideConMateria pudiera reconocer como Español, la
+  // palabra "funciones" (también vocabulario típico de Matemática, ej.
+  // "funciones lineales") activó un falso candado sugiriendo cambiar a
+  // Matemática, en un tema que es 100% de Lenguaje.
+  'Español': ['gramática','gramatica','sintaxis','ortografía','ortografia','redacción','redaccion','literatura','poesía','poesia','narración','narracion','verbo','sustantivo','adjetivo','párrafo','parrafo','lingüístico','linguistico','lingüística','linguistica','paralenguaje','dialecto','dialectos','fonema','fonemas','morfema','morfemas','semántica','semantica'],
   'Inglés': ['vocabulary','grammar','verb','tense','sentence','reading','writing','speaking','listening','english'],
   'Ciencias Naturales': ['planta','animal','ecosistema','medio ambiente','naturaleza','suelo','agua','aire','clima','biodiversidad','nutrición','nutricion'],
 }

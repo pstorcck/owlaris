@@ -190,6 +190,21 @@ function main() {
     'un cambio real de materia (que no coincide con la activa) debe seguir detectándose'
   )
 
+  // Hallazgo real (QA en vivo, 2026-07-16, cuenta Paul): en "Comunicación y
+  // Lenguaje Idioma Español", el alumno seleccionó el tema oficial "Signo
+  // lingüístico, funciones, dialectos y paralenguaje" directamente de la
+  // lista de temas que Owlaris acababa de mostrarle — pero "funciones"
+  // (también vocabulario típico de Matemática) disparó un falso candado
+  // sugiriendo cambiar a Matemática, en un tema 100% de Lenguaje. Ninguna
+  // palabra de vocabulario lingüístico ("lingüístico", "paralenguaje",
+  // "dialecto") estaba en la lista de Español para que la materia activa
+  // absorbiera la coincidencia antes de llegar a "funciones".
+  assert.equal(
+    detectarMateriaDesdeTexto('Signo lingüístico, funciones, dialectos y paralenguaje', 'Español'),
+    null,
+    'un tema oficial de Lenguaje no debe disparar el candado de Matemática solo por "funciones"'
+  )
+
   console.log('materia-detection smoke passed')
 }
 
