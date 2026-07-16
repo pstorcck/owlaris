@@ -29,6 +29,23 @@ function main() {
   assert.match(promptBase, /t[uú] eres su tutor y puedes ayudarle directamente aqu[ií]/i)
   assert.match(promptBase, /REGLA — NO SUGERIR TEMAS SIN BASE CLARA/)
 
+  // Hallazgo real (QA 2026-07-16): de los 11 botones de "Acciones rápidas"
+  // del sidebar, 5 ("Dame una pista", "Explícame el primer paso", "Ponme un
+  // ejemplo parecido", "Explícamelo más fácil", "Empieza desde cero") no
+  // tenían NINGUNA regla explícita en el prompt ni detección determinística
+  // en el código — dependían enteramente de que el modelo adivinara la
+  // intención por contexto. "Empieza desde cero" en particular era ambigua
+  // hasta en su significado previsto (¿reiniciar el ejercicio? ¿cambiar de
+  // tema? ¿borrar el historial?). Se agrega una regla explícita por cada
+  // una, incluyendo qué hacer si no hay contexto reciente al cual referirse.
+  assert.match(promptBase, /REGLA — OPCIONES DE AYUDA RÁPIDA/)
+  assert.match(promptBase, /"Dame una pista": da SOLO una pista/)
+  assert.match(promptBase, /"Explícame el primer paso": identifica el ejercicio o procedimiento activo/)
+  assert.match(promptBase, /"Ponme un ejemplo parecido": genera un ejercicio NUEVO/)
+  assert.match(promptBase, /"Explícamelo más fácil": vuelve a explicar la ÚLTIMA explicación/)
+  assert.match(promptBase, /"Empieza desde cero": significa reiniciar el EJERCICIO actual/)
+  assert.match(promptBase, /NO significa cambiar de materia, cambiar de tema, ni borrar el progreso o historial/)
+
   // Hallazgo real (QA Ronda 4, backlog pendiente): tras un acierto, ofrecer
   // 1-2 ejercicios más del mismo tema para consolidar antes de asumir que
   // el alumno quiere cambiar de tema.
