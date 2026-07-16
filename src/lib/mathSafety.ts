@@ -383,6 +383,22 @@ export function normalizeStudentAnswer(respuesta: string): number | null {
   return null
 }
 
+// Hallazgo real (QA en vivo, 2026-07-16): normalizeStudentAnswer toma solo
+// el ÚLTIMO valor "x = n" del mensaje del alumno (correcto para una
+// ecuación con una sola solución) — pero en una ecuación CUADRÁTICA el
+// alumno puede escribir correctamente las DOS soluciones ("x = 2 y x = 3")
+// y con la lógica anterior solo se calificaba la última (3), descartando
+// la primera. Se usa exclusivamente para calificar ecuaciones cuadráticas
+// (ver solveQuadraticEquation/evaluateQuadraticEquation), sin tocar el
+// comportamiento existente de normalizeStudentAnswer para el resto de
+// casos.
+function extractAllVariableAssignments(respuesta: string): number[] {
+  const s = String(respuesta).trim().toLowerCase().replace(/[¿?¡!]+$/g, '').trim()
+  const matches = Array.from(s.matchAll(/(?:^|[^\d])x\s*(?:=|es(?:\s+igual\s+a)?|vale)\s*(-?\d+(?:[.,]\d+)?(?:\s*\/\s*-?\d+(?:[.,]\d+)?)?)/gi))
+  const valores = matches.map((m) => parseNumericAnswerToken(m[1])).filter((n): n is number => n !== null)
+  return Array.from(new Set(valores))
+}
+
 function withImplicitMultiplication(expr: string): string {
   return expr
     .replace(/X/g, 'x')
@@ -424,6 +440,75 @@ function solveLinearEquation(op: string): number | null {
 
   const rounded = Math.round(solution)
   return Math.abs(solution - rounded) < 0.000001 ? rounded : solution
+}
+
+// Hallazgo real CRÍTICO (QA en vivo, 2026-07-16): el alumno practicaba
+// "Ecuaciones cuadráticas" (x^2-5x+6=0) y respondió correctamente con las
+// DOS soluciones ("x = 2 y x = 3"), pero Owlaris la marcó incorrecta con
+// una pista de ecuación LINEAL ("el coeficiente de x es negativo... divide
+// entre un número negativo"). Causa raíz: el verificador determinístico
+// nunca tuvo soporte real para ecuaciones de grado 2 — solveLinearEquation
+// ajusta una RECTA con 2 puntos (solo válido para grado 1); para una
+// cuadrática real, su verificación de ajuste falla y devuelve null. Si hay
+// un respaldo externo (Wolfram) configurado, éste solo toma el PRIMER
+// número de la respuesta en texto (una sola raíz), ignorando que una
+// cuadrática puede tener dos soluciones válidas. No era un problema de
+// "el modelo de IA no razona bien" — es un vacío del verificador
+// determinístico que corre independientemente de qué modelo generó el
+// ejercicio. Se ajusta una PARÁBOLA (3 puntos) en vez de una recta, se
+// confirma el ajuste con un cuarto punto, y se resuelve con la fórmula
+// general — devolviendo TODAS las raíces reales válidas.
+function solveQuadraticEquation(op: string): number[] | null {
+  const clean = normalizeOperation(op).replace(/X/g, 'x')
+  if (!clean.includes('=') || !/x/i.test(clean)) return null
+  const parts = clean.split('=')
+  if (parts.length !== 2 || !parts[0] || !parts[1]) return null
+
+  const differenceAt = (x: number): number | null => {
+    const left = evaluateNumericExpression(parts[0], { x })
+    const right = evaluateNumericExpression(parts[1], { x })
+    return left !== null && right !== null ? left - right : null
+  }
+
+  const f0 = differenceAt(0)
+  const f1 = differenceAt(1)
+  const f2 = differenceAt(2)
+  if (f0 === null || f1 === null || f2 === null) return null
+
+  const a = (f2 - 2 * f1 + f0) / 2
+  const b = (f1 - f0) - a
+  const c = f0
+
+  // Si "a" es ~0, en realidad es lineal (o de grado 0) — no es una
+  // cuadrática genuina; se deja que solveLinearEquation la maneje.
+  if (Math.abs(a) < 1e-9) return null
+
+  // Confirma el ajuste cuadrático con un cuarto punto — si la expresión
+  // real es de grado mayor a 2 (o no es un polinomio), el ajuste no debe
+  // coincidir y no se debe tratar como cuadrática.
+  const f3 = differenceAt(3)
+  if (f3 === null) return null
+  const prediccionF3 = a * 9 + b * 3 + c
+  if (Math.abs(f3 - prediccionF3) > 0.001) return null
+
+  const discriminante = b * b - 4 * a * c
+  if (discriminante < -1e-6) return null // raíces complejas, fuera de alcance
+
+  const redondear = (n: number) => {
+    const r = Math.round(n)
+    return Math.abs(n - r) < 1e-6 ? r : Math.round(n * 1e6) / 1e6
+  }
+
+  if (discriminante < 0) {
+    // Redondeo numérico cerca de 0 puede dar un discriminante ligeramente
+    // negativo para lo que en realidad es una raíz doble real.
+    return [redondear(-b / (2 * a))]
+  }
+
+  const raizCuadrada = Math.sqrt(discriminante)
+  const raiz1 = redondear((-b + raizCuadrada) / (2 * a))
+  const raiz2 = redondear((-b - raizCuadrada) / (2 * a))
+  return Array.from(new Set([raiz1, raiz2])).sort((x, y) => x - y)
 }
 
 export function solveOperation(op: string): number | null {
@@ -601,6 +686,16 @@ export function buildGuidedMathHint(op: string | null | undefined, idiomaIngles:
         ? 'First move all the x terms to one side of the equation and the plain numbers to the other, then isolate x.'
         : 'Primero junta los términos con x en un mismo lado de la ecuación y los números en el otro, y luego despeja x.'
     }
+    // Hallazgo real CRÍTICO (QA en vivo, 2026-07-16): una ecuación cuadrática
+    // (x^2-5x+6=0) caía en el chequeo de "coeficiente negativo de x" de más
+    // abajo (por tener "-5x") y recibía la pista de despejar una ecuación
+    // LINEAL — consejo que no aplica a resolver una cuadrática. Debe
+    // detectarse ANTES que ese chequeo.
+    if (/x\s*\^?\s*2|x\s*\*\s*x/i.test(clean)) {
+      return idiomaIngles
+        ? 'This is a quadratic equation (it has an x² term) — it can have up to two solutions. Try factoring it, or use the quadratic formula: x = (-b ± √(b²-4ac)) / 2a.'
+        : 'Esta es una ecuación cuadrática (tiene un término x²) — puede tener hasta dos soluciones. Intenta factorizarla, o usa la fórmula cuadrática: x = (-b ± √(b²-4ac)) / 2a.'
+    }
     // Hallazgo real (QA amplia 2026-07-08): coeficiente negativo de x caía en
     // el mensaje genérico — el signo negativo es justo el paso donde más se
     // equivocan, necesita su propia pista.
@@ -737,6 +832,60 @@ export function respuestaEsSoloNumero(studentAnswer: string): boolean {
   return !/porque|ya que|because|since|[-+*/=]/i.test(texto)
 }
 
+// Hallazgo real CRÍTICO (QA en vivo, 2026-07-16): ver nota junto a
+// solveQuadraticEquation. Calificar una ecuación cuadrática es distinto de
+// una lineal: puede tener hasta DOS soluciones válidas, y el alumno puede
+// escribir ambas ("x = 2 y x = 3"). Se compara el conjunto completo de
+// valores que escribió contra el conjunto completo de raíces reales.
+function evaluateQuadraticEquation(
+  op: string,
+  raices: number[],
+  tutorQuestion: string,
+  studentAnswer: string,
+  idiomaIngles: boolean
+): MathEvaluation {
+  const valoresEscritos = extractAllVariableAssignments(studentAnswer)
+  const valoresUsados = valoresEscritos.length > 0
+    ? valoresEscritos
+    : [normalizeStudentAnswer(studentAnswer) ?? extractMultipleChoiceValue(tutorQuestion, studentAnswer)].filter((n): n is number => n !== null)
+
+  const raicesEncontradas = raices.filter((r) => valoresUsados.some((v) => Math.abs(v - r) < 0.001))
+  const valoresIncorrectos = valoresUsados.filter((v) => !raices.some((r) => Math.abs(v - r) < 0.001))
+  const todasCorrectas = valoresUsados.length > 0 && valoresIncorrectos.length === 0 && raicesEncontradas.length === raices.length
+
+  const studentFeedbackValue = valoresUsados.length > 0
+    ? valoresUsados.map((v) => formatNumberForFeedback(v)).join(' y ')
+    : studentAnswer
+
+  let estado: string
+  let feedback: string
+  if (todasCorrectas) {
+    estado = 'correcto'
+    feedback = idiomaIngles
+      ? `Correct. You solved it yourself — x = ${studentFeedbackValue} ${raices.length > 1 ? 'are the right solutions' : 'is the right solution'}. Now you don't just have the answer, you know how to find it again. Can you explain how you got there?`
+      : `¡Correcto! Lo resolviste tú: x = ${studentFeedbackValue} ${raices.length > 1 ? 'son las soluciones correctas' : 'es la solución correcta'}. Ahora no solo tienes la respuesta, ya sabes cómo encontrarla otra vez. ¿Puedes explicarme cómo llegaste a ese resultado?`
+  } else {
+    estado = 'incorrecto'
+    const hint = buildQuadraticHint(idiomaIngles, raicesEncontradas.length)
+    feedback = idiomaIngles ? `Not yet. ${hint} Try again.` : `Todavía no. ${hint} Intenta de nuevo.`
+  }
+
+  logEvaluation({ op, correctAnswer: raices[0] ?? null, studentAnswer, studentN: valoresUsados[0] ?? null, estado, pasoIntermedio: false, guardActivado: false, procedimientoMostrado: true })
+
+  return { estado, feedback, correctAnswer: raices[0] ?? null, op, guardActivado: false, pasoIntermedio: false, procedimientoMostrado: true }
+}
+
+function buildQuadraticHint(idiomaIngles: boolean, raicesYaEncontradas: number): string {
+  if (raicesYaEncontradas > 0) {
+    return idiomaIngles
+      ? 'You already found one correct solution. This is a quadratic equation — it has two solutions. Keep factoring or use the quadratic formula to find the other one.'
+      : 'Ya encontraste una solución correcta. Esta es una ecuación cuadrática — tiene dos soluciones. Sigue factorizando o usa la fórmula cuadrática para encontrar la otra.'
+  }
+  return idiomaIngles
+    ? 'This is a quadratic equation (it has an x² term) — it can have up to two solutions. Try factoring it, or use the quadratic formula: x = (-b ± √(b²-4ac)) / 2a.'
+    : 'Esta es una ecuación cuadrática (tiene un término x²) — puede tener hasta dos soluciones. Intenta factorizarla, o usa la fórmula cuadrática: x = (-b ± √(b²-4ac)) / 2a.'
+}
+
 export async function handleMathEvaluation(
   tutorQuestion: string,
   studentAnswer: string,
@@ -748,6 +897,11 @@ export async function handleMathEvaluation(
 
   const validation = validateOperation(op)
   if (!validation.ok) return null
+
+  const raicesCuadraticas = solveQuadraticEquation(op)
+  if (raicesCuadraticas) {
+    return evaluateQuadraticEquation(op, raicesCuadraticas, tutorQuestion, studentAnswer, idiomaIngles)
+  }
 
   let correctAnswer = solveOperation(op)
 

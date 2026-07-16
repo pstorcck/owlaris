@@ -494,6 +494,45 @@ Intenta nuevamente, ¿cuánto es el impuesto?`
   const siguienteConAviso = buildCorrectAnswerWithNextExercise('Intenta 5+5.', 'Ya llevas una buena racha, así que voy a subir un poco el reto.', false)
   assert.match(siguienteConAviso, /buena racha/i)
 
+  // Hallazgo real CRÍTICO (QA en vivo, 2026-07-16): practicando "Ecuaciones
+  // cuadráticas", el alumno respondió CORRECTAMENTE con las dos soluciones
+  // ("x = 2 y x = 3") a x^2-5x+6=0, pero Owlaris la marcó incorrecta con una
+  // pista de ecuación LINEAL ("el coeficiente de x es negativo... divide
+  // entre un número negativo") — el verificador determinístico no tenía
+  // ningún solver real para ecuaciones de grado 2 (solveLinearEquation solo
+  // ajusta una recta). Se reproduce el caso exacto reportado.
+  const cuadraticaPrompt = 'Resuelve la siguiente ecuación cuadrática: x^2 - 5x + 6 = 0 [OP: x^2-5x+6=0]'
+  const cuadraticaAmbasRaices = await handleMathEvaluation(cuadraticaPrompt, 'Respuesta final: x = 2 y x = 3.', false)
+  assert.equal(cuadraticaAmbasRaices?.estado, 'correcto', 'las dos raíces correctas de una cuadrática deben marcarse correctas')
+  assert.doesNotMatch(cuadraticaAmbasRaices?.feedback || '', /coeficiente de x es negativo/i, 'no debe dar una pista de ecuación lineal para una cuadrática')
+
+  // Con una sola raíz correcta (falta la otra), debe pedir la que falta —
+  // no rechazarla como si nada estuviera bien, ni darla por completa.
+  const cuadraticaUnaRaiz = await handleMathEvaluation(cuadraticaPrompt, 'x = 2', false)
+  assert.equal(cuadraticaUnaRaiz?.estado, 'incorrecto')
+  assert.match(cuadraticaUnaRaiz?.feedback || '', /ya encontraste una soluci[oó]n correcta/i)
+
+  // Una respuesta genuinamente incorrecta debe seguir señalándose como tal,
+  // con una pista de cuadrática (factorizar / fórmula general), no la pista
+  // de ecuación lineal que existía antes.
+  const cuadraticaIncorrecta = await handleMathEvaluation(cuadraticaPrompt, 'x = 10', false)
+  assert.equal(cuadraticaIncorrecta?.estado, 'incorrecto')
+  assert.match(cuadraticaIncorrecta?.feedback || '', /ecuaci[oó]n cuadr[aá]tica/i)
+  assert.doesNotMatch(cuadraticaIncorrecta?.feedback || '', /coeficiente de x es negativo/i)
+
+  // Raíz doble real (2x^2-4x+2=0 → (x-1)²=0 → x=1) — debe reconocerse como
+  // cuadrática genuina con una sola solución válida.
+  const dobleRaizPrompt = 'Resuelve: 2x^2 - 4x + 2 = 0 [OP: 2x^2-4x+2=0]'
+  const dobleRaizCorrecta = await handleMathEvaluation(dobleRaizPrompt, 'x = 1', false)
+  assert.equal(dobleRaizCorrecta?.estado, 'correcto')
+
+  // Una ecuación genuinamente LINEAL con coeficiente negativo (el caso que
+  // SÍ debe seguir usando la pista de "coeficiente negativo") no debe verse
+  // afectada por el nuevo detector de cuadráticas.
+  const linealNegativa = await handleMathEvaluation('Resuelve: -3x + 6 = 0 [OP: -3x+6=0]', 'x = 5', false)
+  assert.equal(linealNegativa?.estado, 'incorrecto')
+  assert.match(linealNegativa?.feedback || '', /coeficiente de x es negativo/i)
+
   console.log('math-safety smoke passed')
 }
 
