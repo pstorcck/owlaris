@@ -963,6 +963,63 @@ function evaluarPosibleMediaAdelantada(
   return null
 }
 
+function escapeRegExpMathSafety(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+// Hallazgo real CRÍTICO (QA en vivo, 2026-07-19, Contabilidad 4to
+// Bachillerato): mismo patrón que la media aritmética, en una forma más
+// general. Ejercicio "salario base 2,500 + bono 300 − impuestos 200"
+// (correcto: 2600) etiquetado como "[OP: 2500+300]" (solo el primer paso,
+// sin la resta final) — tanto "2600" (respuesta final) como
+// "2500+300-200=2600" (el procedimiento COMPLETO en un solo mensaje) se
+// rechazaban, porque ambos se comparaban contra 2800 (la suma parcial), no
+// contra 2600. Solo se aceptaba dividiendo el cálculo en dos mensajes
+// separados (2500+300=2800, luego 2800-200=2600). Cuando la respuesta del
+// alumno CONTINÚA la misma cadena etiquetada (mismos números y signos
+// iniciales, en el mismo orden) agregando más términos +/- y el resultado
+// final de esa cadena extendida coincide con lo que escribió, se acepta
+// como la respuesta completa correcta — el alumno no inventó números, solo
+// completó el cálculo que el tutor dejó a medias.
+function evaluarCadenaExtendida(
+  op: string,
+  tutorQuestion: string,
+  studentAnswer: string,
+  idiomaIngles: boolean
+): MathEvaluation | null {
+  const clean = normalizeOperation(op)
+  if (!/^-?\d+(?:\.\d+)?(?:[+\-]\d+(?:\.\d+)?)+$/.test(clean)) return null
+
+  const cleanStudent = normalizeOperation(studentAnswer)
+  const patron = new RegExp(`(?<![\\d.])${escapeRegExpMathSafety(clean)}[+\\-]\\d+(?:\\.\\d+)?(?:[+\\-]\\d+(?:\\.\\d+)?)*`)
+  const match = cleanStudent.match(patron)
+  if (!match) return null
+
+  const cadenaExtendida = match[0]
+
+  // Defensa: los términos NUEVOS que el alumno agrega (más allá de la
+  // etiqueta original) deben ser números que de verdad aparecen en el
+  // enunciado del tutor — si no, cualquier alumno podría inventar un
+  // término adicional para forzar el resultado que quiera cuando "op" en
+  // realidad ya era la operación completa (no un paso a medias).
+  const numerosNuevos = extraerNumeros(cadenaExtendida.slice(clean.length))
+  const numerosTexto = new Set(extraerNumeros(tutorQuestion))
+  if (numerosNuevos.length === 0 || !numerosNuevos.every((n) => numerosTexto.has(Math.abs(n)))) return null
+
+  const resultado = solveOperation(cadenaExtendida)
+  if (resultado === null) return null
+
+  const studentN = normalizeStudentAnswer(studentAnswer)
+  if (studentN === null || Math.abs(studentN - resultado) > 0.001) return null
+
+  const valor = formatNumberForFeedback(studentN)
+  const feedback = idiomaIngles
+    ? `Correct. You solved it yourself — ${valor} is the right answer. Now you don't just have the answer, you know how to find it again. Can you explain how you got there?`
+    : `¡Correcto! Lo resolviste tú: ${valor} es la respuesta correcta. Ahora no solo tienes la respuesta, ya sabes cómo encontrarla otra vez. ¿Puedes explicarme cómo llegaste a ese resultado?`
+  logEvaluation({ op: cadenaExtendida, correctAnswer: resultado, studentAnswer, studentN, estado: 'correcto', pasoIntermedio: false, guardActivado: false, procedimientoMostrado: true })
+  return { estado: 'correcto', feedback, correctAnswer: resultado, op: cadenaExtendida, guardActivado: false, pasoIntermedio: false, procedimientoMostrado: true }
+}
+
 export async function handleMathEvaluation(
   tutorQuestion: string,
   studentAnswer: string,
@@ -982,6 +1039,9 @@ export async function handleMathEvaluation(
 
   const posibleMediaAdelantada = evaluarPosibleMediaAdelantada(op, tutorQuestion, studentAnswer, idiomaIngles)
   if (posibleMediaAdelantada) return posibleMediaAdelantada
+
+  const cadenaExtendida = evaluarCadenaExtendida(op, tutorQuestion, studentAnswer, idiomaIngles)
+  if (cadenaExtendida) return cadenaExtendida
 
   // Hallazgo real CRÍTICO (QA en vivo, 2026-07-16): con una ecuación
   // cuadrática, el tutor a veces pide primero un PASO intermedio ("¿cuál es

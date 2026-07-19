@@ -454,6 +454,27 @@ Intenta nuevamente, ¿cuánto es el impuesto?`
   const sumaNormal = await handleMathEvaluation('¿Cuánto es 10+15+25? [OP: 10+15+25]', '50', false)
   assert.equal(sumaNormal?.estado, 'correcto')
 
+  // Hallazgo real CRÍTICO (QA en vivo, 2026-07-19, Contabilidad 4to
+  // Bachillerato): mismo patrón que la media aritmética, generalizado a
+  // cualquier cadena de sumas/restas. Ejercicio "salario base 2,500 + bono
+  // 300 − impuestos 200" (correcto: 2600) etiquetado como "[OP: 2500+300]"
+  // (solo el primer paso) — tanto la respuesta final ("2600") como el
+  // procedimiento COMPLETO en un solo mensaje ("2500+300-200=2600") se
+  // rechazaban, comparados contra 2800 (la suma parcial). Solo se aceptaba
+  // partiendo el cálculo en dos mensajes separados.
+  const contabilidadPrompt = 'Calcula el salario neto: salario base de Q2,500, más un bono de Q300, menos Q200 de impuestos. [OP: 2500+300]'
+  const contabilidadProcedimientoCompleto = await handleMathEvaluation(contabilidadPrompt, '2500+300-200=2600', false)
+  assert.equal(contabilidadProcedimientoCompleto?.estado, 'correcto', 'mostrar el procedimiento completo en un solo mensaje debe aceptarse aunque la etiqueta solo cubra el primer paso')
+
+  const contabilidadPasoParcial = await handleMathEvaluation(contabilidadPrompt, '2800', false)
+  assert.equal(contabilidadPasoParcial?.estado, 'correcto', 'el paso parcial (la suma) sigue aceptándose sin regresión')
+
+  // Defensa: si "op" YA es la operación completa (sin ningún paso
+  // faltante), un alumno no debe poder inventar un término adicional para
+  // forzar un resultado distinto al correcto.
+  const sumaCompletaConInvencion = await handleMathEvaluation('¿Cuánto es 10+15+25? [OP: 10+15+25]', '10+15+25+999=1049', false)
+  assert.equal(sumaCompletaConInvencion?.estado, 'incorrecto', 'un término inventado que no aparece en el enunciado no debe aceptarse solo porque el alumno "extendió" la operación')
+
   // El caso real completo: con la operación bien combinada, la respuesta
   // correcta del alumno (0.5) debe evaluarse como correcta, no como
   // incorrecta repetida.
