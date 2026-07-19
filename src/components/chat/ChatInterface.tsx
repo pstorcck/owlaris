@@ -1989,7 +1989,15 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
           <div style={{maxWidth:'800px',margin:'0 auto',display:'flex',flexDirection:'column',gap:'20px'}}>
             {mensajes.map((msg,idx) => {
               const esU = msg.rol === 'usuario'
-              const largo = msg.contenido.length > 350
+              // Hallazgo real (QA en vivo, 2026-07-19): el truncamiento genérico
+              // (mensajes > 350 caracteres se cortan a los primeros 300, con un
+              // botón "Ver explicación completa") cortaba preguntas de opción
+              // múltiple justo después de mostrar la opción A — un alumno que
+              // respondía sin hacer clic en el botón solo veía una opción y
+              // podía elegir la letra equivocada por desconocer las demás. No se
+              // trunca cuando el mensaje contiene un patrón de opciones A)/B)/C)/D).
+              const pareceOpcionMultiple = /(?:^|\n)\s*A[).:]\s/.test(msg.contenido) && /(?:^|\n)\s*[BD][).:]\s/.test(msg.contenido)
+              const largo = !pareceOpcionMultiple && msg.contenido.length > 350
               const abierto = expandido === msg.id
               return (
                 <div key={msg.id} className="o-fade" style={{display:'flex',alignItems:'flex-start',gap:'10px',flexDirection:esU?'row-reverse':'row',animationDelay:`${idx*.05}s`}}>

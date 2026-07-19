@@ -89,7 +89,21 @@ function coincideConMateria(t: string, materia: string): boolean {
 // activa ya cubre razonablemente el mensaje, así que no vale la pena
 // interrumpir con una pregunta de "¿quieres cambiar?" por una ambigüedad
 // de vocabulario compartido.
+// Hallazgo real (QA en vivo, 2026-07-19): en Comunicación y Lenguaje (1ero y
+// 2do Básico), un ejercicio de ESCRITURA que el propio tutor asignó ("tu
+// animal favorito", "un árbol con pájaros") se marcó como posible cambio a
+// Ciencias Naturales solo porque la respuesta del alumno —al responder
+// exactamente lo que se le pidió— mencionaba esas palabras. A diferencia de
+// Matemática/Ciencias/Historia (donde el vocabulario sí correlaciona con la
+// materia), las materias de lenguaje/escritura son temáticamente libres por
+// diseño: un ejercicio de redacción o comprensión lectora puede tratar
+// cualquier tema del mundo sin que eso implique ningún cambio de materia.
+// El vocabulario de contenido de la respuesta del alumno nunca es una señal
+// confiable de cambio de materia en estas clases.
+const MATERIAS_TEMATICAMENTE_LIBRES = new Set(['Español', 'Inglés'])
+
 export function detectarMateriaDesdeTexto(texto: string, materiaActual?: string | null): string | null {
+  if (materiaActual && MATERIAS_TEMATICAMENTE_LIBRES.has(normalizarMateria(materiaActual))) return null
   const t = texto.toLowerCase().replace(/á/g,'a').replace(/é/g,'e').replace(/í/g,'i').replace(/ó/g,'o').replace(/ú/g,'u')
   if (materiaActual && coincideConMateria(t, materiaActual)) return null
   for (const [materia, temas] of Object.entries(TEMAS_POR_MATERIA)) {

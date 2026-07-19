@@ -2200,7 +2200,18 @@ export async function POST(req: NextRequest) {
         pendingMathPrompt,
         ultimoMensajeAsistente(historial),
       ], practicaEnfoquePersistido)
-      const siguienteEjercicio = esRespuestaCorrecta
+      // Hallazgo real (QA en vivo, 2026-07-19): en Ciencias Sociales (materia
+      // humanística, no numérica), un problema de aplicación con respuesta
+      // numérica ("ingreso menos gastos") se evaluaba correctamente por el
+      // protocolo determinístico — pero al acertar, esto encadenaba
+      // automáticamente ejercicios de aritmética SUELTA y sin contexto
+      // (89+25, 67-57, 5x3), generados por el mismo motor de práctica de
+      // Matemática, sin relación alguna con la materia. Encadenar el
+      // "siguiente ejercicio" abstracto solo tiene sentido en materias
+      // genuinamente numéricas — en las demás, un problema numérico puntual
+      // bien resuelto no debe convertirse en una sesión de drill de
+      // aritmética.
+      const siguienteEjercicio = esRespuestaCorrecta && materiaNumerica
         ? buildNextMathExercise(operacionesBloqueadas, nivelSiguiente, idiomaIngles, enfoquePractica)
         : null
       const fuentePractica = siguienteEjercicio

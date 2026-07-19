@@ -205,6 +205,33 @@ function main() {
     'un tema oficial de Lenguaje no debe disparar el candado de Matemática solo por "funciones"'
   )
 
+  // Hallazgo real (QA en vivo, 2026-07-19, 1ero y 2do Básico): un ejercicio
+  // de ESCRITURA que el propio tutor asignó en Comunicación y Lenguaje ("tu
+  // animal favorito", "un árbol con pájaros") se marcó como posible cambio
+  // a Ciencias Naturales solo porque la respuesta del alumno —al responder
+  // exactamente lo pedido— mencionaba esas palabras. Las materias de
+  // lenguaje/escritura son temáticamente libres por diseño: el vocabulario
+  // de contenido de la respuesta nunca es señal confiable de cambio de
+  // materia ahí, a diferencia de Matemática/Ciencias/Historia.
+  assert.equal(
+    detectarMateriaDesdeTexto('Mi animal favorito es el perro porque es muy leal y juguetón.', 'Español'),
+    null,
+    'un ejercicio de escritura sobre un animal no debe disparar el candado de Ciencias Naturales en una materia de lenguaje'
+  )
+  assert.equal(
+    detectarMateriaDesdeTexto('Había un árbol grande donde vivían muchos pájaros felices.', 'Español'),
+    null,
+    'un texto de comprensión lectora sobre un árbol con pájaros no debe disparar el candado en una materia de lenguaje'
+  )
+  // El vocabulario SÍ debe seguir importando en materias de contenido (no de
+  // lenguaje/escritura) — sin regresión para Ciencias Sociales, Matemática,
+  // etc.
+  assert.equal(
+    detectarMateriaDesdeTexto('quiero entender la fotosíntesis', 'Ciencias Sociales'),
+    'Biología',
+    'fuera de una materia de lenguaje, el vocabulario de contenido sigue siendo una señal válida de cambio'
+  )
+
   console.log('materia-detection smoke passed')
 }
 
