@@ -101,6 +101,14 @@ function main() {
   assert.match(promptBase, /NO ANUNCIAR UN VEREDICTO ANTES DE TERMINAR DE VERIFICAR/i)
   assert.match(promptBase, /nunca anuncies un error al inicio y luego confirmes/i)
 
+  // Hallazgo real (QA en vivo, 2026-07-19, Olimpiadas Ciencias Naturales,
+  // 2do Básico): un ejercicio generado sobre cadenas alimenticias omitió la
+  // cantidad de "carnívoros" necesaria para resolverlo — al señalarlo, el
+  // tutor no reconoció la omisión, solo presentó el número faltante como si
+  // siempre hubiera estado en el enunciado.
+  assert.match(promptBase, /verifica que TODOS los datos necesarios para resolverlo est[eé]n escritos expl[ií]citamente/i)
+  assert.match(promptBase, /reconoce con honestidad que falt[oó] en el enunciado original/i)
+
   // Hallazgo real (QA en vivo, 2026-07-19, Olimpiadas Científicas
   // Matemática): las fórmulas citadas de un documento fuente se mostraban
   // con notación LaTeX cruda ("\( n^2+n+1 \)") en vez de convertirse a
