@@ -23,6 +23,7 @@ import {
   isBlockGroupingQuestion,
   isBroadAreaPresenceQuestion,
   isNextTopicRequest,
+  isProbablyTopic,
   isStandardsAlignmentQuestion,
   isStandardsCitationFollowUp,
 } from '../src/lib/courseTopics'
@@ -559,6 +560,72 @@ Fuente: Owlaris - Algebra 1.md
     assert.ok(!indice.topics.some((t) => /escholaris/i.test(t)), 'no debe incluir referencias a recursos internos con el nombre de la plataforma')
     assert.ok(indice.topics.includes('Expresiones algebraicas'), 'los temas reales sí deben conservarse')
     assert.ok(indice.topics.includes('Ecuaciones lineales de una variable'), 'los temas reales sí deben conservarse')
+  })
+
+  // Hallazgo real CRÍTICO (QA en vivo, 2026-07-19, cuenta Paul): en los
+  // documentos base MÁS RECIENTES (ej. "Ciencias Sociales y Formación
+  // Ciudadana Primaria", "Comunicación y Lenguaje", ambas 6to Primaria), el
+  // índice de temas vive en una tabla MARKDOWN genuina ("| No. | Código |
+  // Bloque | Tema | Meta |") bajo "## Índice completo" — formato que
+  // ninguna estrategia anterior reconocía. El código caía hasta el
+  // respaldo más débil (list_items, sin filtro de sección), que recogía
+  // viñetas de metadata ("- Colegio: Colegio Montano.") e instrucciones
+  // internas ("- Distinguir fuente primaria, secundaria...") como si
+  // fueran "temas" del curso — reproducido aquí con la estructura real del
+  // documento (confirmado leyendo la fuente completa en SharePoint).
+  test('extractCourseTopicIndex reconoce una tabla markdown de índice y no confunde metadata ni protocolo interno con temas', () => {
+    const contenidoConTablaMarkdown = `
+# Owlaris - Ciencias Sociales y Formación Ciudadana Primaria
+
+## Identidad y estado
+
+- Colegio: Colegio Montano.
+- Grado: 6 Primaria.
+- Materia: Ciencias Sociales y Formación Ciudadana Primaria.
+- Idioma de tutoría: español.
+- Marco: CNB Guatemala modalidad regular.
+- Integridad: 87 temas que cubren los 251 elementos oficiales.
+
+## Índice completo
+
+| No. | Código | Bloque | Tema | Meta |
+| --- | --- | --- | --- | --- |
+| 1 | CS.1 | Ciencias Sociales: geografía mundial | Continentes, población y grandes formas físicas | Comparar continentes mediante mapas físicos y humanos con escala, fuente y datos fechados. |
+| 2 | CS.2 | Ciencias Sociales: economía geográfica | Puertos, recursos naturales, economía y cultura | Explicar cómo puertos y recursos se conectan con cadenas de valor y cultura sin determinismo. |
+| 3 | CS.7 | Ciencias Sociales: recursos | Recursos de Guatemala, América y otros continentes | Clasificar y comparar recursos por tipo, distribución, acceso y uso responsable. |
+
+## Método general de tutoría
+
+1. Preguntar qué intenta comprender o producir y qué ha probado.
+2. Delimitar territorio, período, actores, conceptos y verbo de la tarea.
+
+## Protocolo de exactitud y actualidad
+
+- Distinguir fuente primaria, secundaria, testimonio, memoria, opinión y propaganda.
+- Verificar nombres, miembros, autoridades, leyes, calendarios y estadísticas.
+`
+    const indice = extractCourseTopicIndex(contenidoConTablaMarkdown)
+    assert.equal(indice.source, 'markdown_index_table', 'debe reconocer la tabla markdown como fuente del índice')
+    assert.deepEqual(indice.topics, [
+      'Continentes, población y grandes formas físicas',
+      'Puertos, recursos naturales, economía y cultura',
+      'Recursos de Guatemala, América y otros continentes',
+    ])
+    assert.ok(!indice.topics.some((t) => /colegio:|grado:|idioma de tutoria/i.test(t)), 'no debe incluir metadata del documento como tema')
+    assert.ok(!indice.topics.some((t) => /distinguir fuente|verificar nombres|preguntar que intenta|delimitar territorio/i.test(t)), 'no debe incluir instrucciones internas del protocolo de tutoría como tema')
+  })
+
+  // Hallazgo real (mismo QA, 2026-07-19): el filtro de metadata/instrucción
+  // ("Recurso:", "Fuente:", "Indicador:") no tenía límite de palabra, así
+  // que rechazaba temas reales que solo EMPEZABAN con la forma plural de
+  // esas palabras — 4 de 87 temas reales de un documento real se perdían
+  // por esto antes del fix.
+  test('isProbablyTopic no rechaza temas reales solo por empezar con la forma plural de una palabra de metadata', () => {
+    assert.equal(isProbablyTopic('Recursos de Guatemala, América y otros continentes'), true)
+    assert.equal(isProbablyTopic('Indicadores y comparación de poblaciones mundiales'), true)
+    assert.equal(isProbablyTopic('Fuentes documentales, orales, visuales y electrónicas'), true)
+    assert.equal(isProbablyTopic('Recurso: libro de texto'), false, 'la etiqueta de metadata real ("Recurso:") sí debe seguir rechazándose')
+    assert.equal(isProbablyTopic('Fuente: página 45'), false, 'la etiqueta de metadata real ("Fuente:") sí debe seguir rechazándose')
   })
 
   if (failures.length > 0) {

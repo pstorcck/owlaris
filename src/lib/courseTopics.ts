@@ -20,8 +20,17 @@ export function isProbablyTopic(value: string) {
   const cleaned = cleanTopic(value)
   if (cleaned.length < 3 || cleaned.length > 130) return false
   const normalized = normalizeText(cleaned)
-  if (/^(objetivo|competencia|indicador|evaluacion|actividad|material|recurso|descripcion|introduccion|instruccion|nota|fuente|pagina|resumen|aprendizaje esperado)/.test(normalized)) return false
-  if (/^(objective|assessment|activity|material|resource|description|introduction|instruction|note|source|page|summary)/.test(normalized)) return false
+  // Hallazgo real CRÍTICO (QA en vivo, 2026-07-19, cuenta Paul): esta
+  // coincidencia no tenía límite de palabra, así que rechazaba temas reales
+  // que solo COMENZABAN con la forma plural de estas palabras ("Recursos de
+  // Guatemala, América y otros continentes", "Indicadores y comparación de
+  // poblaciones mundiales", "Fuentes documentales, orales, visuales y
+  // electrónicas") como si fueran una etiqueta de metadata ("Recurso: ...",
+  // "Fuente: ...") — 4 de 87 temas reales de un documento real se perdían
+  // por esto. Se exige un límite de palabra para que solo la palabra EXACTA
+  // (no un prefijo de otra palabra distinta) dispare el rechazo.
+  if (/^(objetivo|competencia|indicador|evaluacion|actividad|material|recurso|descripcion|introduccion|instruccion|nota|fuente|pagina|resumen|aprendizaje esperado)\b/.test(normalized)) return false
+  if (/^(objective|assessment|activity|material|resource|description|introduction|instruction|note|source|page|summary)\b/.test(normalized)) return false
   // Un tema real es un nombre de concepto/habilidad, no una pregunta ni una
   // instrucción de ejercicio — sin esto, una lista numerada de preguntas o
   // instrucciones de práctica ("1. ¿Cuánto es...? 2. Explica...") se leía
@@ -53,7 +62,15 @@ export function isProbablyTopic(value: string) {
   // el nombre de un concepto o habilidad que se enseña.
   if (/escholaris/.test(normalized)) return false
   if (/^no\s+[a-z]+(?:ar|er|ir)\b/.test(normalized)) return false
-  if (/^(diagnosticar|explicar|pedir|dar|mezclar|crear|usar|evitar|mantener|mostrar|permitir|seguir|resolver|calcular|responder|describir|analizar|identificar|mencionar|definir|desarrollar|justificar|practicar|escribir|dibujar|completar|observar|investigar)\b/.test(normalized)) return false
+  if (/^(diagnosticar|explicar|pedir|dar|mezclar|crear|usar|evitar|mantener|mostrar|permitir|seguir|resolver|calcular|responder|describir|analizar|identificar|mencionar|definir|desarrollar|justificar|practicar|escribir|dibujar|completar|observar|investigar|distinguir|conservar|verificar|delimitar|senalar|solicitar|preguntar|cerrar)\b/.test(normalized)) return false
+  // Hallazgo real CRÍTICO (QA en vivo, 2026-07-19, cuenta Paul): en
+  // documentos con una sección de metadata en viñetas ("- Colegio: Colegio
+  // Montano.", "- Grado: 6 Primaria.", "- Idioma de tutoría: español."), el
+  // respaldo de lista sin filtro de sección (list_items) recogía esas
+  // líneas como si fueran "temas" del curso — ninguna de las reglas
+  // anteriores las reconocía porque no son preguntas, instrucciones ni
+  // rutas de archivo, son metadata de identificación del documento.
+  if (/^(colegio|grado|materia|idioma de tutoria|marco|estado|organizacion|integridad|areas? oficiales? integradas?|modalidad|programa|curso|codigo|source id)\s*:/.test(normalized)) return false
   // Hallazgo real (sexta verificación, 2026-07-13): el respaldo de línea
   // suelta (para índices que perdieron su viñeta/número vía mammoth)
   // empezó a tratar la línea de metadata "Cantidad de temas: N" como si
@@ -125,7 +142,7 @@ export function extractDeclaredTopicCount(content: string) {
 export type CourseTopicIndex = {
   topics: string[]
   declaredCount: number | null
-  source: 'tema_tutor_table' | 'topic_headings' | 'explicit_index' | 'list_items' | 'headings' | 'llm_fallback' | 'none'
+  source: 'tema_tutor_table' | 'markdown_index_table' | 'topic_headings' | 'explicit_index' | 'list_items' | 'headings' | 'llm_fallback' | 'none'
   incomplete: boolean
 }
 
@@ -178,6 +195,42 @@ function extractTemaTutorTable(lines: string[]): string[] {
   return temas
 }
 
+// Hallazgo real CRÍTICO (QA en vivo, 2026-07-19, cuenta Paul): en los
+// documentos base MÁS RECIENTES (ej. "Ciencias Sociales y Formación
+// Ciudadana Primaria" y "Comunicación y Lenguaje", ambas 6to Primaria), el
+// índice de temas vive en una tabla MARKDOWN genuina bajo el encabezado
+// "## Índice completo" ("| No. | Código | Bloque | Tema | Meta |") — un
+// formato distinto tanto de extractTemaTutorTable (tabla de Word aplanada
+// por mammoth, sin pipes, activada por "mapa de contenidos") como de
+// cualquier otra estrategia de abajo. Ninguna las reconocía, así que el
+// código caía hasta el respaldo más débil (list_items, sin ningún
+// encabezado de sección que lo acote), que terminaba recogiendo viñetas de
+// metadata ("Colegio: Colegio Montano.") e instrucciones internas
+// ("Distinguir fuente primaria, secundaria...") como si fueran "temas" del
+// curso — los 87 temas reales de la tabla nunca se usaban.
+function extractMarkdownIndexTable(lines: string[]): string[] {
+  const esFilaDeTabla = (linea: string) => /^\s*\|.*\|\s*$/.test(linea)
+  const esFilaSeparadora = (linea: string) => /^[\s|:\-]+$/.test(linea) && linea.includes('-')
+
+  const headerIdx = lines.findIndex((linea) => esFilaDeTabla(linea) && /\|\s*tema\s*\|/i.test(linea))
+  if (headerIdx === -1) return []
+  if (!esFilaSeparadora(lines[headerIdx + 1] || '')) return []
+
+  const encabezados = lines[headerIdx].split('|').map((c) => c.trim())
+  const colTemaIdx = encabezados.findIndex((c) => /^tema$/i.test(c))
+  if (colTemaIdx === -1) return []
+
+  const temas: string[] = []
+  for (let i = headerIdx + 2; i < lines.length; i++) {
+    const linea = lines[i]
+    if (!esFilaDeTabla(linea)) break
+    const celdas = linea.split('|').map((c) => c.trim())
+    const valor = celdas[colTemaIdx]
+    if (valor) pushUnique(temas, valor)
+  }
+  return temas
+}
+
 export function extractCourseTopicIndex(content: string): CourseTopicIndex {
   const declaredCount = extractDeclaredTopicCount(content)
   const lines = (content || '').split(/\r?\n/)
@@ -186,6 +239,11 @@ export function extractCourseTopicIndex(content: string): CourseTopicIndex {
   const temasDeTabla = extractTemaTutorTable(lines.map((l) => l.trim()).filter(Boolean))
   if (temasDeTabla.length > 0) {
     return { topics: temasDeTabla, declaredCount, source: 'tema_tutor_table', incomplete: declaredCount !== null && temasDeTabla.length < declaredCount }
+  }
+
+  const temasDeTablaMarkdown = extractMarkdownIndexTable(lines)
+  if (temasDeTablaMarkdown.length > 0) {
+    return { topics: temasDeTablaMarkdown, declaredCount, source: 'markdown_index_table', incomplete: declaredCount !== null && temasDeTablaMarkdown.length < declaredCount }
   }
 
   // Hallazgo real CRÍTICO (sexta verificación, 2026-07-13): "temas de esta
