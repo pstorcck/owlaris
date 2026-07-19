@@ -399,6 +399,33 @@ Intenta nuevamente, ¿cuánto es el impuesto?`
   assert.equal(inferCanonicalOperationFromText('Tienes 3/4 de pizza, ¿cuánto es eso en decimal?'), '3/4')
   assert.equal(opCoincideConTexto('3/4', 'Tienes 3/4 de pizza, ¿cuánto es eso en decimal?'), true)
 
+  // Hallazgo real (QA en vivo, 2026-07-19, cuenta Paul): un ejercicio de
+  // media aritmética ("Calcula la media aritmética de estos datos: 75, 85,
+  // 90, 70, 95") con la etiqueta "(75+85+90+70+95)/5" se rechazaba por
+  // opCoincideConTexto — el divisor (5) es la CANTIDAD de datos, un valor
+  // derivado, y el enunciado nunca lo repite como número aparte. Se exime
+  // el divisor SOLO cuando coincide con la cantidad real de sumandos.
+  assert.equal(
+    opCoincideConTexto('(75+85+90+70+95)/5', 'Calcula la media aritmética de estos datos: 75, 85, 90, 70, 95.'),
+    true,
+    'el divisor de una media (cantidad de datos) no debe exigirse como número aparte en el texto'
+  )
+  const mediaEvaluacion = await handleMathEvaluation(
+    'Calcula la media aritmética de estos datos: 75, 85, 90, 70, 95. [OP: (75+85+90+70+95)/5]',
+    '83',
+    false
+  )
+  assert.equal(mediaEvaluacion?.estado, 'correcto', 'la respuesta correcta de una media aritmética debe aceptarse en el primer intento')
+  // Un divisor que NO corresponde a la cantidad real de sumandos (etiqueta
+  // genuinamente mal calculada, ej. solo 2 sumandos pero divide entre 5) sí
+  // debe seguir exigiendo que el divisor aparezca en el texto — la
+  // excepción es específica a promedios bien formados.
+  assert.equal(
+    opCoincideConTexto('(75+85)/5', 'Calcula la media aritmética de estos datos: 75, 85, 90, 70, 95.'),
+    false,
+    'un divisor que no coincide con la cantidad de sumandos no debe eximirse'
+  )
+
   // El caso real completo: con la operación bien combinada, la respuesta
   // correcta del alumno (0.5) debe evaluarse como correcta, no como
   // incorrecta repetida.

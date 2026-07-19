@@ -262,7 +262,27 @@ export function opCoincideConTexto(op: string | null, textoVisible: string): boo
   const numerosOp = extraerNumeros(op)
   if (numerosOp.length === 0) return true
   const numerosTexto = new Set(extraerNumeros(textoVisible))
-  if (!numerosOp.every((n) => numerosTexto.has(n))) return false
+
+  // Hallazgo real (QA en vivo, 2026-07-19, cuenta Paul): un ejercicio de
+  // media aritmética etiquetado como "(75+85+90+70+95)/5" nunca podía pasar
+  // este chequeo — el divisor (5) es la CANTIDAD de datos, un valor
+  // derivado del problema, no un dato independiente que el enunciado deba
+  // repetir como número aparte ("calcula la media de estos datos: 75, 85,
+  // 90, 70, 95" nunca vuelve a mencionar "5"). La etiqueta se rechazaba
+  // como si no coincidiera con el problema, aunque la operación fuera
+  // exactamente correcta — la misma familia de bug que la fracción de la
+  // pizza (validar contra el texto visible en vez de validar la operación
+  // en sí). Se exime el divisor de esta exigencia SOLO cuando coincide
+  // exactamente con la cantidad de sumandos entre paréntesis — los datos
+  // reales (los sumandos) sí deben seguir apareciendo todos en el texto.
+  const mediaMatch = op.match(/^\(((?:-?\d+(?:\.\d+)?\+)+-?\d+(?:\.\d+)?)\)\/(\d+)$/)
+  const sumandosMedia = mediaMatch ? mediaMatch[1].split('+').filter(Boolean) : null
+  if (sumandosMedia && sumandosMedia.length === parseInt(mediaMatch![2], 10)) {
+    const numerosSumandos = sumandosMedia.map(Number)
+    if (!numerosSumandos.every((n) => numerosTexto.has(n))) return false
+  } else if (!numerosOp.every((n) => numerosTexto.has(n))) {
+    return false
+  }
 
   // Hallazgo real CRÍTICO (QA 100 pruebas, 2026-07-14): un problema con 2+
   // fracciones DISTINTAS ("3/4 de pizza... comes 1/4...") puede tener una
