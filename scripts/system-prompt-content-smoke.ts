@@ -92,6 +92,21 @@ function main() {
   // hacer trampa académica — no deben confundirse.
   assert.match(promptBase, /PONME UNA TRAMPA.*NO ES HACER TRAMPA/i)
 
+  // Hallazgo real (QA en vivo, 2026-07-19, Contabilidad y Olimpiadas
+  // Química): al verificar un cálculo de varios pasos, el modelo a veces
+  // anunciaba "hay un error" al inicio de la respuesta, pero el desglose
+  // que seguía confirmaba cada paso como correcto y concluía que la
+  // respuesta final SÍ era correcta — un mensaje contradictorio que no
+  // afecta la calificación pero puede confundir al estudiante.
+  assert.match(promptBase, /NO ANUNCIAR UN VEREDICTO ANTES DE TERMINAR DE VERIFICAR/i)
+  assert.match(promptBase, /nunca anuncies un error al inicio y luego confirmes/i)
+
+  // Hallazgo real (QA en vivo, 2026-07-19, Olimpiadas Científicas
+  // Matemática): las fórmulas citadas de un documento fuente se mostraban
+  // con notación LaTeX cruda ("\( n^2+n+1 \)") en vez de convertirse a
+  // texto plano, violando la regla de FORMATO existente al citar fuentes.
+  assert.match(promptBase, /si la fuente original usa notaci[oó]n LaTeX/i)
+
   // Instructivo de mejoras (ronda 2026-07-11), ítems 26-28: nunca inventar
   // alineación a estándares oficiales, derivar el "enfoque principal" de
   // TODO el índice (no solo los primeros temas), y permitir listar temas
