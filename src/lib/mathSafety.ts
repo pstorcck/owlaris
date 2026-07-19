@@ -906,6 +906,63 @@ function buildQuadraticHint(idiomaIngles: boolean, raicesYaEncontradas: number):
     : 'Esta es una ecuación cuadrática (tiene un término x²) — puede tener hasta dos soluciones. Intenta factorizarla, o usa la fórmula cuadrática: x = (-b ± √(b²-4ac)) / 2a.'
 }
 
+// Hallazgo real CRÍTICO (QA en vivo, 2026-07-19, cuenta Paul): en un
+// ejercicio de media aritmética ("Calcula la media aritmética de los
+// siguientes números: 10, 15, 25, 30 y 50", correcta: suma 130, media 26),
+// la etiqueta [OP:] a veces solo cubre la SUMA de los datos
+// ("10+15+25+30+50"), no la media completa ("(10+15+25+30+50)/5") — el
+// tutor probablemente pensó pedir la suma como paso intermedio antes de
+// pedir la división, pero el alumno respondió directamente con la media
+// final (26). Comparar 26 contra la suma (130) nunca podía coincidir, y ni
+// mostrar el procedimiento completo lo arreglaba (el número final seguía
+// siendo 26, no 130) — exactamente la misma familia que el paso del
+// discriminante en una ecuación cuadrática: el alumno se adelantó a la
+// respuesta final de un ejercicio de varios pasos. Cuando la etiqueta es
+// una simple cadena de sumas y el enunciado menciona "media"/"promedio",
+// se reconoce la MEDIA (sum/cantidad de sumandos) como respuesta final
+// correcta, y la SUMA sola como un paso intermedio válido (no un error) que
+// pide continuar con la división — en vez de dar por resuelto el ejercicio
+// y saltar a uno nuevo sin relación.
+function evaluarPosibleMediaAdelantada(
+  op: string,
+  tutorQuestion: string,
+  studentAnswer: string,
+  idiomaIngles: boolean
+): MathEvaluation | null {
+  const clean = normalizeOperation(op)
+  if (!/^-?\d+(?:\.\d+)?(?:\+-?\d+(?:\.\d+)?)+$/.test(clean)) return null
+  if (!/\b(media|promedio|average)\b/i.test(tutorQuestion)) return null
+
+  const suma = solveOperation(clean)
+  if (suma === null) return null
+  const cantidadDatos = clean.split('+').length
+  if (cantidadDatos < 2) return null
+  const media = suma / cantidadDatos
+
+  const studentN = normalizeStudentAnswer(studentAnswer)
+  if (studentN === null) return null
+
+  if (Math.abs(studentN - media) < 0.001) {
+    const valor = formatNumberForFeedback(studentN)
+    const feedback = idiomaIngles
+      ? `Correct. You solved it yourself — ${valor} is the right average. Now you don't just have the answer, you know how to find it again. Can you explain how you got there?`
+      : `¡Correcto! Lo resolviste tú: ${valor} es el promedio correcto. Ahora no solo tienes la respuesta, ya sabes cómo encontrarla otra vez. ¿Puedes explicarme cómo llegaste a ese resultado?`
+    logEvaluation({ op: clean, correctAnswer: media, studentAnswer, studentN, estado: 'correcto', pasoIntermedio: false, guardActivado: false, procedimientoMostrado: true })
+    return { estado: 'correcto', feedback, correctAnswer: media, op: clean, guardActivado: false, pasoIntermedio: false, procedimientoMostrado: true }
+  }
+
+  if (Math.abs(studentN - suma) < 0.001) {
+    const sumaTexto = formatNumberForFeedback(suma)
+    const feedback = idiomaIngles
+      ? `That's the correct sum (${sumaTexto}). Now divide it by the number of data points (${cantidadDatos}) to get the average. What do you get?`
+      : `Esa es la suma correcta (${sumaTexto}). Ahora divide entre la cantidad de datos (${cantidadDatos}) para obtener la media. ¿Qué te da?`
+    logEvaluation({ op: clean, correctAnswer: media, studentAnswer, studentN, estado: 'paso_correcto', pasoIntermedio: true, guardActivado: false, procedimientoMostrado: true })
+    return { estado: 'paso_correcto', feedback, correctAnswer: media, op: clean, guardActivado: false, pasoIntermedio: true, procedimientoMostrado: true }
+  }
+
+  return null
+}
+
 export async function handleMathEvaluation(
   tutorQuestion: string,
   studentAnswer: string,
@@ -922,6 +979,9 @@ export async function handleMathEvaluation(
   if (raicesCuadraticas) {
     return evaluateQuadraticEquation(op, raicesCuadraticas, tutorQuestion, studentAnswer, idiomaIngles)
   }
+
+  const posibleMediaAdelantada = evaluarPosibleMediaAdelantada(op, tutorQuestion, studentAnswer, idiomaIngles)
+  if (posibleMediaAdelantada) return posibleMediaAdelantada
 
   // Hallazgo real CRÍTICO (QA en vivo, 2026-07-16): con una ecuación
   // cuadrática, el tutor a veces pide primero un PASO intermedio ("¿cuál es

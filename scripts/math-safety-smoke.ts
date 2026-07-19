@@ -426,6 +426,34 @@ Intenta nuevamente, ¿cuánto es el impuesto?`
     'un divisor que no coincide con la cantidad de sumandos no debe eximirse'
   )
 
+  // Hallazgo real CRÍTICO (QA en vivo, 2026-07-19, segunda ronda, cuenta
+  // Paul): con evidencia exacta esta vez — el ejercicio "Calcula la media
+  // aritmética de los siguientes números: 10, 15, 25, 30 y 50" (suma 130,
+  // media 26) rechazó la respuesta correcta (26) incluso mostrando el
+  // procedimiento completo, y solo aceptó "130" (la SUMA, no la media) —
+  // saltando además a un ejercicio nuevo sin relación en vez de pedir la
+  // división. Esto confirma que la etiqueta [OP:] guardada para ese
+  // ejercicio era solo "10+15+25+30+50" (sin el "/5" final) — el tutor
+  // etiquetó el paso intermedio (la suma), no la media completa, y el
+  // alumno se adelantó a la respuesta final. Misma familia que el paso del
+  // discriminante en una cuadrática.
+  const promedioAdelantadoPrompt = 'Calcula la media aritmética de los siguientes números: 10, 15, 25, 30 y 50. [OP: 10+15+25+30+50]'
+  const promedioRespuestaFinal = await handleMathEvaluation(promedioAdelantadoPrompt, '26', false)
+  assert.equal(promedioRespuestaFinal?.estado, 'correcto', 'la media final correcta debe aceptarse aunque la etiqueta solo cubra la suma')
+
+  const promedioSoloSuma = await handleMathEvaluation(promedioAdelantadoPrompt, '130', false)
+  assert.equal(promedioSoloSuma?.estado, 'paso_correcto', 'la suma sola es un paso válido, no un error ni la respuesta final')
+  assert.match(promedioSoloSuma?.feedback || '', /divide.*entre la cantidad de datos/i)
+
+  const promedioIncorrecto = await handleMathEvaluation(promedioAdelantadoPrompt, '20', false)
+  assert.equal(promedioIncorrecto?.estado, 'incorrecto', 'una respuesta que no es ni la suma ni la media sigue siendo incorrecta')
+
+  // No debe activarse fuera de un contexto de media/promedio — una cadena
+  // de sumas normal (sin esas palabras clave) debe seguir calificándose
+  // contra la suma tal cual, sin este respaldo.
+  const sumaNormal = await handleMathEvaluation('¿Cuánto es 10+15+25? [OP: 10+15+25]', '50', false)
+  assert.equal(sumaNormal?.estado, 'correcto')
+
   // El caso real completo: con la operación bien combinada, la respuesta
   // correcta del alumno (0.5) debe evaluarse como correcta, no como
   // incorrecta repetida.
