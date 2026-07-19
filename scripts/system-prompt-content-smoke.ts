@@ -98,8 +98,17 @@ function main() {
   // que seguía confirmaba cada paso como correcto y concluía que la
   // respuesta final SÍ era correcta — un mensaje contradictorio que no
   // afecta la calificación pero puede confundir al estudiante.
-  assert.match(promptBase, /NO ANUNCIAR UN VEREDICTO ANTES DE TERMINAR DE VERIFICAR/i)
-  assert.match(promptBase, /nunca anuncies un error al inicio y luego confirmes/i)
+  // Refuerzo estructural (mismo día, feedback del equipo de QA): una
+  // instrucción de "no lo hagas" no es una garantía en un modelo que genera
+  // texto en una sola pasada — reaparecía con variaciones (más términos,
+  // otra materia) porque el compromiso con el veredicto ya queda escrito
+  // antes de terminar de razonar el resto. Se exige el ORDEN de la
+  // respuesta (desglose primero en silencio, veredicto solo al final) en
+  // vez de solo pedir que no se adelante — el modelo escribe el veredicto
+  // ya habiendo "visto" su propio desglose correcto como contexto previo.
+  assert.match(promptBase, /ORDEN OBLIGATORIO AL VERIFICAR UN PROCEDIMIENTO DE VARIOS PASOS/i)
+  assert.match(promptBase, /sin escribir ninguna palabra de veredicto todav[ií]a/i)
+  assert.match(promptBase, /esa frase debe ir al final de tu verificaci[oó]n, nunca como la primera l[ií]nea/i)
 
   // Hallazgo real (QA en vivo, 2026-07-19, Olimpiadas Ciencias Naturales,
   // 2do Básico): un ejercicio generado sobre cadenas alimenticias omitió la
