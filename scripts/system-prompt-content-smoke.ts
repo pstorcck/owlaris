@@ -118,6 +118,16 @@ function main() {
   assert.match(promptBase, /verifica que TODOS los datos necesarios para resolverlo est[eé]n escritos expl[ií]citamente/i)
   assert.match(promptBase, /reconoce con honestidad que falt[oó] en el enunciado original/i)
 
+  // Pedido explícito del usuario (2026-07-19): el tutor no revisaba
+  // ortografía ni gramática al practicar inglés, solo el contenido/concepto
+  // de la respuesta. Se agrega revisión activa en materias de gramática
+  // estructurada, y un toque más ligero (mención de patrón al cierre, sin
+  // interrumpir cada oración) en materias de fluidez conversacional, para
+  // no desalentar al alumno a comunicarse.
+  assert.match(promptBase, /REGLA — CORRECCIÓN DE ORTOGRAFÍA Y GRAMÁTICA EN INGLÉS/i)
+  assert.match(promptBase, /revisa tambi[eé]n la ortograf[ií]a y gram[aá]tica de lo que el alumno escribi[oó]/i)
+  assert.match(promptBase, /no interrumpas cada oraci[oó]n para corregir errores menores/i)
+
   // Hallazgo real (QA en vivo, 2026-07-19, Olimpiadas Científicas
   // Matemática): las fórmulas citadas de un documento fuente se mostraban
   // con notación LaTeX cruda ("\( n^2+n+1 \)") en vez de convertirse a
