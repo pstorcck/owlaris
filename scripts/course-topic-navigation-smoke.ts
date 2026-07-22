@@ -9,6 +9,7 @@ import {
   buildCategoryTopicsResponse,
   buildNextTopicResponse,
   buildStandardsAlignmentResponse,
+  esTemaOficialDeListaMostrada,
   extractAreaQuery,
   extractBlockQuery,
   extractCourseBlocks,
@@ -655,6 +656,25 @@ Fuente: Owlaris - Algebra 1.md
     assert.equal(indice.source, 'tema_tutor_table')
     assert.deepEqual(indice.topics, ['Ciencias Sociales y Formación Ciudadana', 'Historia de Guatemala'])
     assert.ok(!indice.topics.some((t) => t.startsWith(':')), 'ningún tema debe empezar con ":" sobrante')
+  })
+
+  // Hallazgo real (QA en vivo, 2026-07-22, Ciencias Naturales 2do Básico,
+  // cuenta Paul): el alumno pidió "Temas de esta materia", el tutor mostró
+  // los 22 temas oficiales (incluyendo "14. Genes, ADN, ARN, proteínas,
+  // Mendel y cuadros de Punnett"), y al escribir ese mismo tema para
+  // seleccionarlo, el candado de cambio de materia lo confundió con un
+  // tema de Biología y pidió confirmación innecesaria — aunque es un tema
+  // oficial de la propia lista que el tutor acababa de mostrar.
+  test('esTemaOficialDeListaMostrada reconoce un tema real de la lista que el tutor acaba de mostrar', () => {
+    const listaMostrada = 'Claro. Estos son todos los temas que puedo identificar en el contenido oficial de Ciencias Naturales.\n\n1. Ciencia, tecnología, cultura y preguntas sobre el origen de la vida\n2. Verificación, investigación cualitativa y divulgación científica\n14. Genes, ADN, ARN, proteínas, Mendel y cuadros de Punnett\n15. Mutaciones, genoma, clonación, ingeniería genética y biotecnología'
+    assert.equal(esTemaOficialDeListaMostrada('14. Genes, ADN, ARN, proteínas, Mendel y cuadros de Punnett', listaMostrada), true)
+    assert.equal(esTemaOficialDeListaMostrada('Genes, ADN, ARN, proteínas, Mendel y cuadros de Punnett', listaMostrada), true)
+    // Un tema que NO está en la lista mostrada (ej. uno inventado por el
+    // alumno) no debe colarse como si fuera oficial.
+    assert.equal(esTemaOficialDeListaMostrada('Fotosíntesis y respiración celular', listaMostrada), false)
+    // Sin una lista de temas real en el último mensaje del tutor (ej. un
+    // saludo cualquiera), nunca debe dar un falso positivo.
+    assert.equal(esTemaOficialDeListaMostrada('Genes y ADN', '¡Hola! ¿Qué materia vamos a estudiar hoy?'), false)
   })
 
   if (failures.length > 0) {

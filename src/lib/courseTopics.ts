@@ -341,6 +341,31 @@ export function extractCourseTopicIndex(content: string): CourseTopicIndex {
   }
 }
 
+// Hallazgo real (QA en vivo, 2026-07-22, Ciencias Naturales 2do Básico,
+// cuenta Paul): el alumno pidió "Temas de esta materia", el tutor mostró
+// la lista oficial completa (incluyendo "14. Genes, ADN, ARN, proteínas,
+// Mendel y cuadros de Punnett"), y al escribir ese mismo tema #14 para
+// seleccionarlo, el candado de cambio de materia (detectarMateriaDesdeTexto
+// en route.ts, basado en palabras clave) lo interpretó como un tema de
+// Biología y le preguntó si quería cambiar de materia — aunque ese tema es
+// parte OFICIAL del propio documento curricular de Ciencias Naturales que
+// el tutor acababa de mostrar. La detección por palabra clave no tiene
+// forma de saber que un tema con vocabulario de otra materia es, de
+// hecho, parte legítima del curso actual; esta función sí lo sabe, porque
+// compara contra la lista real que el tutor ya mostró en su último
+// mensaje — se usa como excepción para no disparar el candado en ese caso.
+export function esTemaOficialDeListaMostrada(pregunta: string, ultimoMensajeAsistente: string): boolean {
+  const { topics } = extractCourseTopicIndex(ultimoMensajeAsistente || '')
+  if (topics.length < 2) return false
+  const textoNormalizado = normalizeText(pregunta)
+  if (!textoNormalizado) return false
+  return topics.some((tema) => {
+    const temaNormalizado = normalizeText(tema)
+    if (!temaNormalizado || temaNormalizado.length < 6) return false
+    return textoNormalizado.includes(temaNormalizado) || temaNormalizado.includes(textoNormalizado)
+  })
+}
+
 // Número al final de una frase corta de selección: "2", "el 2", "quiero el
 // tema 6", "dame el número 8", "explícame el 4". No exige que TODO el
 // mensaje sea el número — el alumno rara vez responde con un número pelado.

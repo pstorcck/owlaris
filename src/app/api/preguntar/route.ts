@@ -32,6 +32,7 @@ import {
   extractStandardFromPriorResponse,
   extractStandardMentionedInHistory,
   extractStandardQuery,
+  esTemaOficialDeListaMostrada,
   findBlockByQuery,
   isBlockGroupingQuestion,
   isBroadAreaPresenceQuestion,
@@ -1414,7 +1415,15 @@ export async function POST(req: NextRequest) {
     // agrega la misma exclusión aquí, en el camino que sí corre.
     if (estado === 'activo' && materia_id && materiaActualEnSistemaCNB(materia_id) && !isLanguageSwitchRequest(pregunta)) {
       const materiaDetectada = detectarMateriaDesdeTexto(pregunta, normalizarMateria(materia_id))
-      if (materiaDetectada && materiaDetectada !== normalizarMateria(materia_id)) {
+      // Hallazgo real (QA en vivo, 2026-07-22, Ciencias Naturales 2do
+      // Básico): antes de ofrecer el cambio de materia por palabra clave,
+      // se revisa si el mensaje del alumno es en realidad un tema OFICIAL
+      // que el tutor mismo acaba de mostrar en "Temas de esta materia" —
+      // un tema legítimo del curso actual puede tener vocabulario que
+      // correlaciona con otra materia (ej. genética dentro de Ciencias
+      // Naturales), y no debe disparar una confirmación innecesaria.
+      const esTemaYaSancionado = materiaDetectada && esTemaOficialDeListaMostrada(pregunta, ultimoMensajeAsistente(historial))
+      if (materiaDetectada && materiaDetectada !== normalizarMateria(materia_id) && !esTemaYaSancionado) {
         // Hallazgo real (QA 100 pruebas, 2026-07-14): materiaDetectada es la
         // categoría CNB genérica ("Biología") detectada por palabra clave —
         // una cuenta eScholaris (Grado 8, cuenta Paul) no tiene una clase
