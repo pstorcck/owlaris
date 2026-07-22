@@ -3,6 +3,7 @@ import { createAdminClient, createClient } from '@/lib/supabase/server'
 import { checkContentSafety, type ContentSafetyResult } from '@/lib/contentSafety'
 import { extractRelevantContentWindow } from '@/lib/relevantContentWindow'
 import { buildContradictionClarificationResponse, detectContradictoryInstruction } from '@/lib/contradictoryInstructions'
+import { detectarVeredictoAutocontradictorio, repararVeredictoAutocontradictorio } from '@/lib/contradictoryVerdict'
 import { guardHumanisticResponse } from '@/lib/humanisticSafety'
 import { buildReadyToCopyRedirect, buildWelcomeMessage, describeFinalAnswerPolicyForPrompt, guardNoFinalAnswer, isReadyToCopyRequest } from '@/lib/pedagogicalGuard'
 import { buildGradeAdaptationInstruction } from '@/lib/gradeAdaptation'
@@ -2911,6 +2912,22 @@ ${contextoContenido}`
           console.log('CONTRADICTION GUARD FINAL activado: modelo se contradecía')
         }
       }
+    }
+
+    // GUARD DE VEREDICTO AUTOCONTRADICTORIO (QA en vivo, 2026-07-19
+    // Contabilidad/Química, 2026-07-21 Mineduc Matemática): a diferencia
+    // del guard de arriba, este no depende de resolver la operación de
+    // forma independiente (no siempre es posible, ej. un sistema de dos
+    // ecuaciones no tiene solver dedicado) — detecta que la PROPIA
+    // respuesta se contradice a sí misma (anuncia un error al abrir, pero
+    // su propio desglose concluye que la respuesta es correcta). Se
+    // restringe a materias numéricas/procedimentales para no arriesgar
+    // falsos positivos en materias humanísticas, donde "no es correcto"
+    // puede aparecer en un sentido conceptual no relacionado con calificar
+    // una respuesta.
+    if (materiaNumerica && detectarVeredictoAutocontradictorio(respuesta)) {
+      respuesta = repararVeredictoAutocontradictorio(respuesta, idiomaIngles)
+      console.log('GUARD DE VEREDICTO AUTOCONTRADICTORIO activado')
     }
 
     // La alerta de baja comprensión y las métricas del reporte para padres dependen

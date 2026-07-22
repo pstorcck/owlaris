@@ -9,7 +9,13 @@ function normalizeText(value: string) {
 
 function cleanTopic(value: string) {
   return (value || '')
-    .replace(/^[#*\-\s•\d.)]+/, '')
+    // Hallazgo real (QA en vivo, 2026-07-21, Ciencias Sociales 5to
+    // Bachillerato): una celda de origen como "1: Ciencias Sociales y
+    // Formación Ciudadana" perdía el dígito ("1", cubierto por \d) pero
+    // dejaba el ":" que le seguía, produciendo "1. : Ciencias Sociales..."
+    // al numerar la lista — ningún tema real empieza con ":", así que es
+    // seguro incluirlo en el recorte inicial junto a los demás marcadores.
+    .replace(/^[#*\-\s•\d.):]+/, '')
     .replace(/\*\*/g, '')
     .replace(/\s+/g, ' ')
     .replace(/[.:;\-–—\s]+$/, '')

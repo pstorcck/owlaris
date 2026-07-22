@@ -628,6 +628,35 @@ Fuente: Owlaris - Algebra 1.md
     assert.equal(isProbablyTopic('Fuente: página 45'), false, 'la etiqueta de metadata real ("Fuente:") sí debe seguir rechazándose')
   })
 
+  // Hallazgo real (QA en vivo, 2026-07-21, Ciencias Sociales 5to
+  // Bachillerato): "Temas de esta materia" devolvió los 14 temas reales
+  // correctamente, pero cada uno mostraba "1. : Ciencias Sociales..." en
+  // vez de "1. Ciencias Sociales..." — un ": " sobrante después del número.
+  // La celda de origen viene como "1: Ciencias Sociales..." (número y
+  // texto pegados con dos puntos, sin espacio); cleanTopic recortaba el
+  // dígito pero dejaba el ":" intacto al inicio.
+  test('extractCourseTopicIndex no deja un ": " sobrante cuando la celda de origen trae "N: Tema" pegado', () => {
+    const contenido = [
+      'Mapa de contenidos para tutoría',
+      '#',
+      'Competencia',
+      'Indicador',
+      'Tema tutor',
+      '1',
+      'Comp A',
+      'Ind A',
+      '1: Ciencias Sociales y Formación Ciudadana',
+      '2',
+      'Comp B',
+      'Ind B',
+      '2: Historia de Guatemala',
+    ].join('\n')
+    const indice = extractCourseTopicIndex(contenido)
+    assert.equal(indice.source, 'tema_tutor_table')
+    assert.deepEqual(indice.topics, ['Ciencias Sociales y Formación Ciudadana', 'Historia de Guatemala'])
+    assert.ok(!indice.topics.some((t) => t.startsWith(':')), 'ningún tema debe empezar con ":" sobrante')
+  })
+
   if (failures.length > 0) {
     console.error(`course-topic-navigation smoke failed: ${failures.length}/${total}`)
     for (const failure of failures) {
