@@ -30,6 +30,28 @@ async function main() {
   assert.equal(sanitizarTextoPdf(42 as unknown as string), 42)
   assert.equal(sanitizarTextoPdf(null as unknown as string), null)
 
+  // Hallazgo real (QA en vivo, 2026-07-22, reporte de Brenda): una etiqueta
+  // estructurada ("Materia: Matemáticas Primaria") salió como "Matemá
+  // [emoji]ticas Primaria" en el PDF. La causa probable es un carácter
+  // invisible de formato (espacio de ancho cero, marca direccional,
+  // selector de variación) incrustado en el nombre de la materia, no un
+  // emoji real — esos caracteres deben eliminarse en silencio, no
+  // mostrarse como "[emoji]", porque nunca fueron visibles para nadie.
+  const zwsp = String.fromCharCode(0x200b)
+  const conEspacioAnchoCero = `Matemá${zwsp}ticas Primaria`
+  assert.equal(sanitizarTextoPdf(conEspacioAnchoCero), 'Matemáticas Primaria')
+
+  const marcaDireccional = String.fromCharCode(0x200e)
+  const selectorVariacion = String.fromCharCode(0xfe0f)
+  const bom = String.fromCharCode(0xfeff)
+  assert.equal(sanitizarTextoPdf(`Grado: 4to${marcaDireccional} Primaria`), 'Grado: 4to Primaria')
+  assert.equal(sanitizarTextoPdf(`${bom}Materia: Matemáticas${selectorVariacion}`), 'Materia: Matemáticas')
+
+  // Un emoji genuino (visible, con codepoint fuera del plano básico) sigue
+  // mostrando el marcador "[emoji]" — no se debe perder esa protección.
+  const emojiReal = String.fromCodePoint(0x1f605)
+  assert.equal(sanitizarTextoPdf(`Comentario: todo bien ${emojiReal}`), 'Comentario: todo bien [emoji]')
+
   console.log('pdf-text smoke passed')
 }
 
