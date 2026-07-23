@@ -197,3 +197,16 @@ export function isLanguageSwitchRequest(text: string): boolean {
     .replace(/á/g,'a').replace(/é/g,'e').replace(/í/g,'i').replace(/ó/g,'o').replace(/ú/g,'u')
   return PETICION_SOLO_IDIOMA.some((pattern) => pattern.test(t))
 }
+
+// Hallazgo real (QA en vivo, 2026-07-22, Listening & Speaking, cuenta
+// Paul): con el interruptor de idioma en "Español", el tutor generó un
+// diálogo de práctica COMPLETO en español ("Tú: ¡Hola! ¿Cómo estás?
+// Compañero: ¡Hola! Estoy bien, gracias...") para una clase de práctica de
+// inglés — el interruptor solo debería controlar el idioma de las
+// explicaciones/instrucciones del tutor, no el idioma del contenido que el
+// alumno debe practicar. Practicar "Listening & Speaking" en español no
+// tiene ningún sentido pedagógico.
+export function esClaseDePracticaDeIngles(materia: string): boolean {
+  const normalizado = (materia || '').toLowerCase()
+  return /ingl[eé]s|english|listening|speaking|grammar/.test(normalizado)
+}

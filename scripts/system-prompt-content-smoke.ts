@@ -148,6 +148,13 @@ function main() {
   assert.match(contenido, /buildGradeAdaptationInstruction\(gradoEfectivo, idiomaIngles\)/)
   assert.match(buildGradeAdaptationInstruction('4to Primaria', false), /ADAPTACIÓN POR GRADO/)
 
+  // Hallazgo real (QA en vivo, 2026-07-22, Listening & Speaking): con el
+  // interruptor de idioma en Español, el tutor generaba diálogos de
+  // práctica completos en español para una clase de práctica de inglés —
+  // se verifica que route.ts siga consultando esClaseDePracticaDeIngles al
+  // construir contextoIdioma, en vez de depender solo del interruptor.
+  assert.match(contenido, /esClaseDePracticaDeIngles\(materiaConsultaSharePoint\)/)
+
   console.log('system-prompt-content smoke passed')
 }
 

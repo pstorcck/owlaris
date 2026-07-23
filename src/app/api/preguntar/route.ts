@@ -11,7 +11,7 @@ import { pareceIdiomaDistinto } from '@/lib/languageDetection'
 import { buscarStaffColegio, buscarSuperadmins, elegirFuenteDestinatariosAlerta, resolverDestinatariosAlerta, type DestinatarioAlerta } from '@/lib/alertaEmergencia'
 import { verificarLimiteFrecuencia } from '@/lib/rateLimit'
 import { isExplicitTableRequest, looksLikeMarkdownTable, sanitizeChatFormatting } from '@/lib/chatFormatting'
-import { detectarMateriaDesdeTexto, isLanguageSwitchRequest, materiaActualEnSistemaCNB, normalizarMateria, resolverMateriaRealDisponible } from '@/lib/materiaDetection'
+import { detectarMateriaDesdeTexto, esClaseDePracticaDeIngles, isLanguageSwitchRequest, materiaActualEnSistemaCNB, normalizarMateria, resolverMateriaRealDisponible } from '@/lib/materiaDetection'
 import { isExplicitCourseSwitchRequest } from '@/lib/courseSwitchDetection'
 import { detectarPatronErrores, isReviewMistakesRequest, primeraOperacionValida } from '@/lib/mistakeReview'
 import { limpiarTemaGeneral } from '@/lib/temaGeneral'
@@ -2718,7 +2718,11 @@ export async function POST(req: NextRequest) {
       promptPadre = `\n\nROL ESPECIAL - ASISTENTE PARA PADRES: Estás hablando con un padre o madre de familia. Usa los siguientes documentos:\n${docsPadres}\n\nAyuda con: estrategias para apoyar el aprendizaje, hábitos de estudio, comunicación con hijos. Sé cálido, empático y práctico.`
     }
 
-    const contextoIdioma = idiomaIngles ? '\n\nLANGUAGE INSTRUCTION: Respond entirely in English. All explanations, questions and feedback must be in English only.' : ''
+    const contextoIdioma = idiomaIngles
+      ? '\n\nLANGUAGE INSTRUCTION: Respond entirely in English. All explanations, questions and feedback must be in English only.'
+      : esClaseDePracticaDeIngles(materiaConsultaSharePoint)
+        ? '\n\nINSTRUCCIÓN DE IDIOMA: el alumno tiene el interruptor de idioma en Español, así que tus explicaciones e instrucciones van en español. PERO esta es una clase de práctica de inglés (Listening & Speaking, Grammar, English, etc.) — cualquier contenido que el alumno deba practicar o escuchar (diálogos, oraciones de ejemplo, vocabulario, ejercicios a responder) debe estar en INGLÉS, nunca traducido al español. Practicar esta clase en español no tiene sentido pedagógico.'
+        : ''
 
     // Hallazgo real (QA amplia 2026-07-08): un mensaje en un idioma distinto
     // al configurado se estaba tratando como cambio de tema/subtema ("Eso es

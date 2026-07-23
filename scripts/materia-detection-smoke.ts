@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import {
   detectarMateriaDesdeTexto,
+  esClaseDePracticaDeIngles,
   isLanguageSwitchRequest,
   materiaActualEnSistemaCNB,
   normalizarMateria,
@@ -231,6 +232,24 @@ function main() {
     'Biología',
     'fuera de una materia de lenguaje, el vocabulario de contenido sigue siendo una señal válida de cambio'
   )
+
+  // Hallazgo real (QA en vivo, 2026-07-22, Listening & Speaking, cuenta
+  // Paul): con el interruptor de idioma en Español, el tutor generó un
+  // diálogo de práctica completo en español para una clase de práctica de
+  // inglés. esClaseDePracticaDeIngles identifica estas clases para que
+  // route.ts pueda instruir que el CONTENIDO de práctica vaya en inglés
+  // aunque las explicaciones del tutor vayan en español.
+  assert.equal(esClaseDePracticaDeIngles('Listening & Speaking'), true)
+  assert.equal(esClaseDePracticaDeIngles('Public Speaking'), true)
+  assert.equal(esClaseDePracticaDeIngles('English II'), true)
+  assert.equal(esClaseDePracticaDeIngles('Grammar'), true)
+  assert.equal(esClaseDePracticaDeIngles('Advanced English'), true)
+  assert.equal(esClaseDePracticaDeIngles('Inglés'), true)
+  // No debe activarse para materias sin relación con inglés, incluyendo
+  // otras materias de lenguaje/comunicación en español.
+  assert.equal(esClaseDePracticaDeIngles('Comunicación y Lenguaje Idioma Español'), false)
+  assert.equal(esClaseDePracticaDeIngles('Ciencias Sociales y Formación Ciudadana'), false)
+  assert.equal(esClaseDePracticaDeIngles('Matemáticas'), false)
 
   console.log('materia-detection smoke passed')
 }
