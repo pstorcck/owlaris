@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { isExplicitTableRequest, isFormatRequest, looksLikeMarkdownTable, sanitizeChatFormatting } from '../src/lib/chatFormatting'
+import { isExplicitTableRequest, isFormatRequest, isTableRejection, looksLikeMarkdownTable, sanitizeChatFormatting } from '../src/lib/chatFormatting'
 
 function main() {
   assert.equal(sanitizeChatFormatting('### Ejemplo:\nAlgo de texto'), 'Ejemplo:\nAlgo de texto')
@@ -110,6 +110,38 @@ function main() {
   )
   assert.equal(looksLikeMarkdownTable('- Proceso: fotosíntesis\n- Lugar: cloroplastos'), false)
   assert.equal(looksLikeMarkdownTable(''), false)
+
+  // Hallazgo real CRÍTICO (QA en vivo, 2026-07-24, Olimpiadas de Ciencias
+  // — Química): PALABRA_TABLA marcaba CUALQUIER mención de "tabla" como
+  // petición explícita de tabla — incluyendo "tabla periódica" (un término
+  // de química, no un formato) y los reclamos del alumno para RECHAZAR una
+  // tabla no pedida ("no quiero la tabla", "otra vez la misma tabla").
+  // Esto forzaba al modelo a responder con tabla en cada uno de los 4
+  // turnos exactos de la conversación real, incluyendo los turnos donde el
+  // alumno confrontaba directamente el bucle — reforzándolo en vez de
+  // romperlo.
+  const turno1 = 'holis, en la tabla periodica que significa el numero atomico? siempre lo confundo con la masa'
+  const turno2 = 'ay pero no me explicaste la diferencia jaja, la tabla no me dice que ES el numero atomico'
+  const turno3 = 'no jaja otra vez la misma tabla. mi pregunta es conceptual: que representa fisicamente el numero atomico de un atomo? no quiero la tabla'
+  const turno4 = 'hola? sigues mandando la misma tabla como robot, ya la vi 3 veces. contesta con palabras no con tabla porfavor'
+  assert.equal(isExplicitTableRequest(turno1), false, 'turno1: "tabla periódica" es un término de química, no una petición de formato')
+  assert.equal(isExplicitTableRequest(turno2), false, 'turno2: reclamo, no petición')
+  assert.equal(isExplicitTableRequest(turno3), false, 'turno3: rechazo explícito ("no quiero la tabla")')
+  assert.equal(isExplicitTableRequest(turno4), false, 'turno4: rechazo explícito ("contesta con palabras no con tabla")')
+  assert.equal(isTableRejection(turno3), true)
+  assert.equal(isTableRejection(turno4), true)
+
+  // Las peticiones legítimas de tabla (sin mención de "tabla periódica" ni
+  // frase de rechazo) deben seguir funcionando exactamente igual que antes.
+  for (const frase of [
+    'una tabla comparando célula procariota vs eucariota',
+    'ponme la información en tabla',
+    'quiero un table con los datos',
+    'me lo puedes poner en forma de tabla',
+    'hazme una tabla con los planetas del sistema solar',
+  ]) {
+    assert.equal(isExplicitTableRequest(frase), true, frase)
+  }
 
   console.log('chat-formatting smoke passed')
 }

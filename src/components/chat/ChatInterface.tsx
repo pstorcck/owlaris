@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation'
 import type { Usuario, Materia, MensajeChat } from '@/types'
 import { sanitizarTextoPdf } from '@/lib/pdfText'
 import { buildWelcomeMessage } from '@/lib/pedagogicalGuard'
+import { looksLikeMarkdownTable } from '@/lib/chatFormatting'
 import {
   ArrowLeft,
   BookOpen,
@@ -1997,7 +1998,17 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
               // podía elegir la letra equivocada por desconocer las demás. No se
               // trunca cuando el mensaje contiene un patrón de opciones A)/B)/C)/D).
               const pareceOpcionMultiple = /(?:^|\n)\s*A[).:]\s/.test(msg.contenido) && /(?:^|\n)\s*[BD][).:]\s/.test(msg.contenido)
-              const largo = !pareceOpcionMultiple && msg.contenido.length > 350
+              // Hallazgo real (QA en vivo, 2026-07-24, Olimpiadas de
+              // Ciencias — Química): el truncamiento cortaba a los
+              // primeros 300 caracteres con un substring plano (sin pasar
+              // por renderTextoConTablas), así que un mensaje largo que
+              // incluía una tabla markdown mostraba la sintaxis cruda con
+              // pipes ("| Elemento | Símbolo | ...") como texto literal en
+              // la vista previa colapsada, antes de expandir. Igual que ya
+              // se hizo para preguntas de opción múltiple, no se trunca
+              // cuando el mensaje contiene una tabla.
+              const contieneTabla = looksLikeMarkdownTable(msg.contenido)
+              const largo = !pareceOpcionMultiple && !contieneTabla && msg.contenido.length > 350
               const abierto = expandido === msg.id
               return (
                 <div key={msg.id} className="o-fade" style={{display:'flex',alignItems:'flex-start',gap:'10px',flexDirection:esU?'row-reverse':'row',animationDelay:`${idx*.05}s`}}>

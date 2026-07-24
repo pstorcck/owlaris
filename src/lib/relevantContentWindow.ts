@@ -18,6 +18,14 @@ const PALABRAS_VACIAS = new Set([
   'the', 'of', 'in', 'and', 'to', 'a', 'is', 'that', 'for', 'on', 'with',
   'what', 'how', 'why', 'about', 'explain', 'explica', 'explicame',
   'cual', 'cuales', 'cuanto', 'cuantos', 'quiero', 'puedes', 'dame',
+  // Hallazgo real (QA en vivo, 2026-07-24, Olimpiadas de Ciencias —
+  // Química): "tabla" es una palabra estructural genérica (nombra un
+  // formato de presentación, no un tema específico) — usarla como ancla
+  // hacía que una pregunta CONCEPTUAL que solo mencionaba "tabla
+  // periódica" de paso ("¿qué significa el número atómico?") quedara
+  // anclada en la sección de datos tabulares del documento en vez de
+  // cualquier explicación conceptual disponible, turno tras turno.
+  'tabla', 'table',
 ])
 
 function normalizeText(value: string) {

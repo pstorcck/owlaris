@@ -102,10 +102,50 @@ const FRASES_TABLA_EXPLICITA = [
 // quiere, sin depender de una redacción exacta.
 const PALABRA_TABLA = /\btabla\b|\btable\b/i
 
+// Hallazgo real CRÍTICO (QA en vivo, 2026-07-24, Olimpiadas de Ciencias —
+// Química): "tabla periódica"/"periodic table" es un TÉRMINO DE QUÍMICA
+// (el objeto de estudio), no una petición de formato — "en la tabla
+// periódica, ¿qué significa el número atómico?" es una pregunta
+// conceptual que solo menciona "tabla" de paso, pero PALABRA_TABLA la
+// marcaba como petición explícita de tabla igual. Se excluye ese caso
+// específico del match de palabra suelta.
+const TABLA_PERIODICA = /tabla periodica|periodic table/i
+
+// Hallazgo real CRÍTICO (mismo QA): cuando el tutor SÍ respondió con una
+// tabla que el alumno no pidió, sus siguientes mensajes para rechazarla
+// ("no quiero la tabla", "otra vez la misma tabla", "contesta con
+// palabras no con tabla") NECESARIAMENTE repiten la palabra "tabla" para
+// describir lo que no quieren — y PALABRA_TABLA los marcaba, en cada
+// turno, como una NUEVA petición explícita de tabla, reforzando el mismo
+// bucle exactamente en el momento en que el alumno lo confrontaba. Un
+// rechazo explícito nunca debe contar como petición, sin importar que
+// contenga la palabra "tabla".
+const FRASES_RECHAZO_TABLA = [
+  'no quiero la tabla', 'no quiero tabla', 'sin la tabla', 'sin tabla',
+  'no la tabla', 'otra vez la tabla', 'otra vez la misma tabla', 'misma tabla',
+  'ya la vi', 'no con tabla', 'sin usar tabla', 'no en tabla', 'no en una tabla',
+  'no me dice', 'no me explicaste', 'no me diste', 'contesta con palabras',
+  'explicamelo con palabras', 'con palabras no con tabla', 'no quiero una tabla',
+  "don't want the table", 'not the table', 'without a table', 'without the table',
+  'same table again', 'keep sending the same table', 'in words, not a table',
+]
+
+export function isTableRejection(value: string): boolean {
+  const text = normalizeText(value)
+  if (!text) return false
+  return FRASES_RECHAZO_TABLA.some((needle) => text.includes(needle))
+}
+
 export function isExplicitTableRequest(value: string): boolean {
   const text = normalizeText(value)
   if (!text) return false
-  return FRASES_TABLA_EXPLICITA.some((needle) => text.includes(needle)) || PALABRA_TABLA.test(text)
+  if (isTableRejection(value)) return false
+  if (FRASES_TABLA_EXPLICITA.some((needle) => text.includes(needle))) return true
+  if (!PALABRA_TABLA.test(text)) return false
+  // "tabla periódica" no cuenta como mención de formato salvo que, además,
+  // aparezca en alguna de las frases explícitas de arriba (ya evaluadas).
+  const textoSinTablaPeriodica = text.replace(TABLA_PERIODICA, '')
+  return PALABRA_TABLA.test(textoSinTablaPeriodica)
 }
 
 // Hallazgo real (cuarta y quinta verificación, 2026-07-13): incluso con la

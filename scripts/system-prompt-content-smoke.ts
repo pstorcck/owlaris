@@ -155,6 +155,16 @@ function main() {
   // construir contextoIdioma, en vez de depender solo del interruptor.
   assert.match(contenido, /esClaseDePracticaDeIngles\(materiaConsultaSharePoint\)/)
 
+  // Hallazgo real CRÍTICO (QA en vivo, 2026-07-24, Olimpiadas de Ciencias
+  // — Química): el tutor repitió la misma tabla de referencia 4 veces
+  // seguidas ante una pregunta conceptual, incluso tras ser confrontado
+  // directamente. La causa raíz determinística (isExplicitTableRequest
+  // marcaba cualquier mención de "tabla" como petición, incluyendo
+  // rechazos explícitos) ya está corregida en chatFormatting.ts — esta
+  // regla de refuerzo en el prompt es una segunda capa de defensa.
+  assert.match(promptBase, /NO REPETIR LA MISMA TABLA O CITA ANTE UNA PREGUNTA CONCEPTUAL/i)
+  assert.match(promptBase, /NUNCA vuelvas a repetir esa misma tabla o cita/i)
+
   console.log('system-prompt-content smoke passed')
 }
 
