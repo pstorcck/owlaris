@@ -746,9 +746,17 @@ export function buildGuidedMathHint(op: string | null | undefined, idiomaIngles:
       : 'Para sumar o restar fracciones, primero busca un denominador común, y luego suma o resta solo los numeradores.'
   }
   if (/\d+\.\d+/.test(clean) && clean.includes('*')) {
+    // Hallazgo real CRÍTICO (QA en vivo, 2026-07-24, Mineduc Matemática):
+    // esta pista citaba "0.15"/"15" como ejemplo FIJO, sin relación con el
+    // decimal real del ejercicio (ej. un descuento del 25% mostraba esta
+    // pista mencionando 0.15/15%, una cifra ajena que el alumno nunca vio
+    // en su propio problema) — se usa el decimal real de la operación.
+    const decimalMatch = clean.match(/\d+\.\d+/)
+    const decimal = decimalMatch ? decimalMatch[0] : '0.15'
+    const porcentaje = decimalMatch ? String(Math.round(parseFloat(decimalMatch[0]) * 100)) : '15'
     return idiomaIngles
-      ? 'For decimal multiplication, treat the decimal as a fraction or percentage: 0.15 means 15/100, so multiply by 15 and then divide by 100.'
-      : 'Para multiplicar con decimales, piensa el decimal como fracción o porcentaje: 0.15 significa 15/100, así que multiplica por 15 y luego divide entre 100.'
+      ? `For decimal multiplication, treat the decimal as a fraction or percentage: ${decimal} means ${porcentaje}/100, so multiply by ${porcentaje} and then divide by 100.`
+      : `Para multiplicar con decimales, piensa el decimal como fracción o porcentaje: ${decimal} significa ${porcentaje}/100, así que multiplica por ${porcentaje} y luego divide entre 100.`
   }
   if (clean.includes('%')) {
     return idiomaIngles
@@ -1020,6 +1028,71 @@ function evaluarCadenaExtendida(
   return { estado: 'correcto', feedback, correctAnswer: resultado, op: cadenaExtendida, guardActivado: false, pasoIntermedio: false, procedimientoMostrado: true }
 }
 
+// Hallazgo real CRÍTICO (QA en vivo, 2026-07-24, Mineduc Matemática):
+// mismo patrón que el paso adelantado de la media y de Contabilidad, en un
+// problema de descuento — "cuesta 80 quetzales, con un descuento del 25%,
+// ¿cuánto tendrás que pagar?" se etiquetó como "[OP: 80*0.25]" (solo el
+// CÁLCULO DEL DESCUENTO, 20), pero la pregunta real pide el PRECIO FINAL
+// después de restar el descuento (60). El alumno respondió correctamente
+// con el precio final (80-20=60) y fue rechazado porque se comparó contra
+// el descuento parcial (20), no contra el precio final — con una pista
+// que además citaba una tasa (0.15) ajena al ejercicio real (25%), porque
+// la pista genérica de decimales usa un ejemplo fijo sin relación con el
+// número real (ver también el ajuste de esa pista más abajo). Cuando la
+// etiqueta es una simple multiplicación precio*tasa y el enunciado visible
+// menciona "descuento" junto con una pregunta de precio final, se
+// reconoce el PRECIO FINAL (precio - descuento) como respuesta correcta, y
+// el descuento solo como paso intermedio válido.
+function evaluarPosibleDescuentoAdelantado(
+  op: string,
+  tutorQuestion: string,
+  studentAnswer: string,
+  idiomaIngles: boolean
+): MathEvaluation | null {
+  const clean = normalizeOperation(op)
+  const match = clean.match(/^(-?\d+(?:\.\d+)?)\*(-?\d+(?:\.\d+)?)$/)
+  if (!match) return null
+  const preguntaNormalizada = tutorQuestion
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+  if (!/\b(descuento|discount)\b/.test(preguntaNormalizada)) return null
+  if (!/cuant[oa][^.?]{0,40}(?:pagar|pagaras|pagara|cuesta)|precio final|how much[^.?]{0,40}(?:pay|cost)|final price/.test(preguntaNormalizada)) return null
+
+  const [, a, b] = match
+  const esTasaDecimal = (v: string) => /^0?\.\d+$/.test(v)
+  let precio: number, tasa: number
+  if (esTasaDecimal(a) && !esTasaDecimal(b)) { tasa = parseFloat(a); precio = parseFloat(b) }
+  else if (esTasaDecimal(b) && !esTasaDecimal(a)) { tasa = parseFloat(b); precio = parseFloat(a) }
+  else return null
+
+  const descuento = precio * tasa
+  const precioFinal = precio - descuento
+
+  const studentN = normalizeStudentAnswer(studentAnswer)
+  if (studentN === null) return null
+
+  if (Math.abs(studentN - precioFinal) < 0.001) {
+    const valor = formatNumberForFeedback(studentN)
+    const feedback = idiomaIngles
+      ? `Correct. You solved it yourself — ${valor} is the right final price after the discount. Can you explain how you got there?`
+      : `¡Correcto! Lo resolviste tú: ${valor} es el precio final correcto después del descuento. ¿Puedes explicarme cómo llegaste a ese resultado?`
+    logEvaluation({ op: clean, correctAnswer: precioFinal, studentAnswer, studentN, estado: 'correcto', pasoIntermedio: false, guardActivado: false, procedimientoMostrado: true })
+    return { estado: 'correcto', feedback, correctAnswer: precioFinal, op: clean, guardActivado: false, pasoIntermedio: false, procedimientoMostrado: true }
+  }
+
+  if (Math.abs(studentN - descuento) < 0.001) {
+    const descuentoTexto = formatNumberForFeedback(descuento)
+    const feedback = idiomaIngles
+      ? `That's the correct discount amount (${descuentoTexto}). Now subtract it from the original price to get the final price. What do you get?`
+      : `Ese es el monto correcto del descuento (${descuentoTexto}). Ahora réstalo del precio original para obtener el precio final. ¿Qué te da?`
+    logEvaluation({ op: clean, correctAnswer: precioFinal, studentAnswer, studentN, estado: 'paso_correcto', pasoIntermedio: true, guardActivado: false, procedimientoMostrado: true })
+    return { estado: 'paso_correcto', feedback, correctAnswer: precioFinal, op: clean, guardActivado: false, pasoIntermedio: true, procedimientoMostrado: true }
+  }
+
+  return null
+}
+
 export async function handleMathEvaluation(
   tutorQuestion: string,
   studentAnswer: string,
@@ -1042,6 +1115,9 @@ export async function handleMathEvaluation(
 
   const cadenaExtendida = evaluarCadenaExtendida(op, tutorQuestion, studentAnswer, idiomaIngles)
   if (cadenaExtendida) return cadenaExtendida
+
+  const descuentoAdelantado = evaluarPosibleDescuentoAdelantado(op, tutorQuestion, studentAnswer, idiomaIngles)
+  if (descuentoAdelantado) return descuentoAdelantado
 
   // Hallazgo real CRÍTICO (QA en vivo, 2026-07-16): con una ecuación
   // cuadrática, el tutor a veces pide primero un PASO intermedio ("¿cuál es

@@ -632,6 +632,36 @@ Intenta nuevamente, ¿cuánto es el impuesto?`
   const respuestaAlPasoReal = await handleMathEvaluation(pasoDiscriminantePrompt, '144', false)
   assert.equal(respuestaAlPasoReal?.estado, 'correcto')
 
+  // Hallazgo real CRÍTICO (QA en vivo, 2026-07-24, Mineduc Matemática):
+  // mismo patrón (paso adelantado), esta vez en un problema de descuento.
+  // "cuesta 80 quetzales, con un descuento del 25%, ¿cuánto tendrás que
+  // pagar?" se etiquetó como "[OP: 80*0.25]" (solo el cálculo del
+  // descuento, 20) — el alumno respondió con el precio final correcto (60)
+  // y fue rechazado, con una pista que además citaba "0.15"/"15%", una
+  // cifra ajena al ejercicio real (25%).
+  const descuentoPrompt = 'En una tienda de ropa hay un vestido que cuesta 80 quetzales, con un descuento del 25%. ¿Cuánto tendrás que pagar después de aplicar el descuento? [OP: 80*0.25]'
+  const descuentoPrecioFinal = await handleMathEvaluation(descuentoPrompt, 'ahh ya entendi, 80*0.25=20 de descuento, entonces pago 80-20=60 quetzales', false)
+  assert.equal(descuentoPrecioFinal?.estado, 'correcto', 'el precio final (60) debe reconocerse como la respuesta correcta, no el descuento parcial (20)')
+  assert.equal(descuentoPrecioFinal?.correctAnswer, 60)
+
+  // El monto del descuento solo (20) es un paso intermedio válido, no un
+  // error — debe pedir el siguiente paso, no repetir la pista genérica.
+  const descuentoPasoIntermedio = await handleMathEvaluation(descuentoPrompt, '20', false)
+  assert.equal(descuentoPasoIntermedio?.estado, 'paso_correcto')
+  assert.equal(descuentoPasoIntermedio?.correctAnswer, 60)
+
+  // Una respuesta genuinamente incorrecta (ej. restar el 25 directamente,
+  // 80-25=55, el error típico ya cubierto por el primer intento del
+  // alumno) debe seguir marcándose como incorrecta.
+  const descuentoGenuinamenteIncorrecto = await handleMathEvaluation(descuentoPrompt, '55', false)
+  assert.equal(descuentoGenuinamenteIncorrecto?.estado, 'incorrecto')
+
+  // La pista de multiplicación con decimales ya no debe citar "0.15"/"15%"
+  // fijo cuando el ejercicio real usa otro decimal — debe citar el decimal
+  // real de la operación (0.25/25 en este caso).
+  assert.match(descuentoGenuinamenteIncorrecto?.feedback || '', /0\.25 significa 25\/100/)
+  assert.doesNotMatch(descuentoGenuinamenteIncorrecto?.feedback || '', /0\.15/)
+
   console.log('math-safety smoke passed')
 }
 
