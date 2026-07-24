@@ -96,6 +96,35 @@ function main() {
   assert.match(complaintContext, /Tienes razón/)
   assert.match(complaintContext, /3 \/ 8/)
 
+  // Hallazgo real CRÍTICO (QA en vivo, 2026-07-22, Math Grade 6): un
+  // mensaje puramente emocional ("ay esto está difícil no entiendo nada
+  // :( creo que soy malo en mate") disparaba isPendingContextQuestion (por
+  // contener "no entiendo") y caía en el respaldo genérico, que siempre
+  // mencionaba "sin calculadora" — algo que el alumno nunca dijo. La
+  // respuesta no venía a cuento y no reconocía la frustración real.
+  const mensajeFrustracion = 'ay esto está difícil no entiendo nada :( creo que soy malo en mate'
+  assert.equal(isPendingContextQuestion(mensajeFrustracion), true)
+  const respuestaFrustracion = buildPendingContextResponse({
+    studentQuestion: mensajeFrustracion,
+    activeOperation: '1/3+1/4',
+    activePrompt: 'Suma las fracciones 1/3 y 1/4.',
+  })
+  assert.doesNotMatch(respuestaFrustracion, /calculadora/i, 'no debe inventar una mención de calculadora que el alumno nunca hizo')
+  assert.match(respuestaFrustracion, /no significa que seas malo/i)
+  assert.match(respuestaFrustracion, /1 \/ 3 \+ 1 \/ 4/)
+
+  // Sin ningún marcador de frustración, el respaldo genérico sigue
+  // funcionando (ahora sin mencionar calculadora tampoco, para no asumir
+  // un detalle que el disparador — ej. "necesito ayuda", "sigo sin
+  // entender" — no necesariamente mencionó).
+  const respaldoGenerico = buildPendingContextResponse({
+    studentQuestion: 'necesito ayuda con esto',
+    activeOperation: '1/3+1/4',
+    activePrompt: 'Suma las fracciones 1/3 y 1/4.',
+  })
+  assert.doesNotMatch(respaldoGenerico, /calculadora/i)
+  assert.match(respaldoGenerico, /1 \/ 3 \+ 1 \/ 4/)
+
   const strippedResource = stripUnapprovedExternalResources(
     'Te comparto este recurso de Eduardo Montano que puede ayudarte: https://www.youtube.com/c/EduardoMontano',
     false

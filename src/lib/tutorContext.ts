@@ -216,6 +216,30 @@ type PendingContextResponseInput = {
   idiomaIngles?: boolean
 }
 
+// Hallazgo real CRÍTICO (QA en vivo, 2026-07-22, Math Grade 6): un mensaje
+// puramente emocional ("ay esto está difícil no entiendo nada :( creo que
+// soy malo en mate") activa este guard determinístico porque contiene la
+// frase "no entiendo" (una de las señales de "sigue con el mismo
+// ejercicio" en isPendingContextQuestion), pero termina en el respaldo
+// genérico de abajo, que siempre menciona "sin calculadora" — algo que el
+// alumno nunca dijo. El resultado es una respuesta que no viene a cuento
+// y no reconoce la frustración real, dejando al alumno atrapado
+// aclarando algo que el tutor nunca entendió mal en primer lugar. Se
+// detecta este caso específico ANTES del respaldo genérico para responder
+// con empatía real, en vez de un texto plantilla no relacionado.
+function parecePreguntaEmocionalDeFrustracion(text: string): boolean {
+  const EMOTICONOS_TRISTES = /:\(|:-\(|😢|😭|🙁|☹/
+  const FRASES_FRUSTRACION = [
+    'soy malo en', 'soy mala en', 'no sirvo para', 'no sirvo en',
+    'me rindo', 'no puedo con esto', 'esto es muy dificil',
+    'esta muy dificil', 'esta bien dificil', 'no doy mas',
+    'no soy bueno en', 'no soy buena en', 'odio esta materia',
+    'odio matematicas', 'odio esta materia', 'nunca voy a entender',
+    'i am bad at', "i'm bad at", 'i give up', 'this is too hard', 'i hate math',
+  ]
+  return EMOTICONOS_TRISTES.test(text) || FRASES_FRUSTRACION.some((needle) => text.includes(needle))
+}
+
 export function buildPendingContextResponse(input: PendingContextResponseInput) {
   const question = normalizeText(input.studentQuestion)
   const complaintPrefix = isNoAnswerComplaint(input.studentQuestion)
@@ -262,10 +286,16 @@ export function buildPendingContextResponse(input: PendingContextResponseInput) 
       : `${complaintPrefix}Sí, puedes resolverlo paso a paso. Sigamos con la ecuación activa: ${operation}. Primero identifica el número que está sumando o restando junto a la x, y piensa en la operación contraria que lo quita. ¿Qué harías en ambos lados de la ecuación para dejar la x sola?`
   }
 
+  if (operation && parecePreguntaEmocionalDeFrustracion(question)) {
+    return input.idiomaIngles
+      ? `It is okay that this feels hard — that does not mean you are bad at math, it just means this part needs a bit more practice. Let us slow down and stay with the same exercise: ${operation}. Would you like a simpler first step, or a similar easier example first?`
+      : `Está bien que esto se sienta difícil — eso no significa que seas malo en matemática, solo que esta parte necesita un poco más de práctica. Vamos más despacio y sigamos con el mismo ejercicio: ${operation}. ¿Quieres que te dé un primer paso más sencillo, o un ejemplo parecido más fácil primero?`
+  }
+
   if (operation) {
     return input.idiomaIngles
-      ? `${complaintPrefix}Yes, you can solve it without a calculator if we go one step at a time. Let us stay with the active exercise: ${operation}. Start with the first operation you can safely do. What would that first step be?`
-      : `${complaintPrefix}Sí, puedes resolverlo sin calculadora si vamos paso a paso. Sigamos con el ejercicio activo: ${operation}. Empieza por la primera operación que puedas hacer con seguridad. ¿Cuál sería ese primer paso?`
+      ? `${complaintPrefix}Yes, you can work through it step by step. Let us stay with the active exercise: ${operation}. Start with the first operation you can safely do. What would that first step be?`
+      : `${complaintPrefix}Sí, puedes resolverlo paso a paso. Sigamos con el ejercicio activo: ${operation}. Empieza por la primera operación que puedas hacer con seguridad. ¿Cuál sería ese primer paso?`
   }
 
   return input.idiomaIngles
