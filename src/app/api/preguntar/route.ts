@@ -81,6 +81,7 @@ import {
   calculateAdaptiveDifficulty,
   collectRecentMathOperations,
   describeMathTopic,
+  esTemaEstadisticaSinGeneradorDedicado,
   inferMathPracticeFocusFromOperation,
   isExplicitDifficultyUpRequest,
   isRepeatedMathOperation,
@@ -2232,7 +2233,22 @@ export async function POST(req: NextRequest) {
       // genuinamente numéricas — en las demás, un problema numérico puntual
       // bien resuelto no debe convertirse en una sesión de drill de
       // aritmética.
-      const siguienteEjercicio = esRespuestaCorrecta && materiaNumerica
+      // Hallazgo real (QA en vivo, 2026-07-22, Estadística): el mismo
+      // principio de arriba también aplica DENTRO de una materia numérica
+      // — tras acertar una pregunta sobre mediana y moda, se encadenó un
+      // ejercicio de resta suelta (98-36) sin relación alguna, porque el
+      // motor de práctica solo sabe generar aritmética simple y no tiene
+      // ningún generador para temas de Estadística. Se omite el
+      // auto-encadenado en ese caso específico, en vez de sustituir el
+      // tema por uno que el motor sí sepa representar pero que no tiene
+      // nada que ver con lo que el alumno acaba de resolver.
+      const temaSinGeneradorDedicado = esTemaEstadisticaSinGeneradorDedicado([
+        pregunta,
+        pendingMathOperation,
+        pendingMathPrompt,
+        ultimoMensajeAsistente(historial),
+      ])
+      const siguienteEjercicio = esRespuestaCorrecta && materiaNumerica && !temaSinGeneradorDedicado
         ? buildNextMathExercise(operacionesBloqueadas, nivelSiguiente, idiomaIngles, enfoquePractica)
         : null
       const fuentePractica = siguienteEjercicio

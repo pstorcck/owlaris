@@ -582,6 +582,29 @@ export function inferMathPracticeFocus(texts: Array<string | null | undefined>):
   return 'general'
 }
 
+// Hallazgo real (QA en vivo, 2026-07-22, Estadística): tras responder
+// correctamente una pregunta sobre mediana y moda, el tutor encadenó un
+// ejercicio de resta suelta (98-36) sin ninguna relación con el tema —
+// inferMathPracticeFocus no reconoce vocabulario de Estadística (mediana,
+// moda, desviación estándar, varianza, percentil, cuartil), así que cae
+// al enfoque 'general', y buildNextMathExercise solo sabe generar
+// aritmética simple (suma/resta/mult/div/ecuación/decimal/geometría/
+// exponente) — no tiene ningún generador para estos temas. Encadenar un
+// ejercicio de ese motor genérico en un tema que no puede representar es
+// peor que no encadenar ninguno (mismo principio que ya se aplicó para no
+// encadenar aritmética abstracta en materias humanísticas). Se detecta
+// este caso para que el llamador pueda omitir el auto-encadenado en vez
+// de sustituir el tema por uno sin relación.
+export function esTemaEstadisticaSinGeneradorDedicado(texts: Array<string | null | undefined>): boolean {
+  const normalized = texts
+    .filter(Boolean)
+    .join('\n')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+  return /\b(mediana|moda|desviacion estandar|varianza|percentil(es)?|cuartil(es)?|rango intercuartil|medidas? de dispersion|medidas? de tendencia central|median|mode|standard deviation|variance|percentile|quartile)\b/.test(normalized)
+}
+
 const ENFOQUES_PRACTICA_VALIDOS: MathPracticeFocus[] = ['equation', 'decimal', 'suma_resta', 'multiplicacion_division', 'suma', 'resta', 'multiplicacion', 'division', 'geometria', 'exponente']
 
 // El historial que llega al backend es una ventana corta (ultimos 6 mensajes),

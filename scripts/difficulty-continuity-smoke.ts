@@ -7,7 +7,7 @@
 //   número final, sin mostrar la ecuación o el procedimiento, se marcaba
 //   "correcto" igual que si hubiera mostrado el razonamiento completo.
 import assert from 'node:assert/strict'
-import { calculateAdaptiveDifficulty, isExplicitDifficultyUpRequest } from '../src/lib/mathPractice'
+import { calculateAdaptiveDifficulty, esTemaEstadisticaSinGeneradorDedicado, isExplicitDifficultyUpRequest } from '../src/lib/mathPractice'
 import { handleMathEvaluation, looksLikeWordProblem, respuestaEsSoloNumero } from '../src/lib/mathSafety'
 
 type Failure = { name: string; message: string }
@@ -124,6 +124,26 @@ async function main() {
   await test('una respuesta incorrecta en un problema de aplicación no se ve afectada por este cambio', async () => {
     const resultado = await handleMathEvaluation(problemaAplicacion, '10', false)
     assert.equal(resultado?.estado, 'incorrecto')
+  })
+
+  // Hallazgo real (QA en vivo, 2026-07-22, Estadística): tras acertar una
+  // pregunta sobre mediana y moda, el tutor encadenó un ejercicio de resta
+  // suelta (98-36) sin relación alguna — el motor de práctica solo genera
+  // aritmética simple y no tiene ningún generador para temas de
+  // Estadística. esTemaEstadisticaSinGeneradorDedicado detecta este caso
+  // para que route.ts pueda omitir el auto-encadenado en vez de sustituir
+  // el tema.
+  await test('esTemaEstadisticaSinGeneradorDedicado detecta vocabulario de Estadística sin generador dedicado', () => {
+    assert.equal(esTemaEstadisticaSinGeneradorDedicado(['¿Cuál es la mediana y la moda de este conjunto de datos?']), true)
+    assert.equal(esTemaEstadisticaSinGeneradorDedicado(['¿Cómo se calcula la desviación estándar?']), true)
+    assert.equal(esTemaEstadisticaSinGeneradorDedicado(['¿Qué es el percentil 90 de esta muestra?']), true)
+    assert.equal(esTemaEstadisticaSinGeneradorDedicado(['What is the median and mode of this data set?']), true)
+  })
+
+  await test('esTemaEstadisticaSinGeneradorDedicado no da falso positivo en ejercicios de aritmética normales', () => {
+    assert.equal(esTemaEstadisticaSinGeneradorDedicado(['Resuelve 24/3+5']), false)
+    assert.equal(esTemaEstadisticaSinGeneradorDedicado(['Calcula el promedio de 10, 15 y 25']), false)
+    assert.equal(esTemaEstadisticaSinGeneradorDedicado(['x+30=61']), false)
   })
 
   await Promise.resolve()
