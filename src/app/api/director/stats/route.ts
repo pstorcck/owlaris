@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server'
 import { createAdminClient, createClient } from '@/lib/supabase/server'
-import { detectarSedePorEmail } from '@/lib/sedes'
 import { getAssignedStudents } from '@/lib/guideAccess'
 
 export const dynamic = 'force-dynamic'
@@ -12,6 +11,7 @@ type StudentRow = {
   grado: string | null
   activo: boolean
   ultimo_acceso: string | null
+  sede?: string | null
 }
 
 type InteractionRow = {
@@ -32,7 +32,7 @@ type AlertRow = {
   descripcion: string | null
   contexto: string | null
   creado_en: string
-  alumno?: { nombre_completo?: string; grado?: string | null; email?: string | null } | null
+  alumno?: { nombre_completo?: string; grado?: string | null; email?: string | null; sede?: string | null } | null
 }
 
 function startOfTodayIso() {
@@ -64,7 +64,7 @@ export async function GET() {
 
     const { data: perfil } = await supabase
       .from('usuarios')
-      .select('id, colegio_id, nombre_completo, email, rol, colegio:colegios(nombre)')
+      .select('id, colegio_id, nombre_completo, email, rol, sede, colegio:colegios(nombre)')
       .eq('id', user.id)
       .single()
 
@@ -76,8 +76,15 @@ export async function GET() {
     }
 
     const esGuia = perfil.rol === 'maestro'
-    const sedeDirector = detectarSedePorEmail(perfil.email)
-    const filtrarPorSede = perfil.rol === 'director'
+    // Hallazgo real (QA en vivo, 2026-07-24): la sede ya no se adivina del
+    // correo del director (detectarSedePorEmail fallaba para cualquier
+    // correo que no siguiera el patrón de estudiante, ej. una cuenta de
+    // staff con correo personal) — se usa la columna explícita `sede`. Un
+    // director sin sede asignada ve TODO el colegio, sin filtrar — ese es
+    // el comportamiento esperado para un director de todo el plantel, no
+    // un error ni un caso sin resolver.
+    const sedeDirector = perfil.sede || null
+    const filtrarPorSede = perfil.rol === 'director' && !!sedeDirector
 
     // Hallazgo real (unificación de paneles, 2026-07-13): director y guía
     // comparten exactamente el mismo panel — la única diferencia es el
@@ -99,13 +106,13 @@ export async function GET() {
     } else {
       const { data: alumnosRaw } = await admin
         .from('usuarios')
-        .select('id, nombre_completo, email, grado, activo, ultimo_acceso')
+        .select('id, nombre_completo, email, grado, activo, ultimo_acceso, sede')
         .eq('colegio_id', perfil.colegio_id)
         .eq('rol', 'alumno')
         .order('nombre_completo')
 
       alumnos = ((alumnosRaw || []) as StudentRow[])
-        .filter((alumno) => !filtrarPorSede || detectarSedePorEmail(alumno.email) === sedeDirector)
+        .filter((alumno) => !filtrarPorSede || alumno.sede === sedeDirector)
     }
     const alumnoIds = alumnos.map((alumno) => alumno.id)
 
@@ -126,7 +133,7 @@ export async function GET() {
         .gte('creado_en', hace30dias),
       admin
         .from('alertas')
-        .select('id, alumno_id, tipo, descripcion, contexto, creado_en, alumno:alumno_id(nombre_completo, grado, email)')
+        .select('id, alumno_id, tipo, descripcion, contexto, creado_en, alumno:alumno_id(nombre_completo, grado, email, sede)')
         .eq('colegio_id', perfil.colegio_id)
         .in('alumno_id', idsFiltro)
         .eq('resuelta', false)
@@ -175,7 +182,7 @@ export async function GET() {
         id: alumno.id,
         nombre_completo: alumno.nombre_completo,
         email: alumno.email,
-        sede: detectarSedePorEmail(alumno.email),
+        sede: alumno.sede || null,
         grado: alumno.grado,
         activo: alumno.activo,
         sesiones30: ints.length,
@@ -255,7 +262,7 @@ export async function GET() {
           nombre_completo: alerta.alumno?.nombre_completo || 'Alumno',
           grado: alerta.alumno?.grado || null,
           email: alerta.alumno?.email || '',
-          sede: detectarSedePorEmail(alerta.alumno?.email || ''),
+          sede: alerta.alumno?.sede || null,
         },
       })),
     })

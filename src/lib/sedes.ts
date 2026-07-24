@@ -1,6 +1,6 @@
 export const SEDES_POR_PREFIJO: Record<string, string> = {
   cortijo: 'Cortijo',
-  pla: 'Portal Los Alamos',
+  pla: 'Portal Los Álamos',
 }
 
 export const SEDE_PRINCIPAL = 'Colegio Montano'
