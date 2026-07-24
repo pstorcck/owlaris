@@ -24,15 +24,25 @@ export async function POST(req: NextRequest) {
       .trim()
       .substring(0, modo === 'conversation' ? 240 : 300)
 
-    const mp3 = await withOpenAIRetry(() => openai.audio.speech.create({
-      model: 'tts-1',
-      voice: modo === 'conversation' ? 'nova' : 'onyx',
-      input: limpio,
-      // La conversacion en ingles es para practicar pronunciacion con alumnos
-      // que estan aprendiendo el idioma: mas lento que el habla normal ayuda
-      // a entender, en vez de mas rapido (antes 1.08, mas rapido de lo normal).
-      speed: modo === 'conversation' ? 0.88 : 1.0,
-    }), { maxRetries: 1, baseDelayMs: 300 })
+    // La conversacion en ingles usa gpt-4o-mini-tts: voz mas natural y
+    // "steerable" por instrucciones en lenguaje natural. Ese modelo no
+    // soporta el parametro "speed" (a diferencia de tts-1) — el ritmo mas
+    // lento para alumnos que aprenden ingles se pide como instruccion.
+    const mp3 = await withOpenAIRetry(() => openai.audio.speech.create(
+      modo === 'conversation'
+        ? {
+            model: 'gpt-4o-mini-tts',
+            voice: 'nova',
+            input: limpio,
+            instructions: 'Speak like a warm, patient tutor coaching a student who is still learning English: articulate each word clearly, pace it a little slower than normal conversation, and sound encouraging.',
+          }
+        : {
+            model: 'tts-1',
+            voice: 'onyx',
+            input: limpio,
+            speed: 1.0,
+          }
+    ), { maxRetries: 1, baseDelayMs: 300 })
 
     // Streaming directo — el audio empieza a sonar mientras llega
     const stream = mp3.body as ReadableStream

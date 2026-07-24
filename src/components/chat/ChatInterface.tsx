@@ -1035,7 +1035,7 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
               forceEstado: 'activo',
               forceMateria: 'Inglés',
               fromVoice: true,
-              speechConfidence: null,
+              speechConfidence: typeof data.confianza === 'number' ? data.confianza : null,
             })
           } else {
             // Silencio total (nada que transcribir): reanuda la escucha
