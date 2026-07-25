@@ -1,6 +1,7 @@
 import { createAdminClient, createClient } from '@/lib/supabase/server'
 import { canStaffAccessStudent } from '@/lib/guideAccess'
 import { redirect } from 'next/navigation'
+import ReporteToolbar from '@/components/reporte/ReporteToolbar'
 
 export const dynamic = 'force-dynamic'
 
@@ -166,19 +167,24 @@ export default async function ReporteAlumnoPage({ searchParams }: { searchParams
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  const alumnoId = searchParams.id
-  if (!alumnoId) redirect('/guia')
-
   const { data: perfil } = await supabase
     .from('usuarios').select('rol, colegio_id, email, sede').eq('id', user.id).single()
   if (!perfil) redirect('/login')
 
+  // /director solo acepta director/admin/superadmin y /guia solo acepta
+  // maestro/admin/superadmin (hallazgo real, 2026-07-25): enlazar siempre a
+  // /guia hacía que un director rebotara a /chat en vez de volver a su panel.
+  const dashboardHref = perfil.rol === 'director' ? '/director' : '/guia'
+
+  const alumnoId = searchParams.id
+  if (!alumnoId) redirect(dashboardHref)
+
   const { data: alumno } = await admin
     .from('usuarios').select('*, colegio:colegios(nombre)').eq('id', alumnoId).single()
-  if (!alumno) redirect('/guia')
+  if (!alumno) redirect(dashboardHref)
 
   const puedeVer = await canStaffAccessStudent(admin, perfil, user.id, alumnoId)
-  if (!puedeVer) redirect('/guia')
+  if (!puedeVer) redirect(dashboardHref)
 
   const { data: interacciones } = await admin
     .from('interacciones')
@@ -311,7 +317,10 @@ export default async function ReporteAlumnoPage({ searchParams }: { searchParams
 
   return (
     <div style={{minHeight:'100vh',background:'#F5F7FA',fontFamily:'system-ui,-apple-system,sans-serif',padding:'32px 20px'}}>
+      <style>{`@media print { .no-print { display: none !important; } body { background: white !important; } }`}</style>
       <div style={{maxWidth:'860px',margin:'0 auto'}}>
+
+        <ReporteToolbar dashboardHref={dashboardHref} />
 
         {/* Header */}
         <div style={{background:'linear-gradient(135deg,#1E3A5F,#2C3E6B)',borderRadius:'16px',padding:'28px 32px',marginBottom:'24px',color:'white'}}>
@@ -672,8 +681,8 @@ export default async function ReporteAlumnoPage({ searchParams }: { searchParams
           </div>
         )}
 
-        <div style={{textAlign:'center',marginTop:'24px'}}>
-          <a href="/guia" style={{color:'#2C3E6B',fontSize:'13px',textDecoration:'none',fontWeight:500}}>← Volver al panel</a>
+        <div className="no-print" style={{textAlign:'center',marginTop:'24px'}}>
+          <a href={dashboardHref} style={{color:'#2C3E6B',fontSize:'13px',textDecoration:'none',fontWeight:500}}>← Volver al panel</a>
         </div>
       </div>
     </div>

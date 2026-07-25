@@ -5,7 +5,7 @@ import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import BurbujaGuia from '@/components/guia/BurbujaGuia'
 
-type DirectorStats = {
+export type DirectorStats = {
   perfil: { nombre: string; colegio: string; sede: string; rol: 'director' | 'guia' }
   resumen: {
     totalAlumnos: number
@@ -47,6 +47,17 @@ type DirectorStats = {
   }[]
 }
 
+type AlertaHistorial = {
+  id: string
+  alumno_id: string
+  tipo: string
+  descripcion: string | null
+  contexto: string | null
+  creado_en: string
+  resuelta_en: string | null
+  alumno: { nombre_completo: string; grado: string | null; email: string } | null
+}
+
 const tipoLabel: Record<string, string> = {
   baja_comprension: 'Baja comprensión',
   seguridad_contenido: 'Seguridad',
@@ -77,9 +88,11 @@ function tiempoRelativo(iso: string | null) {
 export default function DirectorDashboard() {
   const [stats, setStats] = useState<DirectorStats | null>(null)
   const [cargando, setCargando] = useState(true)
-  const [tab, setTab] = useState<'resumen' | 'alertas' | 'alumnos'>('resumen')
+  const [tab, setTab] = useState<'resumen' | 'alertas' | 'historial' | 'alumnos'>('resumen')
   const [buscar, setBuscar] = useState('')
   const [resolviendo, setResolviendo] = useState<string | null>(null)
+  const [historial, setHistorial] = useState<AlertaHistorial[] | null>(null)
+  const [cargandoHistorial, setCargandoHistorial] = useState(false)
   const router = useRouter()
 
   useEffect(() => {
@@ -89,6 +102,21 @@ export default function DirectorDashboard() {
       .catch(() => setStats(null))
       .finally(() => setCargando(false))
   }, [])
+
+  // Historial de alertas ya resueltas (hallazgo real, 2026-07-25): resolver
+  // una alerta la hacía desaparecer sin dejar rastro visible en el panel.
+  // Se carga bajo demanda (solo al abrir el tab) para no pagar esa consulta
+  // en cada carga del dashboard.
+  function abrirHistorial() {
+    setTab('historial')
+    if (historial !== null) return
+    setCargandoHistorial(true)
+    fetch('/api/alertas?estado=historial')
+      .then((res) => res.json())
+      .then((data) => setHistorial(data.alertas || []))
+      .catch(() => setHistorial([]))
+      .finally(() => setCargandoHistorial(false))
+  }
 
   // Hallazgo real (unificación de paneles, 2026-07-13): la vista de guía
   // tenía un botón para marcar una alerta como resuelta que este panel
@@ -111,6 +139,7 @@ export default function DirectorDashboard() {
           alertas: prev.alertas.filter((alerta) => alerta.id !== id),
           resumen: { ...prev.resumen, alertasActivas: Math.max(0, prev.resumen.alertasActivas - 1) },
         } : prev)
+        setHistorial(null)
       }
     } finally {
       setResolviendo(null)
@@ -203,6 +232,7 @@ export default function DirectorDashboard() {
         <nav className="director-nav">
           <button className={tab === 'resumen' ? 'active' : ''} onClick={() => setTab('resumen')}>Resumen ejecutivo</button>
           <button className={tab === 'alertas' ? 'active' : ''} onClick={() => setTab('alertas')}>Alertas activas</button>
+          <button className={tab === 'historial' ? 'active' : ''} onClick={abrirHistorial}>Alertas históricas</button>
           <button className={tab === 'alumnos' ? 'active' : ''} onClick={() => setTab('alumnos')}>Seguimiento</button>
         </nav>
         <div className="director-side-foot">
@@ -345,6 +375,38 @@ export default function DirectorDashboard() {
               </section>
             )}
 
+            {tab === 'historial' && (
+              <section className="director-panel">
+                <div className="panel-head"><h2>Alertas históricas</h2><span>{historial ? `${historial.length} resueltas` : ''}</span></div>
+                <div className="alert-list">
+                  {cargandoHistorial ? (
+                    <div className="empty">Cargando historial...</div>
+                  ) : historial && historial.length ? historial.map((alerta) => (
+                    <div className="alert-item" key={alerta.id}>
+                      <div className="alert-top">
+                        <div>
+                          <div className="alert-title">{alerta.alumno?.nombre_completo || 'Alumno'}</div>
+                          <div className="alert-meta">{alerta.alumno?.grado || 'Sin grado'} · Resuelta {tiempoRelativo(alerta.resuelta_en)}</div>
+                          {alerta.descripcion && <div className="alert-meta" style={{ marginTop: 6 }}>{alerta.descripcion}</div>}
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8 }}>
+                          <span className="pill" style={{ background: `${tipoColor[alerta.tipo] || '#64748B'}18`, color: tipoColor[alerta.tipo] || '#64748B' }}>
+                            {tipoLabel[alerta.tipo] || alerta.tipo}
+                          </span>
+                          <span className="pill pill-green">✓ Resuelta</span>
+                          {alerta.alumno_id && (
+                            <a href={`/reporte-alumno?id=${alerta.alumno_id}`} className="pill pill-blue" style={{ textDecoration: 'none' }}>
+                              Ver informe →
+                            </a>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )) : <div className="empty">Aún no hay alertas resueltas.</div>}
+                </div>
+              </section>
+            )}
+
             {tab === 'alumnos' && (
               <section className="director-panel">
                 <div className="toolbar">
@@ -381,7 +443,7 @@ export default function DirectorDashboard() {
           </>
         )}
       </main>
-      {stats?.perfil.rol === 'guia' && <BurbujaGuia colegio={stats.perfil.colegio} />}
+      {stats && <BurbujaGuia stats={stats} />}
     </div>
   )
 }

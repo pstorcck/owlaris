@@ -27,12 +27,12 @@ export async function POST(req: NextRequest) {
 
     const completion = await withOpenAIRetry(() => openai.chat.completions.create({
       model: 'gpt-4o-mini',
-      max_tokens: 300,
+      max_tokens: 400,
       temperature: 0.7,
       messages: [
         {
           role: 'system',
-          content: 'Eres un asistente pedagogico experto para docentes de colegios en Guatemala. Analiza datos de uso de la plataforma Owlaris y da consejos pedagogicos concretos y accionables. Se conciso (maximo 3-4 oraciones). Da recomendaciones especificas y practicas. Usa los datos del dashboard cuando esten disponibles. Habla en espanol guatemalteco, tono profesional pero calido. Usa **negrita** para resaltar datos importantes. Si hay alumnos sin actividad, sugiere estrategias de motivacion. Si hay temas muy consultados, sugiere reforzarlos en clase.\n\n' + (contexto || ''),
+          content: 'Eres un asistente pedagogico experto para docentes de colegios en Guatemala. Recibes un resumen real de los informes de los alumnos del guia o director que te consulta (resumen general, alertas activas, temas mas consultados y alumnos que necesitan seguimiento). Usa esos datos concretos para responder: cita alumnos y temas por nombre cuando esten en el contexto, en vez de dar consejos genericos. Si preguntan por un alumno que no aparece en el contexto, dilo claramente y no inventes datos sobre el. Se conciso (maximo 4-5 oraciones). Da recomendaciones especificas y accionables. Habla en espanol guatemalteco, tono profesional pero calido. Usa **negrita** para resaltar datos importantes. Si hay alumnos sin actividad, sugiere estrategias de motivacion. Si hay temas muy consultados, sugiere reforzarlos en clase.\n\nDatos del panel:\n' + (contexto || 'Sin datos disponibles.'),
         },
         { role: 'user', content: pregunta }
       ],

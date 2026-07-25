@@ -1,8 +1,41 @@
 'use client'
 
 import { useState, useRef } from 'react'
+import type { DirectorStats } from '@/components/director/DirectorDashboard'
 
-export default function BurbujaGuia({ colegio }: { colegio: string }) {
+// Hallazgo real (2026-07-25): el asistente pedagógico solo recibía "Guía
+// del colegio X" como contexto — no tenía forma de aconsejar sobre alumnos
+// concretos porque no conocía sus informes. El dashboard ya trae toda esa
+// información (alumnosAtencion, alertas, temas más consultados) para
+// pintar el panel; se arma un resumen legible de esos mismos datos y se
+// manda como contexto, así el asistente cita alumnos y temas reales en vez
+// de hablar en genérico.
+function construirContexto(stats: DirectorStats): string {
+  const { perfil, resumen, topTemas, alumnosAtencion, alertas } = stats
+  const partes: string[] = []
+  partes.push(`Rol: ${perfil.rol === 'guia' ? 'guía/maestro' : 'director'} de ${perfil.colegio} (${perfil.sede}).`)
+  partes.push(`Resumen: ${resumen.totalAlumnos} alumnos visibles, ${resumen.activosHoy} activos hoy, ${resumen.activosSemana} activos esta semana, ${resumen.alertasActivas} alertas pendientes, ${resumen.sinActividad} sin actividad en 30 días.`)
+
+  if (topTemas.length > 0) {
+    partes.push(`Temas más consultados (30 días): ${topTemas.slice(0, 6).map(t => `${t.tema} (${t.count})`).join(', ')}.`)
+  }
+
+  if (alertas.length > 0) {
+    partes.push('Alertas activas: ' + alertas.slice(0, 10).map(a =>
+      `${a.alumno.nombre_completo} (${a.tipo}${a.descripcion ? ': ' + a.descripcion : ''})`
+    ).join(' | ') + '.')
+  }
+
+  if (alumnosAtencion.length > 0) {
+    partes.push('Alumnos que necesitan seguimiento: ' + alumnosAtencion.slice(0, 15).map(a =>
+      `${a.nombre_completo} (${a.grado || 'sin grado'}): ${a.sesiones30} sesiones/30d, ${a.temasUnicos} temas, ${a.alertasActivas} alertas, ${a.diasInactivo}d sin actividad`
+    ).join(' | ') + '.')
+  }
+
+  return partes.join('\n')
+}
+
+export default function BurbujaGuia({ stats }: { stats: DirectorStats }) {
   const [abierto, setAbierto] = useState(false)
   const [mensajes, setMensajes] = useState<{rol:'user'|'assistant'; texto:string}[]>([
     { rol: 'assistant', texto: 'Hola, soy tu asistente pedagógico. Puedo ayudarte a analizar el desempeño de tus alumnos y darte recomendaciones. ¿En qué te puedo ayudar?' }
@@ -21,7 +54,7 @@ export default function BurbujaGuia({ colegio }: { colegio: string }) {
       const res = await fetch('/api/asistente-docente', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ pregunta: txt, contexto: `Guía del colegio ${colegio}` })
+        body: JSON.stringify({ pregunta: txt, contexto: construirContexto(stats) })
       })
       const data = await res.json()
       setMensajes(p => [...p, { rol: 'assistant', texto: data.respuesta || 'Error al responder.' }])

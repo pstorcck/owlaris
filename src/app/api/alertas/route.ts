@@ -16,11 +16,14 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Sin permiso' }, { status: 403 })
   }
 
+  const { searchParams } = new URL(req.url)
+  const historial = searchParams.get('estado') === 'historial'
+
   let query = admin
     .from('alertas')
     .select('*, alumno:alumno_id(nombre_completo, email, grado), guia:guia_id(nombre_completo)')
-    .eq('resuelta', false)
-    .order('creado_en', { ascending: false })
+    .eq('resuelta', historial)
+    .order(historial ? 'resuelta_en' : 'creado_en', { ascending: false })
     .limit(50)
 
   if (perfil.rol === 'superadmin') {
