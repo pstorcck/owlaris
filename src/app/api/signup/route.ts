@@ -31,7 +31,7 @@ export async function POST(req: NextRequest) {
     const supabase = createServerClient()
 
     const body = await req.json()
-    const { nombre_completo, email, grado, rol, colegio_id } = body
+    const { nombre_completo, email, grado, rol, colegio_id, sede } = body
 
     if (!nombre_completo?.trim() || !email?.trim()) {
       return NextResponse.json({ error: 'Nombre y email son requeridos' }, { status: 400 })
@@ -118,6 +118,7 @@ export async function POST(req: NextRequest) {
       rol:             rolFinal,
       grado:           grado || null,
       activo:          true,
+      sede:            sede || null,
     })
 
     if (perfilError) {

@@ -14,10 +14,26 @@ const ROL_COLOR: Record<string,string> = {
   director: '#0F766E', alumno: '#7C3AED', padre: '#0D9488', guia: '#059669'
 }
 
+// Hallazgo real (QA en vivo, 2026-07-24): "Colegio Montano Cortijo" y
+// "Colegio Montano Portal Los Álamos" existían como colegio_id SEPARADOS
+// de "Colegio Montano" — un administrador podía elegirlos aquí pensando
+// que eran solo la sede, y esa cuenta terminaba en un colegio sin
+// alumnos, invisible para el resto del colegio. Se consolidó la base de
+// datos a un único colegio_id + una columna "sede" explícita — estos IDs
+// quedan obsoletos y se excluyen de los selectores para no repetir el
+// mismo error con cuentas nuevas.
+const COLEGIO_MONTANO_ID = '1ed08641-9611-425f-96da-02a67bf9bc54'
+const COLEGIOS_OBSOLETOS = new Set([
+  '4cd950b5-3385-4aa9-84a7-201eb87406f4', // Colegio Montano Cortijo (fusionado)
+  '9fe47d21-5ee3-4aa1-a347-a08f95869a96', // Colegio Montano Portal Los Álamos (fusionado)
+])
+const SEDES_MONTANO = ['Colegio Montano', 'Cortijo', 'Portal Los Álamos']
+
 interface Usuario {
   id: string; nombre_completo: string; email: string; rol: string
   grado: string | null; activo: boolean; ultimo_acceso: string | null
   colegio: { nombre: string; id: string }; colegio_id?: string
+  sede?: string | null
 }
 
 interface Asignacion {
@@ -48,8 +64,9 @@ export default function UsuariosPage() {
   const [modalGuia, setModalGuia]   = useState(false)
   const [formGuia, setFormGuia]     = useState({ guia_id: '', tipo: 'grado', grado: '', alumno_id: '', colegio_id: '' })
   const [procesandoGuia, setProcesandoGuia] = useState(false)
-  const [form, setForm]             = useState({ nombre_completo: '', email: '', rol: 'alumno', grado: '', colegio_id: '' })
+  const [form, setForm]             = useState({ nombre_completo: '', email: '', rol: 'alumno', grado: '', colegio_id: '', sede: '' })
   const fileRef = useRef<HTMLInputElement>(null)
+  const colegiosSeleccionables = colegios.filter(c => !COLEGIOS_OBSOLETOS.has(c.id))
 
   useEffect(() => {
     const supabase = createClient()
@@ -169,6 +186,7 @@ export default function UsuariosPage() {
         grado: modalEditar.grado,
         activo: modalEditar.activo,
         colegio_id: modalEditar.colegio_id || colegioId,
+        sede: modalEditar.sede,
       })
     })
     const data = await res.json()
@@ -183,7 +201,7 @@ export default function UsuariosPage() {
       body: JSON.stringify({ ...form, colegio_id: form.colegio_id || colegioId }) })
     const data = await res.json()
     setProcesando(false)
-    if (data.ok) { setMensaje('✅ Usuario creado y email enviado'); setModalCrear(false); setForm({ nombre_completo: '', email: '', rol: 'alumno', grado: '', colegio_id: '' }); cargarUsuarios() }
+    if (data.ok) { setMensaje('✅ Usuario creado y email enviado'); setModalCrear(false); setForm({ nombre_completo: '', email: '', rol: 'alumno', grado: '', colegio_id: '', sede: '' }); cargarUsuarios() }
     else setMensaje(`❌ ${data.error}`)
   }
 
@@ -295,7 +313,7 @@ export default function UsuariosPage() {
                 <select value={colegioId} onChange={e => setColegioId(e.target.value)}
                   style={{ padding: '8px 12px', border: '1px solid #E2E8F0', borderRadius: '8px', fontSize: '13px', background: 'white' }}>
                   <option value="">Todos los colegios</option>
-                  {colegios.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+                  {colegiosSeleccionables.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
                 </select>
               )}
               <select value={filtroRol} onChange={e => setFiltroRol(e.target.value)}
@@ -457,7 +475,17 @@ export default function UsuariosPage() {
                 <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: '#64748B', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '.5px' }}>Colegio</label>
                 <select value={form.colegio_id || colegioId} onChange={e => setForm(p => ({ ...p, colegio_id: e.target.value }))}
                   style={{ width: '100%', padding: '9px 12px', border: '1px solid #E2E8F0', borderRadius: '8px', fontSize: '13px' }}>
-                  {colegios.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+                  {colegiosSeleccionables.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+                </select>
+              </div>
+            )}
+            {(form.colegio_id || colegioId) === COLEGIO_MONTANO_ID && (
+              <div>
+                <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: '#64748B', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '.5px' }}>Sede</label>
+                <select value={form.sede} onChange={e => setForm(p => ({ ...p, sede: e.target.value }))}
+                  style={{ width: '100%', padding: '9px 12px', border: '1px solid #E2E8F0', borderRadius: '8px', fontSize: '13px' }}>
+                  <option value="">Sin sede específica (ve todo el colegio, si es director)</option>
+                  {SEDES_MONTANO.map(s => <option key={s} value={s}>{s}</option>)}
                 </select>
               </div>
             )}
@@ -490,9 +518,19 @@ export default function UsuariosPage() {
               <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: '#64748B', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '.5px' }}>Colegio</label>
               <select value={modalEditar.colegio_id || colegioId} onChange={e => setModalEditar({ ...modalEditar, colegio_id: e.target.value })}
                 style={{ width: '100%', padding: '9px 12px', border: '1px solid #E2E8F0', borderRadius: '8px', fontSize: '13px' }}>
-                {colegios.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+                {colegiosSeleccionables.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
               </select>
             </div>
+            {(modalEditar.colegio_id || colegioId) === COLEGIO_MONTANO_ID && (
+              <div>
+                <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: '#64748B', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '.5px' }}>Sede</label>
+                <select value={modalEditar.sede || ''} onChange={e => setModalEditar({ ...modalEditar, sede: e.target.value })}
+                  style={{ width: '100%', padding: '9px 12px', border: '1px solid #E2E8F0', borderRadius: '8px', fontSize: '13px' }}>
+                  <option value="">Sin sede específica (ve todo el colegio, si es director)</option>
+                  {SEDES_MONTANO.map(s => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </div>
+            )}
             <div>
               <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: '#64748B', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '.5px' }}>Grado</label>
               <input value={modalEditar.grado || ''} onChange={e => setModalEditar({ ...modalEditar, grado: e.target.value })}
@@ -532,7 +570,7 @@ export default function UsuariosPage() {
                   <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: '#64748B', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '.5px' }}>Colegio</label>
                   <select value={formGuia.colegio_id || colegioId} onChange={e => setFormGuia(p => ({ ...p, colegio_id: e.target.value }))}
                     style={{ width: '100%', padding: '9px 12px', border: '1px solid #E2E8F0', borderRadius: '8px', fontSize: '13px' }}>
-                    {colegios.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+                    {colegiosSeleccionables.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
                   </select>
                 </div>
                 <div>

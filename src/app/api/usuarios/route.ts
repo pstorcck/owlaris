@@ -110,12 +110,12 @@ export async function PATCH(req: NextRequest) {
     if (!auth.ok) return auth.response
 
     const admin = createAdminClient()
-    const { id, nombre_completo, rol, grado, activo, nueva_password, colegio_id } = await req.json()
+    const { id, nombre_completo, rol, grado, activo, nueva_password, colegio_id, sede } = await req.json()
     if (!id) return NextResponse.json({ error: 'ID requerido' }, { status: 400 })
 
     const { data: objetivo } = await admin
       .from('usuarios')
-      .select('colegio_id, rol, nombre_completo, activo')
+      .select('colegio_id, rol, nombre_completo, activo, sede')
       .eq('id', id)
       .single()
 
@@ -149,6 +149,7 @@ export async function PATCH(req: NextRequest) {
       rol: rolFinal,
       grado: grado || null,
       activo: typeof activo === 'boolean' ? activo : objetivo.activo,
+      sede: sede !== undefined ? (sede || null) : objetivo.sede,
     }).eq('id', id)
 
     if (error) throw error
