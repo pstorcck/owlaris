@@ -5,6 +5,21 @@ import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import BurbujaGuia from '@/components/guia/BurbujaGuia'
 
+type AlumnoStats = {
+  id: string
+  nombre_completo: string
+  email: string
+  sede: string
+  grado: string | null
+  activo?: boolean
+  sesiones30: number
+  temasUnicos: number
+  ultimaSesion: string | null
+  diasInactivo: number
+  alertasActivas: number
+  sospechasCopia: number
+}
+
 export type DirectorStats = {
   perfil: { nombre: string; colegio: string; sede: string; rol: 'director' | 'guia' }
   resumen: {
@@ -23,19 +38,8 @@ export type DirectorStats = {
   topTemas: { tema: string; count: number }[]
   topMaterias: { materia: string; count: number }[]
   alertasPorTipo: { tipo: string; count: number }[]
-  alumnosAtencion: {
-    id: string
-    nombre_completo: string
-    email: string
-    sede: string
-    grado: string | null
-    sesiones30: number
-    temasUnicos: number
-    ultimaSesion: string | null
-    diasInactivo: number
-    alertasActivas: number
-    sospechasCopia: number
-  }[]
+  alumnosAtencion: AlumnoStats[]
+  alumnos: AlumnoStats[]
   alertas: {
     id: string
     alumno_id: string
@@ -90,6 +94,8 @@ export default function DirectorDashboard() {
   const [cargando, setCargando] = useState(true)
   const [tab, setTab] = useState<'resumen' | 'alertas' | 'historial' | 'alumnos'>('resumen')
   const [buscar, setBuscar] = useState('')
+  const [soloSeguimiento, setSoloSeguimiento] = useState(true)
+  const [filtroGradoAlumnos, setFiltroGradoAlumnos] = useState('')
   const [resolviendo, setResolviendo] = useState<string | null>(null)
   const [historial, setHistorial] = useState<AlertaHistorial[] | null>(null)
   const [cargandoHistorial, setCargandoHistorial] = useState(false)
@@ -152,13 +158,15 @@ export default function DirectorDashboard() {
 
   const alumnosFiltrados = useMemo(() => {
     const q = buscar.trim().toLowerCase()
-    if (!q) return stats?.alumnosAtencion || []
-    return (stats?.alumnosAtencion || []).filter((alumno) =>
-      alumno.nombre_completo.toLowerCase().includes(q) ||
-      alumno.email.toLowerCase().includes(q) ||
-      (alumno.grado || '').toLowerCase().includes(q)
+    const base = soloSeguimiento ? (stats?.alumnosAtencion || []) : (stats?.alumnos || [])
+    return base.filter((alumno) =>
+      (!q ||
+        alumno.nombre_completo.toLowerCase().includes(q) ||
+        alumno.email.toLowerCase().includes(q) ||
+        (alumno.grado || '').toLowerCase().includes(q)) &&
+      (!filtroGradoAlumnos || alumno.grado === filtroGradoAlumnos)
     )
-  }, [buscar, stats])
+  }, [buscar, filtroGradoAlumnos, soloSeguimiento, stats])
 
   async function cerrarSesion() {
     await createClient().auth.signOut()
@@ -409,9 +417,24 @@ export default function DirectorDashboard() {
 
             {tab === 'alumnos' && (
               <section className="director-panel">
-                <div className="toolbar">
-                  <div className="panel-head" style={{ margin: 0 }}><h2>Alumnos que necesitan seguimiento</h2><span>{alumnosFiltrados.length}</span></div>
-                  <input className="search" value={buscar} onChange={(e) => setBuscar(e.target.value)} placeholder="Buscar alumno o grado" />
+                <div className="toolbar" style={{ flexWrap: 'wrap' }}>
+                  <div className="panel-head" style={{ margin: 0 }}>
+                    <h2>{soloSeguimiento ? 'Alumnos que necesitan seguimiento' : 'Todos los alumnos'}</h2>
+                    <span>{alumnosFiltrados.length}</span>
+                  </div>
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                    <select className="search" style={{ minWidth: 0 }} value={filtroGradoAlumnos} onChange={(e) => setFiltroGradoAlumnos(e.target.value)}>
+                      <option value="">Todos los grados</option>
+                      {(stats?.grados || []).map((g) => <option key={g.grado} value={g.grado}>{g.grado}</option>)}
+                    </select>
+                    <input className="search" value={buscar} onChange={(e) => setBuscar(e.target.value)} placeholder="Buscar alumno o grado" />
+                    <button
+                      onClick={() => setSoloSeguimiento((v) => !v)}
+                      style={{ height: 38, border: '1px solid #CBD5E1', borderRadius: 8, padding: '0 14px', fontSize: 13, fontWeight: 600, background: soloSeguimiento ? 'white' : '#EFF6FF', color: soloSeguimiento ? '#334155' : '#1D4ED8', cursor: 'pointer', whiteSpace: 'nowrap' }}
+                    >
+                      {soloSeguimiento ? 'Ver todos' : 'Solo con seguimiento'}
+                    </button>
+                  </div>
                 </div>
                 <div className="student-list">
                   {alumnosFiltrados.length ? alumnosFiltrados.map((alumno) => {
@@ -436,7 +459,7 @@ export default function DirectorDashboard() {
                         </div>
                       </div>
                     )
-                  }) : <div className="empty">No hay alumnos en seguimiento con esos filtros.</div>}
+                  }) : <div className="empty">{soloSeguimiento ? 'No hay alumnos en seguimiento con esos filtros.' : 'No hay alumnos con esos filtros.'}</div>}
                 </div>
               </section>
             )}
