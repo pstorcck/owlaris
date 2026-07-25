@@ -32,9 +32,9 @@ export async function POST(req: NextRequest) {
       modo === 'conversation'
         ? {
             model: 'gpt-4o-mini-tts',
-            voice: 'nova',
+            voice: 'fable',
             input: limpio,
-            instructions: 'Speak like a warm, patient tutor coaching a student who is still learning English: articulate each word clearly, pace it a little slower than normal conversation, and sound encouraging.',
+            instructions: 'Speak like a warm, kind male tutor with an academic, articulate tone: enunciate each word clearly, pace it a little slower than normal conversation, and sound genuinely encouraging and approachable, never stiff or cold.',
           }
         : {
             model: 'tts-1',
