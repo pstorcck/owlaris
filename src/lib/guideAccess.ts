@@ -111,3 +111,37 @@ export async function canStaffAccessStudent(
   const assignedIds = await getAssignedStudentIds(admin, viewerId)
   return assignedIds.includes(alumnoId)
 }
+
+// Vínculo padre-alumno (hallazgo real, 2026-07-26): el rol "padre" no tenía
+// ningún alumno vinculado en la base de datos — se agrega por separado de
+// canStaffAccessStudent porque un padre no es staff (reglas de acceso
+// distintas: nunca ve todo un grado/colegio, solo su(s) hijo(s) puntuales).
+export async function getLinkedChildren(admin: AdminClient, padreId: string): Promise<AssignedStudent[]> {
+  const { data: vinculos } = await admin
+    .from('padre_alumno')
+    .select('alumno:alumno_id(id, nombre_completo, grado, ultimo_acceso, email, colegio_id, rol, activo)')
+    .eq('padre_id', padreId)
+    .eq('activo', true)
+
+  const students = new Map<string, AssignedStudent>()
+  for (const vinculo of vinculos || []) {
+    const student = normalizeStudent(vinculo.alumno)
+    if (student) students.set(student.id, student)
+  }
+
+  return Array.from(students.values()).sort((a, b) =>
+    a.nombre_completo.localeCompare(b.nombre_completo, 'es')
+  )
+}
+
+export async function canParentAccessStudent(admin: AdminClient, padreId: string, alumnoId: string): Promise<boolean> {
+  const { data: vinculo } = await admin
+    .from('padre_alumno')
+    .select('id')
+    .eq('padre_id', padreId)
+    .eq('alumno_id', alumnoId)
+    .eq('activo', true)
+    .maybeSingle()
+
+  return !!vinculo
+}

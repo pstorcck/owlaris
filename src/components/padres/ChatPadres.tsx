@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
+import type { AssignedStudent } from '@/lib/guideAccess'
 
 interface Props {
   usuario: {
@@ -11,6 +12,15 @@ interface Props {
     colegio: { nombre: string; id: string }
     colegio_id: string
   }
+  hijos: AssignedStudent[]
+}
+
+function tiempoRelativo(iso: string | null) {
+  if (!iso) return 'sin registro'
+  const dias = Math.floor((Date.now() - new Date(iso).getTime()) / 86400000)
+  if (dias <= 0) return 'hoy'
+  if (dias === 1) return 'ayer'
+  return `hace ${dias} días`
 }
 
 interface Mensaje {
@@ -20,7 +30,8 @@ interface Mensaje {
   timestamp: Date
 }
 
-export default function ChatPadres({ usuario }: Props) {
+export default function ChatPadres({ usuario, hijos }: Props) {
+  const [tab, setTab] = useState<'chat' | 'hijos'>('chat')
   const [mensajes, setMensajes] = useState<Mensaje[]>([{
     id: 'bienvenida',
     rol: 'asistente',
@@ -153,6 +164,15 @@ export default function ChatPadres({ usuario }: Props) {
         .p-send:hover:not(:disabled) { box-shadow: 0 4px 16px rgba(44,62,107,.4); transform: translateY(-1px); }
         .btn-salir { background: rgba(255,255,255,.1); border: 1px solid rgba(255,255,255,.2); border-radius: 8px; padding: 6px 14px; font-size: 12px; color: rgba(255,255,255,.8); cursor: pointer; font-family: system-ui, sans-serif; transition: all .15s; }
         .btn-salir:hover { background: rgba(255,255,255,0.2); }
+        .p-tabs { display: flex; gap: 4px; padding: 12px 20px 0; max-width: 780px; width: 100%; margin: 0 auto; }
+        .p-tab { background: transparent; border: none; padding: 8px 14px; font-size: 13px; font-weight: 600; color: #94A3B8; cursor: pointer; border-bottom: 2px solid transparent; font-family: system-ui, sans-serif; }
+        .p-tab.active { color: #2C3E6B; border-bottom-color: #2C3E6B; }
+        .p-hijos { flex: 1; overflow-y: auto; padding: 20px; max-width: 780px; width: 100%; margin: 0 auto; display: flex; flex-direction: column; gap: 12px; }
+        .p-hijo-card { background: white; border: 1px solid rgba(44,62,107,.1); border-radius: 12px; padding: 16px 18px; display: flex; justify-content: space-between; align-items: center; gap: 12px; box-shadow: 0 2px 12px rgba(44,62,107,.06); }
+        .p-hijo-nombre { font-size: 14px; font-weight: 700; color: #1A2744; }
+        .p-hijo-meta { font-size: 12px; color: #94A3B8; margin-top: 2px; }
+        .p-hijo-link { background: #EFF6FF; color: #1D4ED8; border-radius: 999px; padding: 8px 14px; font-size: 12px; font-weight: 700; text-decoration: none; white-space: nowrap; }
+        .p-hijos-vacio { text-align: center; color: #94A3B8; font-size: 13px; padding: 40px 20px; }
       `}</style>
 
       <div className="padres-root">
@@ -206,6 +226,27 @@ export default function ChatPadres({ usuario }: Props) {
           </div>
         </header>
 
+        <div className="p-tabs">
+          <button className={`p-tab ${tab === 'chat' ? 'active' : ''}`} onClick={() => setTab('chat')}>💬 Chat</button>
+          <button className={`p-tab ${tab === 'hijos' ? 'active' : ''}`} onClick={() => setTab('hijos')}>📊 Mis hijos{hijos.length > 0 ? ` (${hijos.length})` : ''}</button>
+        </div>
+
+        {tab === 'hijos' ? (
+          <div className="p-hijos">
+            {hijos.length === 0 ? (
+              <div className="p-hijos-vacio">Tu colegio aún no ha vinculado alumnos a tu cuenta. Contacta a la administración si crees que esto es un error.</div>
+            ) : hijos.map(hijo => (
+              <div className="p-hijo-card" key={hijo.id}>
+                <div>
+                  <div className="p-hijo-nombre">{hijo.nombre_completo}</div>
+                  <div className="p-hijo-meta">{hijo.grado || 'Sin grado'} · Última actividad: {tiempoRelativo(hijo.ultimo_acceso)}</div>
+                </div>
+                <a className="p-hijo-link" href={`/reporte-alumno?id=${hijo.id}`}>Ver informe →</a>
+              </div>
+            ))}
+          </div>
+        ) : (
+        <>
         <div className="p-messages">
           {mensajes.map(m => (
             <div key={m.id} className={`p-msg-wrap ${m.rol}`}>
@@ -273,6 +314,8 @@ export default function ChatPadres({ usuario }: Props) {
             </button>
           </div>
         </footer>
+        </>
+        )}
         </div>
       </div>
     </>

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { ventanaHoyGuatemala } from '../src/lib/fechaGuatemala'
+import { ventanaHoyGuatemala, ventanaDiaGuatemala, diaGuatemalaDeFecha } from '../src/lib/fechaGuatemala'
 
 function main() {
   // Bug real: usar la fecha UTC cruda (new Date().toISOString().split('T')[0])
@@ -36,6 +36,23 @@ function main() {
   // El inicio de la ventana debe corresponder a medianoche EN GUATEMALA
   // (06:00 UTC), no medianoche UTC.
   assert.equal(start.getUTCHours(), 6)
+
+  // ventanaDiaGuatemala debe coincidir con ventanaHoyGuatemala cuando se le
+  // pasa el día de hoy (mismo cálculo, generalizado a cualquier fecha) —
+  // usado por el filtro "ver por día" del informe de alumno para revisar
+  // días pasados, no solo hoy.
+  const { start: hoyStart } = ventanaHoyGuatemala(new Date('2026-07-07T14:00:00Z'))
+  const { start: diaStart, end: diaEnd } = ventanaDiaGuatemala('2026-07-07')
+  assert.equal(diaStart.toISOString(), hoyStart.toISOString())
+  assert.equal(diaEnd.getTime() - diaStart.getTime(), 24 * 60 * 60 * 1000)
+
+  // diaGuatemalaDeFecha debe agrupar los mismos momentos usados arriba bajo
+  // la misma clave de día (2026-07-07), incluyendo el momento justo antes
+  // del cambio de día UTC que causaba el bug original.
+  for (const momento of momentosDelMismoDiaGT) {
+    assert.equal(diaGuatemalaDeFecha(momento), '2026-07-07', `momento ${momento} debería agruparse en 2026-07-07`)
+  }
+  assert.equal(diaGuatemalaDeFecha('2026-07-08T06:00:00Z'), '2026-07-08')
 
   console.log('fecha-guatemala smoke passed')
 }

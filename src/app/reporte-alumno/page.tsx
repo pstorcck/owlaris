@@ -1,8 +1,10 @@
 import { createAdminClient, createClient } from '@/lib/supabase/server'
-import { canStaffAccessStudent } from '@/lib/guideAccess'
+import { canStaffAccessStudent, canParentAccessStudent } from '@/lib/guideAccess'
 import { redirect } from 'next/navigation'
 import ReporteToolbar from '@/components/reporte/ReporteToolbar'
+import SelectorDia from '@/components/reporte/SelectorDia'
 import type { InformeAlumnoPdfData } from '@/lib/informeAlumnoPdf'
+import { diaGuatemalaDeFecha } from '@/lib/fechaGuatemala'
 
 export const dynamic = 'force-dynamic'
 
@@ -162,7 +164,7 @@ function calcularRutaDificultad(interacciones: Interaccion[]) {
   return { eventos: eventos.slice(-6), nivelFinal: nivel }
 }
 
-export default async function ReporteAlumnoPage({ searchParams }: { searchParams: { id?: string } }) {
+export default async function ReporteAlumnoPage({ searchParams }: { searchParams: { id?: string; dia?: string } }) {
   const supabase = createClient()
   const admin = createAdminClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -175,7 +177,8 @@ export default async function ReporteAlumnoPage({ searchParams }: { searchParams
   // /director solo acepta director/admin/superadmin y /guia solo acepta
   // maestro/admin/superadmin (hallazgo real, 2026-07-25): enlazar siempre a
   // /guia hacía que un director rebotara a /chat en vez de volver a su panel.
-  const dashboardHref = perfil.rol === 'director' ? '/director' : '/guia'
+  // Un padre tiene su propio panel (/padres), sin acceso al de guía/director.
+  const dashboardHref = perfil.rol === 'director' ? '/director' : perfil.rol === 'padre' ? '/padres' : '/guia'
 
   const alumnoId = searchParams.id
   if (!alumnoId) redirect(dashboardHref)
@@ -184,7 +187,12 @@ export default async function ReporteAlumnoPage({ searchParams }: { searchParams
     .from('usuarios').select('*, colegio:colegios(nombre)').eq('id', alumnoId).single()
   if (!alumno) redirect(dashboardHref)
 
-  const puedeVer = await canStaffAccessStudent(admin, perfil, user.id, alumnoId)
+  // El "Informe Pedagógico Familiar" ya está pensado para la familia — un
+  // padre vinculado al alumno (padre_alumno) ve exactamente el mismo
+  // informe que guía/director, sin duplicar esta página.
+  const puedeVer = perfil.rol === 'padre'
+    ? await canParentAccessStudent(admin, user.id, alumnoId)
+    : await canStaffAccessStudent(admin, perfil, user.id, alumnoId)
   if (!puedeVer) redirect(dashboardHref)
 
   const { data: interacciones } = await admin
@@ -202,7 +210,22 @@ export default async function ReporteAlumnoPage({ searchParams }: { searchParams
     .order('creado_en', { ascending: false })
     .limit(10) as { data: AlertaReporte[] | null }
 
-  const lista = interacciones || []
+  const todasInteracciones = interacciones || []
+  const conteoPorDia = new Map<string, number>()
+  for (const int of todasInteracciones) {
+    const key = diaGuatemalaDeFecha(int.creado_en)
+    conteoPorDia.set(key, (conteoPorDia.get(key) || 0) + 1)
+  }
+  const diasConActividad = Array.from(conteoPorDia.entries())
+    .map(([fecha, count]) => ({ fecha, count }))
+    .sort((a, b) => b.fecha.localeCompare(a.fecha))
+  const diaSeleccionado = searchParams.dia && /^\d{4}-\d{2}-\d{2}$/.test(searchParams.dia) && conteoPorDia.has(searchParams.dia)
+    ? searchParams.dia
+    : null
+
+  const lista = diaSeleccionado
+    ? todasInteracciones.filter(i => diaGuatemalaDeFecha(i.creado_en) === diaSeleccionado)
+    : todasInteracciones
   const alertas = alertasActivas || []
   const temas = Array.from(new Set(lista.map(i => inferirTemaLegible(i)).filter(Boolean)))
   const totalSesiones = lista.length
@@ -213,9 +236,11 @@ export default async function ReporteAlumnoPage({ searchParams }: { searchParams
   const evaluables = correctos + incorrectos
   const tasaAcierto = evaluables > 0 ? Math.round((correctos / evaluables) * 100) : null
   const fechaReporte = new Date()
-  const etiquetaPeriodo = lista.length > 0
-    ? `${new Date(lista[lista.length - 1].creado_en).toLocaleDateString('es-GT', { day: '2-digit', month: 'short' })} - ${fechaReporte.toLocaleDateString('es-GT', { day: '2-digit', month: 'short', year: 'numeric' })}`
-    : fechaReporte.toLocaleDateString('es-GT', { day: '2-digit', month: 'short', year: 'numeric' })
+  const etiquetaPeriodo = diaSeleccionado
+    ? new Date(`${diaSeleccionado}T12:00:00`).toLocaleDateString('es-GT', { day: '2-digit', month: 'short', year: 'numeric' })
+    : lista.length > 0
+      ? `${new Date(lista[lista.length - 1].creado_en).toLocaleDateString('es-GT', { day: '2-digit', month: 'short' })} - ${fechaReporte.toLocaleDateString('es-GT', { day: '2-digit', month: 'short', year: 'numeric' })}`
+      : fechaReporte.toLocaleDateString('es-GT', { day: '2-digit', month: 'short', year: 'numeric' })
 
   // Agrupar por materia
   const porMateria = new Map<string, Interaccion[]>()
@@ -366,6 +391,7 @@ export default async function ReporteAlumnoPage({ searchParams }: { searchParams
       <div style={{maxWidth:'860px',margin:'0 auto'}}>
 
         <ReporteToolbar dashboardHref={dashboardHref} data={pdfData} />
+        <SelectorDia alumnoId={alumnoId} dias={diasConActividad} diaSeleccionado={diaSeleccionado} />
 
         {/* Header */}
         <div style={{background:'linear-gradient(135deg,#1E3A5F,#2C3E6B)',borderRadius:'16px',padding:'28px 32px',marginBottom:'24px',color:'white'}}>
@@ -681,7 +707,7 @@ export default async function ReporteAlumnoPage({ searchParams }: { searchParams
             </div>
             <div>
               <p style={{fontSize:'11px',color:'#94A3B8',margin:'0 0 2px',textTransform:'uppercase',letterSpacing:'.5px'}}>Mostrando</p>
-              <p style={{fontSize:'14px',color:'#0F1C2E',margin:0,fontWeight:500}}>Últimas {totalSesiones} interacciones (máx. 200)</p>
+              <p style={{fontSize:'14px',color:'#0F1C2E',margin:0,fontWeight:500}}>{diaSeleccionado ? `${totalSesiones} interacciones ese día` : `Últimas ${totalSesiones} interacciones (máx. 200)`}</p>
             </div>
           </div>
         </div>

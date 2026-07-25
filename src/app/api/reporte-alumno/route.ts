@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient, createClient } from '@/lib/supabase/server'
-import { canStaffAccessStudent } from '@/lib/guideAccess'
+import { canStaffAccessStudent, canParentAccessStudent } from '@/lib/guideAccess'
 
 export const dynamic = 'force-dynamic'
 
@@ -66,7 +66,9 @@ export async function GET(req: NextRequest) {
       .from('usuarios').select('*, colegio:colegios(nombre)').eq('id', alumnoId).single()
     if (!alumno) return NextResponse.json({ error: 'Alumno no encontrado' }, { status: 404 })
 
-    const puedeVer = await canStaffAccessStudent(admin, perfil, user.id, alumnoId)
+    const puedeVer = perfil.rol === 'padre'
+      ? await canParentAccessStudent(admin, user.id, alumnoId)
+      : await canStaffAccessStudent(admin, perfil, user.id, alumnoId)
 
     if (!puedeVer) return NextResponse.json({ error: 'Sin permisos para este alumno' }, { status: 403 })
 

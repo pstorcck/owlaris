@@ -1,6 +1,7 @@
-import { createClient } from '@/lib/supabase/server'
+import { createAdminClient, createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import ChatPadres from '@/components/padres/ChatPadres'
+import { getLinkedChildren } from '@/lib/guideAccess'
 
 export default async function PadresPage() {
   const supabase = createClient()
@@ -15,5 +16,7 @@ export default async function PadresPage() {
 
   if (!perfil || perfil.rol !== 'padre') redirect('/chat')
 
-  return <ChatPadres usuario={perfil} />
+  const hijos = await getLinkedChildren(createAdminClient(), user.id)
+
+  return <ChatPadres usuario={perfil} hijos={hijos} />
 }

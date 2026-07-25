@@ -43,6 +43,12 @@ interface Asignacion {
   alumno?: { nombre_completo: string }
 }
 
+interface VinculoPadre {
+  id: string; padre_id: string; alumno_id: string
+  padre?: { nombre_completo: string; email: string }
+  alumno?: { nombre_completo: string; grado: string | null; email: string }
+}
+
 export default function UsuariosPage() {
   const [usuarios, setUsuarios]     = useState<Usuario[]>([])
   const [cargando, setCargando]     = useState(true)
@@ -58,12 +64,17 @@ export default function UsuariosPage() {
   const [colegioId, setColegioId]   = useState('')
   const [esSuperAdmin, setEsSuperAdmin] = useState(false)
   const [colegios, setColegios]     = useState<{id:string;nombre:string}[]>([])
-  const [tabActivo, setTabActivo]   = useState<'usuarios'|'guias'>('usuarios')
+  const [tabActivo, setTabActivo]   = useState<'usuarios'|'guias'|'padres'>('usuarios')
   const [guias, setGuias]           = useState<Usuario[]>([])
   const [asignaciones, setAsignaciones] = useState<Asignacion[]>([])
   const [modalGuia, setModalGuia]   = useState(false)
   const [formGuia, setFormGuia]     = useState({ guia_id: '', tipo: 'grado', grado: '', alumno_id: '', colegio_id: '' })
   const [procesandoGuia, setProcesandoGuia] = useState(false)
+  const [padres, setPadres]         = useState<Usuario[]>([])
+  const [vinculosPadres, setVinculosPadres] = useState<VinculoPadre[]>([])
+  const [modalPadre, setModalPadre] = useState(false)
+  const [formPadre, setFormPadre]   = useState({ padre_id: '', alumno_id: '' })
+  const [procesandoPadre, setProcesandoPadre] = useState(false)
   const [form, setForm]             = useState({ nombre_completo: '', email: '', rol: 'alumno', grado: '', colegio_id: '', sede: '' })
   const fileRef = useRef<HTMLInputElement>(null)
   const colegiosSeleccionables = colegios.filter(c => !COLEGIOS_OBSOLETOS.has(c.id))
@@ -84,6 +95,7 @@ export default function UsuariosPage() {
       cargarUsuarios()
       cargarGuias()
       cargarAsignaciones()
+      cargarPadresVinculos()
     }
   }, [buscar, filtroRol, filtroGrado, colegioId, esSuperAdmin])
 
@@ -146,6 +158,41 @@ export default function UsuariosPage() {
     const data = await res.json()
     if (!res.ok) { setMensaje('❌ Error: ' + (data.error || 'No se pudo eliminar la asignación')); return }
     cargarAsignaciones(); setMensaje('✅ Asignación eliminada')
+  }
+
+  async function cargarPadresVinculos() {
+    const params = new URLSearchParams()
+    if (colegioId) params.set('colegio_id', colegioId)
+    const res = await fetch(`/api/padre-asignaciones?${params}`)
+    const data = await res.json()
+    setPadres((data.padres as unknown as Usuario[]) || [])
+    setVinculosPadres((data.vinculos as unknown as VinculoPadre[]) || [])
+  }
+
+  async function crearVinculoPadre() {
+    setProcesandoPadre(true)
+    const res = await fetch('/api/padre-asignaciones', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ padre_id: formPadre.padre_id, alumno_id: formPadre.alumno_id })
+    })
+    const data = await res.json()
+    setProcesandoPadre(false)
+    if (!res.ok) { setMensaje('❌ Error: ' + (data.error || 'No se pudo crear el vínculo')); return }
+    setModalPadre(false)
+    setFormPadre({ padre_id: '', alumno_id: '' })
+    cargarPadresVinculos(); setMensaje(data.duplicada ? '✅ Ese vínculo ya existía' : '✅ Padre vinculado correctamente')
+  }
+
+  async function eliminarVinculoPadre(id: string) {
+    const res = await fetch('/api/padre-asignaciones', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, activo: false })
+    })
+    const data = await res.json()
+    if (!res.ok) { setMensaje('❌ Error: ' + (data.error || 'No se pudo desvincular')); return }
+    cargarPadresVinculos(); setMensaje('✅ Vínculo eliminado')
   }
 
   async function toggleActivo(u: Usuario) {
@@ -295,10 +342,10 @@ export default function UsuariosPage() {
 
         {/* Tabs */}
         <div style={{ display: 'flex', gap: '4px', marginBottom: '20px', borderBottom: '2px solid #E2E8F0', paddingBottom: '0' }}>
-          {(['usuarios', 'guias'] as const).map(tab => (
+          {(['usuarios', 'guias', 'padres'] as const).map(tab => (
             <button key={tab} onClick={() => setTabActivo(tab)}
               style={{ padding: '10px 20px', fontSize: '13px', fontWeight: 600, border: 'none', cursor: 'pointer', borderBottom: tabActivo === tab ? '2px solid #2C3E6B' : '2px solid transparent', color: tabActivo === tab ? '#2C3E6B' : '#94A3B8', background: 'transparent', marginBottom: '-2px' }}>
-              {tab === 'usuarios' ? '👥 Usuarios' : '🎓 Guías y Asignaciones'}
+              {tab === 'usuarios' ? '👥 Usuarios' : tab === 'guias' ? '🎓 Guías y Asignaciones' : '👨‍👩‍👧 Padres'}
             </button>
           ))}
         </div>
@@ -425,6 +472,45 @@ export default function UsuariosPage() {
                         <button onClick={() => eliminarAsignacion(a.id)}
                           style={{ background: 'none', border: '1px solid #FECACA', borderRadius: '6px', padding: '4px 10px', cursor: 'pointer', fontSize: '12px', color: '#DC2626' }}>
                           Eliminar
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
+
+        {/* TAB PADRES */}
+        {tabActivo === 'padres' && (
+          <>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <p style={{ color: '#64748B', fontSize: '13px', margin: 0 }}>Vincula una cuenta de padre con su(s) hijo(s) para que pueda ver su informe</p>
+              <button onClick={() => setModalPadre(true)} style={S.btn()}>+ Vincular padre</button>
+            </div>
+
+            <div style={S.card}>
+              <table style={{ width: '100%', fontSize: '13px', borderCollapse: 'collapse' }}>
+                <thead>
+                  <tr style={{ borderBottom: '1px solid #F1F5F9' }}>
+                    {['Padre', 'Hijo/a', 'Grado', 'Acciones'].map(h => (
+                      <th key={h} style={{ textAlign: 'left', padding: '12px 16px', color: '#64748B', fontWeight: 600, fontSize: '12px' }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {vinculosPadres.length === 0 ? (
+                    <tr><td colSpan={4} style={{ textAlign: 'center', padding: '40px', color: '#94A3B8' }}>Sin vínculos aún. Crea el primero.</td></tr>
+                  ) : vinculosPadres.map(v => (
+                    <tr key={v.id} style={{ borderBottom: '1px solid #F8FAFC' }}>
+                      <td style={{ padding: '12px 16px', fontWeight: 500, color: '#1A2744' }}>{v.padre?.nombre_completo || '—'}</td>
+                      <td style={{ padding: '12px 16px', color: '#64748B', fontSize: '12px' }}>{v.alumno?.nombre_completo || '—'}</td>
+                      <td style={{ padding: '12px 16px', color: '#64748B', fontSize: '12px' }}>{v.alumno?.grado || '—'}</td>
+                      <td style={{ padding: '12px 16px' }}>
+                        <button onClick={() => eliminarVinculoPadre(v.id)}
+                          style={{ background: 'none', border: '1px solid #FECACA', borderRadius: '6px', padding: '4px 10px', cursor: 'pointer', fontSize: '12px', color: '#DC2626' }}>
+                          Desvincular
                         </button>
                       </td>
                     </tr>
@@ -600,6 +686,36 @@ export default function UsuariosPage() {
             <button onClick={crearAsignacion} disabled={procesandoGuia || !formGuia.guia_id || (formGuia.tipo === 'grado' && (!formGuia.grado || !(formGuia.colegio_id || colegioId))) || (formGuia.tipo === 'alumno' && !formGuia.alumno_id)}
               style={{ ...S.btn(), width: '100%', padding: '11px', marginTop: '4px', opacity: (procesandoGuia || !formGuia.guia_id || (formGuia.tipo === 'grado' && (!formGuia.grado || !(formGuia.colegio_id || colegioId))) || (formGuia.tipo === 'alumno' && !formGuia.alumno_id)) ? 0.5 : 1 }}>
               {procesandoGuia ? 'Asignando...' : 'Crear asignación'}
+            </button>
+          </div>
+        </Modal>
+      )}
+
+      {/* Modal Vincular Padre */}
+      {modalPadre && (
+        <Modal titulo="Vincular padre con alumno" onClose={() => setModalPadre(false)}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            <div>
+              <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: '#64748B', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '.5px' }}>Padre</label>
+              <select value={formPadre.padre_id} onChange={e => setFormPadre(p => ({ ...p, padre_id: e.target.value }))}
+                style={{ width: '100%', padding: '9px 12px', border: '1px solid #E2E8F0', borderRadius: '8px', fontSize: '13px' }}>
+                <option value="">Seleccionar padre...</option>
+                {padres.map(p => <option key={p.id} value={p.id}>{p.nombre_completo} ({p.email})</option>)}
+              </select>
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: '#64748B', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '.5px' }}>Alumno (hijo/a)</label>
+              <select value={formPadre.alumno_id} onChange={e => setFormPadre(p => ({ ...p, alumno_id: e.target.value }))}
+                style={{ width: '100%', padding: '9px 12px', border: '1px solid #E2E8F0', borderRadius: '8px', fontSize: '13px' }}>
+                <option value="">Seleccionar alumno...</option>
+                {usuarios.filter(u => u.rol === 'alumno').map(u => (
+                  <option key={u.id} value={u.id}>{u.nombre_completo} — {u.grado}</option>
+                ))}
+              </select>
+            </div>
+            <button onClick={crearVinculoPadre} disabled={procesandoPadre || !formPadre.padre_id || !formPadre.alumno_id}
+              style={{ ...S.btn(), width: '100%', padding: '11px', marginTop: '4px', opacity: (procesandoPadre || !formPadre.padre_id || !formPadre.alumno_id) ? 0.5 : 1 }}>
+              {procesandoPadre ? 'Vinculando...' : 'Vincular'}
             </button>
           </div>
         </Modal>
