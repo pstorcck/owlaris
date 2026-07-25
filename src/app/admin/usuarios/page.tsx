@@ -340,16 +340,16 @@ export default function UsuariosPage() {
               <table style={{ width: '100%', fontSize: '13px', borderCollapse: 'collapse' }}>
                 <thead>
                   <tr style={{ borderBottom: '1px solid #F1F5F9' }}>
-                    {['Nombre', 'Email', 'Rol', 'Grado', 'Último acceso', 'Estado', 'Acciones'].map(h => (
+                    {['Nombre', 'Email', 'Rol', 'Colegio', 'Sede', 'Grado', 'Último acceso', 'Estado', 'Acciones'].map(h => (
                       <th key={h} style={{ textAlign: 'left', padding: '12px 16px', color: '#64748B', fontWeight: 600, fontSize: '12px' }}>{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
                   {cargando ? (
-                    <tr><td colSpan={7} style={{ textAlign: 'center', padding: '40px', color: '#94A3B8' }}>Cargando...</td></tr>
+                    <tr><td colSpan={9} style={{ textAlign: 'center', padding: '40px', color: '#94A3B8' }}>Cargando...</td></tr>
                   ) : filtrados.length === 0 ? (
-                    <tr><td colSpan={7} style={{ textAlign: 'center', padding: '40px', color: '#94A3B8' }}>No se encontraron usuarios</td></tr>
+                    <tr><td colSpan={9} style={{ textAlign: 'center', padding: '40px', color: '#94A3B8' }}>No se encontraron usuarios</td></tr>
                   ) : filtrados.map(u => (
                     <tr key={u.id} style={{ borderBottom: '1px solid #F8FAFC' }}>
                       <td style={{ padding: '12px 16px', fontWeight: 500, color: '#1A2744' }}>{u.nombre_completo}</td>
@@ -359,6 +359,8 @@ export default function UsuariosPage() {
                           {u.rol}
                         </span>
                       </td>
+                      <td style={{ padding: '12px 16px', color: '#64748B', fontSize: '12px' }}>{u.colegio?.nombre || '—'}</td>
+                      <td style={{ padding: '12px 16px', color: '#64748B', fontSize: '12px' }}>{u.sede || '—'}</td>
                       <td style={{ padding: '12px 16px', color: '#64748B', fontSize: '12px' }}>{u.grado || '—'}</td>
                       <td style={{ padding: '12px 16px', color: '#94A3B8', fontSize: '12px' }}>
                         {u.ultimo_acceso ? new Date(u.ultimo_acceso).toLocaleDateString('es-GT') : 'Nunca'}
