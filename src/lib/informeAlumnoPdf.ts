@@ -219,6 +219,22 @@ export async function generarInformeAlumnoPdf(data: InformeAlumnoPdfData): Promi
     }
   }
 
+  // Cada turno se dibuja como una caja separada por hablante (mismo criterio
+  // que la vista web): etiqueta en mayúsculas + fondo propio, para que quede
+  // inequívoco quién escribió qué en una lectura rápida o impresa.
+  const speakerBox = (label: string, texto: string, labelColor: number[], bg: number[], border: number[]) => {
+    const innerW = maxW - 10
+    const lines = doc.splitTextToSize(String(texto || ''), innerW)
+    const textH = lines.length * (9 * 0.38 + 1.6)
+    const boxH = textH + 11
+    checkY(boxH + 3)
+    doc.setFillColor(bg[0], bg[1], bg[2]); doc.roundedRect(margin, y - 3, maxW, boxH, 2, 2, 'F')
+    doc.setDrawColor(border[0], border[1], border[2]); doc.roundedRect(margin, y - 3, maxW, boxH, 2, 2, 'S')
+    text(label, margin + 5, y + 3, 7, true, labelColor)
+    wrapped(texto, margin + 5, y + 9, innerW, 9, palette.ink)
+    y += boxH + 4
+  }
+
   // Anexo: conversaciones completas por materia
   for (const grupo of data.conversaciones) {
     addPage()
@@ -234,11 +250,10 @@ export async function generarInformeAlumnoPdf(data: InformeAlumnoPdfData): Promi
       text(item.tema, margin + 4, y, 9, true, palette.violet)
       text(item.fechaLabel, W - margin, y, 8, false, palette.muted)
       y += 6
-      y += wrapped(`Alumno: ${item.pregunta}`, margin, y, maxW, 9, palette.ink)
-      y += 1
-      y += wrapped(`Owlaris: ${item.respuesta}`, margin, y, maxW, 9, palette.muted)
+      speakerBox('ESTUDIANTE', item.pregunta, [100, 116, 139], [248, 250, 252], [226, 232, 240])
+      speakerBox('OWLARIS (TUTOR)', item.respuesta, palette.violet, [238, 242, 255], [219, 234, 254])
       if (item.documentoFuente) { y += wrapped(`Fuente: ${item.documentoFuente}`, margin, y, maxW, 8, palette.teal) }
-      y += 6
+      y += 4
     }
   }
 

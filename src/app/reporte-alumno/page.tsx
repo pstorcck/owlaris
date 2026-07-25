@@ -709,8 +709,14 @@ export default async function ReporteAlumnoPage({ searchParams }: { searchParams
                         </div>
                         <span style={{fontSize:'11px',color:'#94A3B8'}}>{fmtFecha(int.creado_en)}</span>
                       </div>
-                      <p style={{fontSize:'13px',color:'#334155',margin:'0 0 6px',lineHeight:1.5}}><strong>Alumno:</strong> {int.pregunta}</p>
-                      <p style={{fontSize:'13px',color:'#64748B',margin:0,lineHeight:1.5,whiteSpace:'pre-wrap'}}><strong>Owlaris:</strong> {int.respuesta}</p>
+                      <div style={{background:'#F8FAFC',border:'1px solid #E2E8F0',borderRadius:'8px',padding:'10px 12px',marginBottom:'8px'}}>
+                        <p style={{fontSize:'10px',fontWeight:800,color:'#64748B',textTransform:'uppercase',letterSpacing:'.5px',margin:'0 0 4px'}}>Estudiante</p>
+                        <p style={{fontSize:'13px',color:'#1E293B',margin:0,lineHeight:1.55}}>{int.pregunta}</p>
+                      </div>
+                      <div style={{background:'#EEF2FF',border:'1px solid #DBEAFE',borderRadius:'8px',padding:'10px 12px'}}>
+                        <p style={{fontSize:'10px',fontWeight:800,color:'#2C3E6B',textTransform:'uppercase',letterSpacing:'.5px',margin:'0 0 4px'}}>Owlaris (tutor)</p>
+                        <p style={{fontSize:'13px',color:'#334155',margin:0,lineHeight:1.55,whiteSpace:'pre-wrap'}}>{int.respuesta}</p>
+                      </div>
                       {int.documento_fuente && <p style={{fontSize:'11px',fontWeight:700,color:'#0E7490',margin:'8px 0 0'}}>◈ {int.documento_fuente}</p>}
                     </div>
                   )
