@@ -29,8 +29,8 @@ export type InformeAlumnoPdfData = {
   alertas: { tipoLabel: string; descripcion: string | null; contexto: string | null; fechaLabel: string }[]
   ultimaActividadLabel: string
   conversaciones: {
-    materia: string
-    items: { tema: string; badgeTxt: string | null; fechaLabel: string; sospecha: boolean; pregunta: string; respuesta: string; documentoFuente: string | null }[]
+    fechaTitulo: string
+    items: { materia: string; tema: string; badgeTxt: string | null; fechaLabel: string; sospecha: boolean; pregunta: string; respuesta: string; documentoFuente: string | null }[]
   }[]
 }
 
@@ -235,10 +235,12 @@ export async function generarInformeAlumnoPdf(data: InformeAlumnoPdfData): Promi
     y += boxH + 4
   }
 
-  // Anexo: conversaciones completas por materia
+  // Anexo: conversaciones completas organizadas por día (no por materia —
+  // un padre quiere revisar la actividad día a día, cada turno etiquetado
+  // con su materia para no perder ese contexto).
   for (const grupo of data.conversaciones) {
     addPage()
-    text(`Anexo — ${grupo.materia}`, margin, y, 12, true, palette.violet)
+    text(`Anexo — ${grupo.fechaTitulo}`, margin, y, 12, true, palette.violet)
     y += 4
     doc.setDrawColor(palette.line[0], palette.line[1], palette.line[2])
     doc.line(margin, y, W - margin, y)
@@ -247,7 +249,7 @@ export async function generarInformeAlumnoPdf(data: InformeAlumnoPdfData): Promi
       checkY(20)
       doc.setFillColor(palette.violet[0], palette.violet[1], palette.violet[2])
       doc.rect(margin, y - 3.5, 1, 5, 'F')
-      text(item.tema, margin + 4, y, 9, true, palette.violet)
+      text(`${item.materia} · ${item.tema}`, margin + 4, y, 9, true, palette.violet)
       text(item.fechaLabel, W - margin, y, 8, false, palette.muted)
       y += 6
       speakerBox('ESTUDIANTE', item.pregunta, [100, 116, 139], [248, 250, 252], [226, 232, 240])

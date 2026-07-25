@@ -56,6 +56,10 @@ function normalizarTexto(texto: string) {
     .toLowerCase()
 }
 
+function resolverMateria(interaccion: Interaccion) {
+  return interaccion.materia?.nombre || (normalizarTexto(interaccion.respuesta).includes('english conversation') ? 'Inglés' : 'Materia no clasificada')
+}
+
 function limpiarTema(texto: string | null | undefined) {
   return String(texto || '')
     .replace(/\[OP:[^\]]+\]/gi, '')
@@ -245,11 +249,25 @@ export default async function ReporteAlumnoPage({ searchParams }: { searchParams
   // Agrupar por materia
   const porMateria = new Map<string, Interaccion[]>()
   for (const int of lista) {
-    const nombre = int.materia?.nombre || (normalizarTexto(int.respuesta).includes('english conversation') ? 'Inglés' : 'Materia no clasificada')
+    const nombre = resolverMateria(int)
     if (!porMateria.has(nombre)) porMateria.set(nombre, [])
     porMateria.get(nombre)!.push(int)
   }
   const materias = Array.from(porMateria.keys())
+
+  // Agrupar por día calendario Guatemala (hallazgo real, 2026-07-26): un
+  // padre quiere ver la conversación organizada "a diario", no como un
+  // desplegable que solo muestra un día a la vez ni mezclada por materia
+  // sin ubicar cuándo pasó cada cosa. `lista` ya viene ordenada por
+  // creado_en descendente desde la consulta, así que cada grupo de día
+  // conserva ese mismo orden cronológico interno sin re-ordenar.
+  const porDia = new Map<string, Interaccion[]>()
+  for (const int of lista) {
+    const key = diaGuatemalaDeFecha(int.creado_en)
+    if (!porDia.has(key)) porDia.set(key, [])
+    porDia.get(key)!.push(int)
+  }
+  const diasOrdenadosDesc = Array.from(porDia.keys()).sort((a, b) => b.localeCompare(a))
 
   const resumenMaterias: ResumenMateria[] = Array.from(porMateria.entries()).map(([nombre, ints]) => {
     const c = ints.filter(i => i.estado_evaluacion === 'correcto' || i.estado_evaluacion === 'equivalente').length
@@ -371,9 +389,10 @@ export default async function ReporteAlumnoPage({ searchParams }: { searchParams
       fechaLabel: fmtFecha(a.creado_en),
     })),
     ultimaActividadLabel: ultimaActividad ? fmtFecha(ultimaActividad) : 'Sin actividad',
-    conversaciones: materias.map(nombreMateria => ({
-      materia: nombreMateria,
-      items: (porMateria.get(nombreMateria) || []).map(int => ({
+    conversaciones: diasOrdenadosDesc.map(fecha => ({
+      fechaTitulo: new Date(`${fecha}T12:00:00`).toLocaleDateString('es-GT', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' }),
+      items: (porDia.get(fecha) || []).map(int => ({
+        materia: resolverMateria(int),
         tema: inferirTemaLegible(int),
         badgeTxt: badgeEval(int.estado_evaluacion)?.txt || null,
         fechaLabel: fmtFecha(int.creado_en),
@@ -712,15 +731,20 @@ export default async function ReporteAlumnoPage({ searchParams }: { searchParams
           </div>
         </div>
 
-        {/* Conversaciones por materia */}
-        {materias.map(nombreMateria => {
-          const ints = porMateria.get(nombreMateria)!
-          const errsMateria = ints.filter(i => i.estado_evaluacion === 'incorrecto').length
+        {/* Conversaciones por día: se muestran TODOS los días con actividad
+            automáticamente (más reciente primero), no solo el día elegido
+            en el selector de arriba — un padre/guía quiere revisar la
+            actividad organizada día a día sin tener que elegir uno por uno. */}
+        {diasOrdenadosDesc.map(fecha => {
+          const ints = porDia.get(fecha)!
+          const errsDia = ints.filter(i => i.estado_evaluacion === 'incorrecto').length
+          const correctosDia = ints.filter(i => i.estado_evaluacion === 'correcto' || i.estado_evaluacion === 'equivalente').length
+          const fechaLabel = new Date(`${fecha}T12:00:00`).toLocaleDateString('es-GT', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' })
           return (
-            <div key={nombreMateria} style={{background:'white',borderRadius:'12px',padding:'20px 24px',marginBottom:'20px',border:'1px solid rgba(15,28,46,.06)'}}>
-              <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'16px',borderBottom:'2px solid #F1F5F9',paddingBottom:'12px'}}>
-                <h3 style={{fontSize:'16px',fontWeight:700,color:'#2C3E6B',margin:0}}>{nombreMateria}</h3>
-                <span style={{fontSize:'12px',color:'#94A3B8'}}>{ints.length} interacciones{errsMateria > 0 ? ` · ${errsMateria} en práctica` : ''}</span>
+            <div key={fecha} style={{background:'white',borderRadius:'12px',padding:'20px 24px',marginBottom:'20px',border:'1px solid rgba(15,28,46,.06)'}}>
+              <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'16px',borderBottom:'2px solid #F1F5F9',paddingBottom:'12px',flexWrap:'wrap',gap:'6px'}}>
+                <h3 style={{fontSize:'16px',fontWeight:700,color:'#2C3E6B',margin:0,textTransform:'capitalize'}}>{fechaLabel}</h3>
+                <span style={{fontSize:'12px',color:'#94A3B8'}}>{ints.length} interacciones · {correctosDia} logrados{errsDia > 0 ? ` · ${errsDia} en práctica` : ''}</span>
               </div>
               <div style={{display:'flex',flexDirection:'column',gap:'16px'}}>
                 {ints.map(int => {
@@ -729,6 +753,7 @@ export default async function ReporteAlumnoPage({ searchParams }: { searchParams
                     <div key={int.id} style={{borderLeft:'3px solid #E2E8F0',paddingLeft:'16px'}}>
                       <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'6px',flexWrap:'wrap',gap:'6px'}}>
                         <div style={{display:'flex',gap:'8px',alignItems:'center',flexWrap:'wrap'}}>
+                          <span style={{background:'#F1F5F9',color:'#475569',borderRadius:'6px',padding:'2px 8px',fontSize:'10px',fontWeight:700}}>{resolverMateria(int)}</span>
                           <span style={{fontSize:'11px',fontWeight:650,color:'#2C3E6B'}}>{inferirTemaLegible(int)}</span>
                           {badge && <span style={{background:badge.bg,color:badge.color,borderRadius:'6px',padding:'2px 8px',fontSize:'10px',fontWeight:700}}>{badge.txt}</span>}
                           {int.sospecha_copia && <span style={{background:'#FEF3C7',color:'#B45309',borderRadius:'6px',padding:'2px 8px',fontSize:'10px',fontWeight:700}}>Revisar autoría</span>}
