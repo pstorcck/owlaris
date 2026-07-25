@@ -2,6 +2,7 @@ import { createAdminClient, createClient } from '@/lib/supabase/server'
 import { canStaffAccessStudent } from '@/lib/guideAccess'
 import { redirect } from 'next/navigation'
 import ReporteToolbar from '@/components/reporte/ReporteToolbar'
+import type { InformeAlumnoPdfData } from '@/lib/informeAlumnoPdf'
 
 export const dynamic = 'force-dynamic'
 
@@ -315,12 +316,56 @@ export default async function ReporteAlumnoPage({ searchParams }: { searchParams
     seguridad_contenido: '#B91C1C',
   }
 
+  const pdfData: InformeAlumnoPdfData = {
+    alumno: {
+      nombreCompleto: alumno?.nombre_completo || 'Alumno',
+      email: alumno?.email || '',
+      grado: alumno?.grado || '',
+      colegioNombre: (alumno?.colegio as {nombre?:string})?.nombre || 'Sin colegio',
+    },
+    fechaGeneradoLabel: fechaReporte.toLocaleString('es-GT', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
+    etiquetaPeriodo,
+    estadoGeneral: { txt: estadoGeneral.txt, colorHex: estadoGeneral.color },
+    lecturaFamilia,
+    tasaAcierto,
+    alertasAbiertas: alertas.length,
+    materiaPrioritaria: materiaPrioritaria?.nombre || null,
+    fraseMotivacional,
+    rutaDificultad: {
+      nivelFinal: rutaDificultad.nivelFinal,
+      eventos: rutaDificultad.eventos.map(ev => ({ tipo: ev.tipo, nivelAnterior: ev.nivelAnterior, nivelNuevo: ev.nivelNuevo, motivo: ev.motivo })),
+    },
+    recomendaciones,
+    fortalezas: fortalezas.map(m => `${m.nombre}: respuestas correctas con avance sostenido en las últimas interacciones.`),
+    resumenMaterias: resumenMaterias.map(m => ({ nombre: m.nombre, interacciones: m.interacciones, tasa: m.tasa, temas: m.temas })),
+    metricas: { totalSesiones, materias: materias.length, temas: temas.length, correctos, incorrectos, sospechas },
+    alertas: alertas.map(a => ({
+      tipoLabel: tipoLabel[a.tipo] || 'Alerta',
+      descripcion: a.descripcion,
+      contexto: a.contexto,
+      fechaLabel: fmtFecha(a.creado_en),
+    })),
+    ultimaActividadLabel: ultimaActividad ? fmtFecha(ultimaActividad) : 'Sin actividad',
+    conversaciones: materias.map(nombreMateria => ({
+      materia: nombreMateria,
+      items: (porMateria.get(nombreMateria) || []).map(int => ({
+        tema: inferirTemaLegible(int),
+        badgeTxt: badgeEval(int.estado_evaluacion)?.txt || null,
+        fechaLabel: fmtFecha(int.creado_en),
+        sospecha: int.sospecha_copia,
+        pregunta: int.pregunta,
+        respuesta: int.respuesta,
+        documentoFuente: int.documento_fuente,
+      })),
+    })),
+  }
+
   return (
     <div style={{minHeight:'100vh',background:'#F5F7FA',fontFamily:'system-ui,-apple-system,sans-serif',padding:'32px 20px'}}>
       <style>{`@media print { .no-print { display: none !important; } body { background: white !important; } }`}</style>
       <div style={{maxWidth:'860px',margin:'0 auto'}}>
 
-        <ReporteToolbar dashboardHref={dashboardHref} />
+        <ReporteToolbar dashboardHref={dashboardHref} data={pdfData} />
 
         {/* Header */}
         <div style={{background:'linear-gradient(135deg,#1E3A5F,#2C3E6B)',borderRadius:'16px',padding:'28px 32px',marginBottom:'24px',color:'white'}}>
