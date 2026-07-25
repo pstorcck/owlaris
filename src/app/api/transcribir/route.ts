@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { withOpenAIRetry } from '@/lib/openaiRetry'
 import { createClient } from '@/lib/supabase/server'
 import { verificarLimiteFrecuencia } from '@/lib/rateLimit'
+import { palabraMasDebil } from '@/lib/pronunciationSignal'
 
 // Promedio de logprobs por token, convertido de logaritmo natural a
 // probabilidad (0-1), como señal de qué tan segura estuvo la transcripción.
@@ -49,6 +50,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       texto: transcripcion.text,
       confianza: confianzaDesdeLogprobs(transcripcion.logprobs),
+      // Palabra puntual con menor confianza de transcripción, si alguna
+      // baja del umbral — permite darle al alumno un tip de pronunciación
+      // dirigido a una palabra real en vez de un aviso genérico.
+      palabraDebil: palabraMasDebil(transcripcion.logprobs),
     })
   } catch (err) {
     console.error('Transcripción error:', err)

@@ -49,6 +49,8 @@ interface Props {
 
 type EstadoChat = 'esperando_nombre' | 'esperando_confirmacion_grado' | 'esperando_grado' | 'esperando_materia' | 'esperando_materia_olimpiadas' | 'esperando_confirmacion_cambio_materia' | 'activo'
 
+type PalabraDebil = { palabra: string; confianza: number }
+
 type EnviarPreguntaOpciones = {
   forceConversation?: boolean
   forceEnglish?: boolean
@@ -56,6 +58,7 @@ type EnviarPreguntaOpciones = {
   forceMateria?: string
   fromVoice?: boolean
   speechConfidence?: number | null
+  palabraDebil?: PalabraDebil | null
 }
 
 type AdaptacionDificultad = {
@@ -190,6 +193,22 @@ function mismaMateria(a: string, b: string): boolean {
   const nb = normalizarNombreMateria(b)
   if (na === nb) return true
   return (MATERIA_EQUIVALENCIAS[na] || na) === (MATERIA_EQUIVALENCIAS[nb] || nb)
+}
+
+// Resalta en la transcripción en pantalla la palabra puntual que costó más
+// entender (ver palabraDebilVoz), para que el alumno vea a qué palabra
+// exacta apunta el tip de pronunciación del tutor, en vez de un aviso
+// genérico sin ubicación.
+function renderTranscripcionVoz(texto: string, palabraFoco: PalabraDebil | null): React.ReactNode {
+  if (!palabraFoco) return texto
+  const normalizar = (s: string) => s.toLowerCase().replace(/^[^a-zA-Z']+|[^a-zA-Z']+$/g, '')
+  const foco = normalizar(palabraFoco.palabra)
+  if (!foco) return texto
+  return texto.split(/(\s+)/).map((parte, i) =>
+    normalizar(parte) === foco
+      ? <span key={i} style={{color:'#B45309',fontWeight:700,borderBottom:'2px solid #F59E0B'}}>{parte}</span>
+      : <React.Fragment key={i}>{parte}</React.Fragment>
+  )
 }
 
 function renderSegmento(texto: string, key: number): React.ReactNode[] {
@@ -366,6 +385,7 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
   const audioUnlockedRef = useRef(false)
   const [transcribiendo, setTranscribiendo] = useState(false)
   const [transcripcionVoz, setTranscripcionVoz] = useState('')
+  const [palabraDebilVoz, setPalabraDebilVoz] = useState<PalabraDebil | null>(null)
   const [vozNavegadorActiva, setVozNavegadorActiva] = useState(false)
   const [audioPendiente, setAudioPendiente] = useState('')
   // Refs espejo de estado para leer el valor vigente dentro de callbacks
@@ -741,6 +761,7 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
           pending_math_interaction_id: pendingMathId,
           entrada_voz: opciones.fromVoice || false,
           speech_confidence: opciones.speechConfidence ?? null,
+          palabra_debil: opciones.palabraDebil ?? null,
         })
       })
       if (!res.ok) {
@@ -983,6 +1004,7 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
     setReproduciendo(false)
     setTranscribiendo(false)
     setTranscripcionVoz('')
+    setPalabraDebilVoz(null)
     transcriptRef.current = ''
     confidenceValuesRef.current = []
     if (audioRef.current) { try { audioRef.current.pause() } catch { /* */ } }
@@ -1028,7 +1050,11 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
           const res  = await fetch('/api/transcribir', { method: 'POST', body: fd })
           const data = await res.json()
           if (data.texto?.trim()) {
+            const palabraDebil: PalabraDebil | null = data.palabraDebil && typeof data.palabraDebil.palabra === 'string'
+              ? data.palabraDebil
+              : null
             setTranscripcionVoz(data.texto.trim())
+            setPalabraDebilVoz(palabraDebil)
             enviarPregunta(data.texto, {
               forceConversation: true,
               forceEnglish: true,
@@ -1036,6 +1062,7 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
               forceMateria: 'Inglés',
               fromVoice: true,
               speechConfidence: typeof data.confianza === 'number' ? data.confianza : null,
+              palabraDebil,
             })
           } else {
             // Silencio total (nada que transcribir): reanuda la escucha
@@ -2147,7 +2174,7 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
 
               {(transcripcionVoz || grabando) && (
                 <div style={{background:'rgba(255,255,255,.9)',borderRadius:'14px',padding:'10px 14px',width:'min(92vw,420px)',textAlign:'center',boxShadow:'0 2px 16px rgba(14,165,233,.08)',border:'1px solid rgba(14,165,233,.14)',fontSize:'12px',color:'#236184',lineHeight:'1.5',minHeight:'40px'}}>
-                  {transcripcionVoz || '...'}
+                  {transcripcionVoz ? renderTranscripcionVoz(transcripcionVoz, palabraDebilVoz) : '...'}
                 </div>
               )}
 

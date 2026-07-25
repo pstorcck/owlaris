@@ -955,11 +955,18 @@ async function obtenerFuenteCurricularParaPractica(input: {
   }
 }
 
-function buildEnglishConversationSystemPrompt(input: { entradaVoz: boolean; speechConfidence: number | null }) {
+function buildEnglishConversationSystemPrompt(input: { entradaVoz: boolean; speechConfidence: number | null; palabraDebil: { palabra: string; confianza: number } | null }) {
   const confidenceHint = input.entradaVoz
-    ? input.speechConfidence !== null
-      ? `\nVOICE SIGNAL: The student's speech recognition confidence was ${input.speechConfidence.toFixed(2)}. If it is below 0.72, include one short pronunciation tip or ask them to repeat one useful phrase slowly.`
-      : '\nVOICE SIGNAL: The student spoke by microphone. Include pronunciation coaching when it naturally helps, but do not claim you heard sounds you cannot verify.'
+    ? input.palabraDebil
+      // Señal fina: se sabe QUÉ palabra costó más transcribir, no solo un
+      // promedio de toda la frase. Se le pide al modelo apuntar ahí
+      // directamente, pero sin afirmar que la pronunciación estuvo mal —
+      // baja confianza de transcripción también puede ser ruido de fondo o
+      // una palabra poco común, no solo un error real del alumno.
+      ? `\nVOICE SIGNAL: Transcription had the most trouble catching the word "${input.palabraDebil.palabra}" (confidence ${input.palabraDebil.confianza.toFixed(2)}). Focus your one pronunciation tip on that specific word: model it clearly with "Try saying: ..." and invite them to repeat it slowly. Frame it as coaching ("let's make sure that one lands clearly"), never as a flat claim that they said it wrong — low transcription confidence can also mean background noise or a less common word.`
+      : input.speechConfidence !== null
+        ? `\nVOICE SIGNAL: The student's speech recognition confidence was ${input.speechConfidence.toFixed(2)}. If it is below 0.72, include one short pronunciation tip or ask them to repeat one useful phrase slowly.`
+        : '\nVOICE SIGNAL: The student spoke by microphone. Include pronunciation coaching when it naturally helps, but do not claim you heard sounds you cannot verify.'
     : ''
 
   return `You are Owlaris, a premium English conversation coach for Guatemalan students, speaking out loud in a live voice call.
@@ -1556,9 +1563,14 @@ export async function POST(req: NextRequest) {
           content: String(m.contenido || '').substring(0, 700),
         }))
       const speechConfidence = typeof body.speech_confidence === 'number' ? body.speech_confidence : null
+      const palabraDebilBody = body.palabra_debil
+      const palabraDebil = palabraDebilBody && typeof palabraDebilBody.palabra === 'string' && typeof palabraDebilBody.confianza === 'number'
+        ? { palabra: palabraDebilBody.palabra, confianza: palabraDebilBody.confianza }
+        : null
       const system = buildEnglishConversationSystemPrompt({
         entradaVoz: !!body.entrada_voz,
         speechConfidence,
+        palabraDebil,
       })
       const completion = await withOpenAIRetry(() => openai.chat.completions.create({
         model: 'gpt-4o-mini',
