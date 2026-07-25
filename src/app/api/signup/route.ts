@@ -9,6 +9,7 @@ const DOMINIOS_PERMITIDOS: Record<string, { colegio_slug: string; nombre: string
 }
 
 const ROLES_ADMIN_PERMITIDOS = ['alumno', 'maestro', 'padre', 'director', 'admin', 'superadmin']
+const COLEGIO_MONTANO_ID = '1ed08641-9611-425f-96da-02a67bf9bc54'
 
 function generarPassword(): string {
   const chars      = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789'
@@ -118,7 +119,7 @@ export async function POST(req: NextRequest) {
       rol:             rolFinal,
       grado:           grado || null,
       activo:          true,
-      sede:            sede || null,
+      sede:            colegio.id === COLEGIO_MONTANO_ID ? (sede || null) : null,
     })
 
     if (perfilError) {

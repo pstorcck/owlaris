@@ -93,7 +93,7 @@ export default function UsuariosPage() {
     if (buscar) params.set('buscar', buscar)
     if (filtroRol) params.set('rol', filtroRol)
     if (filtroGrado) params.set('grado', filtroGrado)
-    if (!esSuperAdmin) params.set('colegio_id', colegioId)
+    if (colegioId) params.set('colegio_id', colegioId)
     const res = await fetch(`/api/usuarios?${params}`)
     const data = await res.json()
     setUsuarios(data.usuarios || [])
@@ -475,7 +475,7 @@ export default function UsuariosPage() {
             {esSuperAdmin && (
               <div>
                 <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: '#64748B', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '.5px' }}>Colegio</label>
-                <select value={form.colegio_id || colegioId} onChange={e => setForm(p => ({ ...p, colegio_id: e.target.value }))}
+                <select value={form.colegio_id || colegioId} onChange={e => setForm(p => ({ ...p, colegio_id: e.target.value, sede: e.target.value === COLEGIO_MONTANO_ID ? p.sede : '' }))}
                   style={{ width: '100%', padding: '9px 12px', border: '1px solid #E2E8F0', borderRadius: '8px', fontSize: '13px' }}>
                   {colegiosSeleccionables.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
                 </select>
@@ -518,7 +518,7 @@ export default function UsuariosPage() {
             </div>
             <div>
               <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: '#64748B', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '.5px' }}>Colegio</label>
-              <select value={modalEditar.colegio_id || colegioId} onChange={e => setModalEditar({ ...modalEditar, colegio_id: e.target.value })}
+              <select value={modalEditar.colegio_id || colegioId} onChange={e => setModalEditar({ ...modalEditar, colegio_id: e.target.value, sede: e.target.value === COLEGIO_MONTANO_ID ? modalEditar.sede : null })}
                 style={{ width: '100%', padding: '9px 12px', border: '1px solid #E2E8F0', borderRadius: '8px', fontSize: '13px' }}>
                 {colegiosSeleccionables.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
               </select>

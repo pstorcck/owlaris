@@ -3,6 +3,7 @@ import { createAdminClient, createClient } from '@/lib/supabase/server'
 import { canAccessColegio, requireRoles } from '@/lib/auth'
 
 const ROLES_PERMITIDOS = ['alumno', 'maestro', 'padre', 'director', 'admin', 'superadmin']
+const COLEGIO_MONTANO_ID = '1ed08641-9611-425f-96da-02a67bf9bc54'
 
 // GET — listar usuarios con filtros
 export async function GET(req: NextRequest) {
@@ -143,13 +144,20 @@ export async function PATCH(req: NextRequest) {
       await admin.auth.admin.updateUserById(id, { password: nueva_password })
     }
 
+    // Sede solo tiene sentido dentro de Colegio Montano (sus sub-sedes) — si
+    // el colegio cambia a otro, se limpia para no arrastrar un valor
+    // obsoleto que rompa el filtrado por sede del director/guía.
+    const sedeFinal = colegioFinal !== COLEGIO_MONTANO_ID
+      ? null
+      : (sede !== undefined ? (sede || null) : objetivo.sede)
+
     const { error } = await admin.from('usuarios').update({
       nombre_completo: nombre_completo || objetivo.nombre_completo,
       colegio_id: colegioFinal,
       rol: rolFinal,
       grado: grado || null,
       activo: typeof activo === 'boolean' ? activo : objetivo.activo,
-      sede: sede !== undefined ? (sede || null) : objetivo.sede,
+      sede: sedeFinal,
     }).eq('id', id)
 
     if (error) throw error

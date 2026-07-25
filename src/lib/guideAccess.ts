@@ -1,6 +1,5 @@
 import type { AuthPerfil } from '@/lib/auth'
 import type { createAdminClient } from '@/lib/supabase/server'
-import { mismaSedePorEmail } from '@/lib/sedes'
 
 type AdminClient = ReturnType<typeof createAdminClient>
 
@@ -94,7 +93,7 @@ export async function canStaffAccessStudent(
 ) {
   const { data: alumno } = await admin
     .from('usuarios')
-    .select('id, colegio_id, rol, email')
+    .select('id, colegio_id, rol, email, sede')
     .eq('id', alumnoId)
     .single()
 
@@ -103,7 +102,9 @@ export async function canStaffAccessStudent(
   if (perfil.rol === 'alumno') return viewerId === alumnoId
   if (perfil.rol === 'admin') return alumno.colegio_id === perfil.colegio_id
   if (perfil.rol === 'director') {
-    return alumno.colegio_id === perfil.colegio_id && mismaSedePorEmail(perfil.email, alumno.email)
+    if (alumno.colegio_id !== perfil.colegio_id) return false
+    // sede=null en el director significa alcance de TODO el colegio (todas las sedes).
+    return !perfil.sede || alumno.sede === perfil.sede
   }
   if (perfil.rol !== 'maestro' || alumno.colegio_id !== perfil.colegio_id) return false
 

@@ -3,7 +3,6 @@ import { createAdminClient, createClient } from '@/lib/supabase/server'
 import { Resend } from 'resend'
 import { canAccessColegio, requireRoles } from '@/lib/auth'
 import { canStaffAccessStudent, getAssignedStudentIds } from '@/lib/guideAccess'
-import { mismaSedePorEmail } from '@/lib/sedes'
 import { resolverDestinatariosAlerta } from '@/lib/alertaEmergencia'
 
 export async function GET(req: NextRequest) {
@@ -12,7 +11,7 @@ export async function GET(req: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
 
-  const { data: perfil } = await supabase.from('usuarios').select('rol, colegio_id, email').eq('id', user.id).single()
+  const { data: perfil } = await supabase.from('usuarios').select('rol, colegio_id, email, sede').eq('id', user.id).single()
   if (!perfil || !['maestro', 'director', 'admin', 'superadmin'].includes(perfil.rol)) {
     return NextResponse.json({ error: 'Sin permiso' }, { status: 403 })
   }
@@ -29,16 +28,20 @@ export async function GET(req: NextRequest) {
   } else if (perfil.rol === 'admin') {
     query = query.eq('colegio_id', perfil.colegio_id)
   } else if (perfil.rol === 'director') {
-    const { data: alumnosSede } = await admin
-      .from('usuarios')
-      .select('id, email')
-      .eq('colegio_id', perfil.colegio_id)
-      .eq('rol', 'alumno')
-    const ids = (alumnosSede || [])
-      .filter((alumno) => mismaSedePorEmail(perfil.email, alumno.email))
-      .map((alumno) => alumno.id)
-    if (ids.length === 0) return NextResponse.json({ alertas: [] })
-    query = query.eq('colegio_id', perfil.colegio_id).in('alumno_id', ids)
+    // sede=null en el director significa alcance de TODO el colegio (todas las sedes).
+    if (perfil.sede) {
+      const { data: alumnosSede } = await admin
+        .from('usuarios')
+        .select('id')
+        .eq('colegio_id', perfil.colegio_id)
+        .eq('rol', 'alumno')
+        .eq('sede', perfil.sede)
+      const ids = (alumnosSede || []).map((alumno) => alumno.id)
+      if (ids.length === 0) return NextResponse.json({ alertas: [] })
+      query = query.eq('colegio_id', perfil.colegio_id).in('alumno_id', ids)
+    } else {
+      query = query.eq('colegio_id', perfil.colegio_id)
+    }
   } else {
     const assignedIds = await getAssignedStudentIds(admin, user.id)
     if (assignedIds.length === 0) return NextResponse.json({ alertas: [] })
