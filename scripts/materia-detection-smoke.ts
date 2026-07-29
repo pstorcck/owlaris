@@ -251,6 +251,30 @@ function main() {
   assert.equal(esClaseDePracticaDeIngles('Ciencias Sociales y Formación Ciudadana'), false)
   assert.equal(esClaseDePracticaDeIngles('Matemáticas'), false)
 
+  // Bug real (QA en vivo, 2026-07-28): "¿Cómo escribo la raíz cuadrada de
+  // una función?" en Matemática ofrecía cambiar a Biología, porque "raíz"
+  // estaba solo en las palabras clave de Biología (biología de plantas). El
+  // alumno quedaba atrapado: al reformular, el estado de confirmación se
+  // comía la pregunta ("Sin problema, seguimos con Matemáticas").
+  assert.equal(
+    detectarMateriaDesdeTexto('Cómo escribo la raíz cuadrada de una función dividido la raíz cubica de otra función', 'Matemática'),
+    null,
+    'raíz cuadrada/cúbica en Matemática no debe sugerir cambio a Biología'
+  )
+  assert.equal(
+    detectarMateriaDesdeTexto('Cómo puedo escribir matemáticamente la raíz cuadrada de una función', 'Matemática'),
+    null,
+    'raíz cuadrada en Matemática no debe sugerir cambio a Biología'
+  )
+  // Pero una pregunta REAL de biología vegetal desde Matemática sí debe
+  // seguir detectándose: se agregaron las frases completas ("raíz
+  // cuadrada"), no "raíz" a secas, justamente para no perder este caso.
+  assert.equal(
+    detectarMateriaDesdeTexto('la raíz de la planta absorbe agua', 'Matemática'),
+    'Biología',
+    'una pregunta real de biología vegetal sí debe seguir detectando cambio'
+  )
+
   console.log('materia-detection smoke passed')
 }
 

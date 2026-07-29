@@ -29,7 +29,17 @@ export function normalizarMateria(texto: string, esOlimpiadas = false): string {
 }
 
 export const TEMAS_POR_MATERIA: Record<string, string[]> = {
-  'Matemática': ['aritmética','aritmetica','algebra','álgebra','geometría','geometria','fracciones','ecuaciones','trigonometría','trigonometria','estadística','estadistica','probabilidad','porcentajes','decimales','números','numeros','matrices','funciones','polinomios','logaritmos'],
+  // Hallazgo real (QA en vivo, 2026-07-28): "cómo escribo la raíz cuadrada
+  // de una función" en Matemática ofrecía cambiar a Biología — "raíz" está
+  // en las palabras clave de Biología (biología de plantas) y Matemática no
+  // la tenía, así que ganaba Biología. Peor: al reformular la pregunta, el
+  // estado quedaba en esperando_confirmacion_cambio_materia y el tutor
+  // respondía "Sin problema, seguimos con Matemáticas" sin contestar nada.
+  // Se agregan las FRASES completas ("raíz cuadrada", "raíz cúbica"), no
+  // "raíz" a secas: así la guarda coincideConMateria corta el falso positivo
+  // en Matemática sin dejar de reconocer una pregunta real de biología
+  // vegetal ("la raíz de la planta absorbe agua") como cambio a Biología.
+  'Matemática': ['aritmética','aritmetica','algebra','álgebra','geometría','geometria','fracciones','ecuaciones','trigonometría','trigonometria','estadística','estadistica','probabilidad','porcentajes','decimales','números','numeros','matrices','funciones','polinomios','logaritmos','raíz cuadrada','raiz cuadrada','raíces cuadradas','raices cuadradas','raíz cúbica','raiz cubica','raíz enésima','raiz enesima','radical','radicales','exponente','exponentes','potencia','potencias'],
   // Hallazgo real (reporte de un maestro, 2026-07-08): un problema de
   // aplicación de Matemática ("la velocidad es 20, encuentra el tiempo:
   // distancia = velocidad * tiempo") se detectó como "Física" solo por
