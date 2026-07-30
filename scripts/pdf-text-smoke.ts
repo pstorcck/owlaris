@@ -52,6 +52,40 @@ async function main() {
   const emojiReal = String.fromCodePoint(0x1f605)
   assert.equal(sanitizarTextoPdf(`Comentario: todo bien ${emojiReal}`), 'Comentario: todo bien [emoji]')
 
+  // Hallazgo real (QA en vivo, 2026-07-30, informe de Gabriela Alfaro): el
+  // PDF mostró "Owlaris - Matema[emoji]ticas Primaria.md" 18 veces. NO era
+  // un carácter invisible como en el caso de Brenda: el nombre del documento
+  // de SharePoint trae la "á" DESCOMPUESTA (NFD: "a" + U+0301 acento
+  // combinante). La "a" base cae dentro de Latin-1 y sobrevive, pero el
+  // acento combinante no, así que quedaba un "[emoji]" en medio de la
+  // palabra. Normalizar a NFC lo recompone en "á" (U+00E1).
+  const acentoCombinante = String.fromCharCode(0x0301)
+  const nfdDescompuesta = `Owlaris - Matema${acentoCombinante}ticas Primaria.md`
+  assert.equal(sanitizarTextoPdf(nfdDescompuesta), 'Owlaris - Matemáticas Primaria.md')
+  assert.ok(!sanitizarTextoPdf(nfdDescompuesta).includes('[emoji]'))
+
+  const enieDescompuesta = `Ni${String.fromCharCode(0x006e, 0x0303)}o`
+  assert.equal(sanitizarTextoPdf(enieDescompuesta), 'Niño')
+
+  // Puntuación tipográfica fuera de Latin-1 que el propio informe usa en sus
+  // títulos ("Anexo — miércoles, 29 de julio") salía como "Anexo [emoji]".
+  // Se transcribe a su equivalente ASCII, no se marca como emoji.
+  const guionLargo = String.fromCharCode(0x2014)
+  assert.equal(sanitizarTextoPdf(`Anexo ${guionLargo} miércoles`), 'Anexo - miércoles')
+
+  const comillaIzq = String.fromCharCode(0x201c)
+  const comillaDer = String.fromCharCode(0x201d)
+  const apostrofo = String.fromCharCode(0x2019)
+  const elipsis = String.fromCharCode(0x2026)
+  assert.equal(
+    sanitizarTextoPdf(`Dijo ${comillaIzq}hola${comillaDer} y no s${apostrofo}e${elipsis}`),
+    'Dijo "hola" y no s\'e...'
+  )
+
+  const espacioDuro = String.fromCharCode(0x00a0)
+  const espacioFino = String.fromCharCode(0x202f)
+  assert.equal(sanitizarTextoPdf(`10${espacioDuro}a${espacioFino}15 minutos`), '10 a 15 minutos')
+
   console.log('pdf-text smoke passed')
 }
 
