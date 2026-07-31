@@ -38,6 +38,7 @@ function main() {
     '/reset-password',
     '/api/signup',
     '/api/recuperar-password',
+    '/api/reset-password',
     '/auth/callback',
     '/auth/callback?token_hash=abc&type=recovery',
   ]

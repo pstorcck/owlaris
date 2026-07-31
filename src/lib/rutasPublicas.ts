@@ -27,6 +27,9 @@ const PREFIJOS = [
   // Envía el correo de recuperación: el usuario no tiene sesión, es
   // justamente lo que está intentando recuperar.
   '/api/recuperar-password',
+  // Canjea el token del correo y aplica la contraseña nueva. Tampoco hay
+  // sesión: la autorización es el token de un solo uso, no una cookie.
+  '/api/reset-password',
 ]
 
 export function esRutaPublica(pathname: string): boolean {

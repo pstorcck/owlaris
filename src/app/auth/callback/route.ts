@@ -14,6 +14,16 @@ import { createClient } from '@/lib/supabase/server'
 // Resend, apuntando aquí con ?token_hash=&type=recovery. Se soportan los dos
 // formatos: el nuevo (token_hash + verifyOtp) y el anterior (?code=), para
 // que cualquier correo ya enviado con el flujo viejo siga funcionando.
+// Hallazgo real (logs de producción, 2026-07-31): un escáner de correo hacía
+// HEAD sobre el enlace un segundo antes del clic humano. Sin este handler,
+// Next atiende el HEAD ejecutando el GET — y el GET canjeaba el token de un
+// solo uso, así que la persona llegaba con el enlace ya quemado. HEAD no debe
+// consumir nada. Los correos nuevos ya ni pasan por aquí (van directo a
+// /reset-password), pero los enlaces ya enviados sí.
+export async function HEAD() {
+  return new NextResponse(null, { status: 200 })
+}
+
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url)
   const code = searchParams.get('code')

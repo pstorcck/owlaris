@@ -7,10 +7,18 @@ import { createClient } from '@/lib/supabase/client'
 // Hallazgo real (funcionalidad solicitada, 2026-07-13): "recuperar
 // contraseña" no existía para padres ni para alumnos — el login de padres
 // solo decía "contacta al administrador del colegio". Esta página completa
-// el flujo: llega aquí después de que /auth/callback intercambió el código
-// del enlace del correo por una sesión real, y el alumno o padre puede
-// establecer su nueva contraseña directamente.
+// el flujo: el alumno o padre establece aquí su nueva contraseña.
+//
+// Hallazgo real (logs de producción, 2026-07-31): "el correo llega pero al
+// hacer clic me manda al login". El enlace apuntaba a /auth/callback, que
+// canjeaba el token de un solo uso al ABRIRSE — y un escáner de correo lo
+// abría (HEAD) un segundo antes que la persona, dejándolo gastado. Ahora el
+// correo apunta directo a esta pantalla con ?token_hash=: abrirla NO consume
+// nada, solo muestra el formulario. El token se canjea al enviarlo, en
+// /api/reset-password. Se mantiene el modo por sesión para los enlaces
+// viejos que todavía pasan por /auth/callback.
 export default function ResetPasswordPage() {
+  const [tokenHash, setTokenHash] = useState<string | null>(null)
   const [sesionValida, setSesionValida] = useState<boolean | null>(null)
   const [password, setPassword] = useState('')
   const [confirmar, setConfirmar] = useState('')
@@ -19,6 +27,14 @@ export default function ResetPasswordPage() {
   const [listo, setListo] = useState(false)
 
   useEffect(() => {
+    // Se lee de window.location en vez de useSearchParams para no forzar un
+    // límite de Suspense ni sacar la página del prerender.
+    const token = new URLSearchParams(window.location.search).get('token_hash')
+    if (token) {
+      setTokenHash(token)
+      setSesionValida(true)
+      return
+    }
     const supabase = createClient()
     supabase.auth.getUser().then(({ data }) => setSesionValida(!!data.user))
   }, [])
@@ -38,6 +54,38 @@ export default function ResetPasswordPage() {
 
     setLoading(true)
     const supabase = createClient()
+
+    if (tokenHash) {
+      // Recién aquí se canjea el token del correo, junto con el cambio.
+      try {
+        const res = await fetch('/api/reset-password', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token_hash: tokenHash, password }),
+        })
+        const datos = await res.json().catch(() => ({}))
+        if (!res.ok) {
+          setLoading(false)
+          setError(datos?.error || 'No se pudo actualizar la contraseña. Solicita un enlace nuevo.')
+          return
+        }
+        // La contraseña ya cambió del lado del servidor; se inicia sesión con
+        // ella para que el usuario entre directo en vez de volver al login.
+        if (datos?.email) {
+          await supabase.auth.signInWithPassword({ email: datos.email, password })
+        }
+      } catch {
+        setLoading(false)
+        setError('Error de conexión. Intenta de nuevo.')
+        return
+      }
+      setLoading(false)
+      setListo(true)
+      setTimeout(() => { window.location.href = '/' }, 1800)
+      return
+    }
+
+    // Enlaces viejos: /auth/callback ya dejó una sesión de recuperación.
     const { error: updateError } = await supabase.auth.updateUser({ password })
     setLoading(false)
 
