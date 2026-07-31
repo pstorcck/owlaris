@@ -17,6 +17,17 @@
 // tiene un solver dedicado), este guard es puramente textual: detecta que
 // la PROPIA respuesta se contradice a sí misma, sin necesitar calcular
 // nada por separado.
+// Hallazgo real (QA semanal en vivo, 2026-07-31, Física — Americano,
+// trabajo-energía): el patrón reapareció con DOS huecos distintos, ambos
+// reproducidos en scripts/contradictory-verdict-smoke.ts:
+//
+//   1. VOCABULARIO: el modelo escribió "Aquí está el único error" — ninguno
+//      de los patrones de abajo lo cubría, así que ni siquiera se detectaba
+//      con la frase al inicio del texto.
+//   2. UBICACIÓN: la frase apareció dentro del "Paso 3" (carácter 309), no
+//      en la apertura. Al verificar un procedimiento paso a paso el modelo
+//      no abre con el veredicto: lo suelta al llegar al paso que cree malo,
+//      y acto seguido se contradice ("v = √50 ≈ 7.07 m/s, está bien").
 const ANUNCIOS_DE_ERROR = [
   /hay un (?:peque[ñn]o )?error/i,
   /parece que hay .{0,40}error/i,
@@ -25,6 +36,14 @@ const ANUNCIOS_DE_ERROR = [
   /tu (?:proceso|procedimiento) (?:tiene|contiene) un error/i,
   /there(?:'s| is) a (?:small )?(?:mistake|error)/i,
   /your (?:answer|process|result) (?:is not correct|is incorrect|has a mistake)/i,
+  // Anuncios que SEÑALAN dónde está el error, la forma natural de hacerlo
+  // en un desglose paso a paso.
+  /(?:aqu[ií] )?est[aá] (?:el|tu) (?:[uú]nico )?error/i,
+  /el (?:[uú]nico )?error est[aá] (?:aqu[ií]|en)/i,
+  /(?:aqu[ií] )?(?:hay|est[aá]) (?:un|el) (?:peque[ñn]o )?fallo/i,
+  /te equivocaste (?:aqu[ií]|en)/i,
+  /here(?:'s| is) (?:the|your) (?:only )?(?:mistake|error)/i,
+  /the (?:only )?(?:mistake|error) is (?:here|in)/i,
 ]
 
 const CONFIRMACIONES_DE_EXITO = [
@@ -38,41 +57,141 @@ const CONFIRMACIONES_DE_EXITO = [
   /you (?:solved|applied|calculated) .{0,30}correctly/i,
 ]
 
-// Tamaño de la ventana de "apertura" donde debe aparecer el anuncio de
-// error para contar como un veredicto adelantado (no una mención tardía,
-// ya avanzada la explicación, que sería un uso legítimo de esas palabras).
+// Confirmaciones que solo son fiables PEGADAS al anuncio de error. "Está
+// bien" a secas es demasiado débil para aceptarla a cualquier distancia
+// (una respuesta que corrige de verdad puede cerrar con "fíjate si el
+// planteamiento inicial está bien" sin contradecirse en absoluto), pero a
+// menos de una oración del anuncio, y sin ninguna marca de corrección de
+// por medio, sí delata la contradicción.
+const CONFIRMACIONES_CERCANAS = [
+  ...CONFIRMACIONES_DE_EXITO,
+  /(?<!\bno\s)\best[aá]\s+bien\b/i,
+  /\bbien\s+(?:hecho|resuelto|planteado|calculado|aplicado)\b/i,
+  /(?<!\bnot\s)\blooks\s+(?:good|right|correct)\b/i,
+]
+
+// Si entre el anuncio y la confirmación el modelo CORRIGE algo, no hay
+// contradicción: encontró un error real, lo enmendó y por eso lo que sigue
+// ya está bien. Ese es el comportamiento deseado y no debe tocarse.
+const MARCAS_DE_CORRECCION = [
+  /deber[ií]as/i,
+  /debiste/i,
+  /en realidad/i,
+  /lo correcto (?:es|ser[ií]a)/i,
+  /corrigiendo/i,
+  /corregido/i,
+  /el valor correcto/i,
+  /vuelve a (?:intentar|revisar|calcular)/i,
+  /int[eé]ntalo de nuevo/i,
+  /should (?:be|have been)/i,
+  /actually/i,
+  /the correct value/i,
+  /try again/i,
+]
+
+// Tamaño de la ventana de "apertura" donde un anuncio de error cuenta como
+// veredicto adelantado sin más requisitos (el patrón original: el modelo
+// abre con el veredicto equivocado y lo desmiente en el resto del texto).
 const LARGO_APERTURA = 260
 
-export function detectarVeredictoAutocontradictorio(respuesta: string): boolean {
+// Fuera de la apertura, la confirmación tiene que estar PEGADA al anuncio
+// para que cuente: una mención de error ya avanzada la explicación, seguida
+// mucho después de un "es correcta" sobre otra cosa, no es contradicción.
+const VENTANA_CONFIRMACION_CERCANA = 220
+
+type Contradiccion = { indice: number; largo: number; adelantado: boolean }
+
+// Devuelve el anuncio de error que la propia respuesta desmiente, o null.
+// Lo comparten la detección y la reparación para que ambas operen sobre
+// exactamente el mismo hallazgo.
+function encontrarContradiccion(respuesta: string): Contradiccion | null {
   const texto = (respuesta || '').trim()
-  if (!texto) return false
-  const apertura = texto.slice(0, LARGO_APERTURA)
-  const match = ANUNCIOS_DE_ERROR.map((r) => apertura.match(r)).find(Boolean)
-  if (!match) return false
-  // La confirmación de éxito debe aparecer DESPUÉS del anuncio de error, no
-  // en un punto fijo arbitrario del texto (que podría cortar a mitad de la
-  // propia frase de confirmación en respuestas cortas).
-  const resto = texto.slice((match.index ?? 0) + match[0].length)
-  return CONFIRMACIONES_DE_EXITO.some((r) => r.test(resto))
+  if (!texto) return null
+
+  for (const patron of ANUNCIOS_DE_ERROR) {
+    const busqueda = new RegExp(patron.source, patron.flags.includes('g') ? patron.flags : `${patron.flags}g`)
+    let match: RegExpExecArray | null
+    while ((match = busqueda.exec(texto)) !== null) {
+      const indice = match.index
+      const desde = indice + match[0].length
+      // La confirmación debe aparecer DESPUÉS del anuncio, no en un punto
+      // fijo arbitrario del texto (que podría cortar a mitad de la propia
+      // frase de confirmación en respuestas cortas).
+      const resto = texto.slice(desde)
+      const adelantado = indice < LARGO_APERTURA
+
+      if (adelantado) {
+        if (CONFIRMACIONES_DE_EXITO.some((r) => r.test(resto))) {
+          return { indice, largo: match[0].length, adelantado }
+        }
+        continue
+      }
+
+      const cercano = resto.slice(0, VENTANA_CONFIRMACION_CERCANA)
+      if (!CONFIRMACIONES_CERCANAS.some((r) => r.test(cercano))) continue
+      if (MARCAS_DE_CORRECCION.some((r) => r.test(cercano))) continue
+      return { indice, largo: match[0].length, adelantado }
+    }
+  }
+
+  return null
 }
 
-// Corta el texto justo después de la primera oración/párrafo que contiene
-// el anuncio de error (para descartar SOLO esa frase adelantada), y
-// antepone un veredicto correcto — el resto de la respuesta (el desglose
-// paso a paso que el propio modelo ya escribió) se conserva intacto, ya
-// que es contenido pedagógico válido y ya confirma la respuesta correcta.
-export function repararVeredictoAutocontradictorio(respuesta: string, idiomaIngles = false): string {
-  const texto = respuesta.trim()
-  const match = ANUNCIOS_DE_ERROR.map((r) => texto.slice(0, LARGO_APERTURA).match(r)).find(Boolean)
-  const indiceError = match?.index ?? 0
-  const desde = indiceError + (match?.[0]?.length ?? 0)
+export function detectarVeredictoAutocontradictorio(respuesta: string): boolean {
+  return encontrarContradiccion(respuesta) !== null
+}
 
+// Fin de la oración/párrafo que contiene el anuncio de error.
+function finDeOracion(texto: string, desde: number): number {
   const saltoParrafo = texto.indexOf('\n', desde)
   const puntoFinal = texto.indexOf('. ', desde)
   const candidatos = [saltoParrafo, puntoFinal].filter((i) => i !== -1)
-  const corte = candidatos.length > 0 ? Math.min(...candidatos) + (texto[Math.min(...candidatos)] === '.' ? 2 : 1) : texto.length
+  if (candidatos.length === 0) return texto.length
+  const corte = Math.min(...candidatos)
+  return corte + (texto[corte] === '.' ? 2 : 1)
+}
 
-  const resto = texto.slice(corte).trim()
+// Inicio de la cláusula que contiene el anuncio. Se corta también en ":" y
+// "," para no arrastrar la etiqueta del paso: en "Paso 3: Aquí está el
+// único error." lo que sobra es la frase, no el "Paso 3:".
+function inicioDeClausula(texto: string, indice: number): number {
+  const limites = ['\n', '. ', ': ', ', ']
+    .map((sep) => {
+      const pos = texto.lastIndexOf(sep, indice)
+      return pos === -1 ? -1 : pos + sep.length
+    })
+    .filter((pos) => pos >= 0 && pos <= indice)
+  return limites.length > 0 ? Math.max(...limites) : 0
+}
+
+// Quita SOLO la frase que anuncia el error; el resto de la respuesta (el
+// desglose paso a paso que el propio modelo ya escribió) se conserva
+// intacto, porque es contenido pedagógico válido que ya confirma la
+// respuesta correcta.
+//
+// Hallazgo real (QA 2026-07-31): la versión anterior siempre cortaba desde
+// el inicio del texto hasta el final de esa frase, lo cual solo es correcto
+// cuando el anuncio ESTÁ en la apertura. Con el anuncio dentro del "Paso 3",
+// ese mismo corte se habría comido los pasos 1 y 2 — la parte más útil de
+// la explicación. Ahora el corte desde el inicio se reserva al veredicto
+// adelantado, y en cualquier otra posición la frase se extirpa en el lugar.
+export function repararVeredictoAutocontradictorio(respuesta: string, idiomaIngles = false): string {
+  const texto = respuesta.trim()
   const apertura = idiomaIngles ? 'Correct.' : '¡Correcto!'
-  return resto ? `${apertura} ${resto}` : apertura
+  const hallazgo = encontrarContradiccion(texto)
+  if (!hallazgo) return texto
+
+  const fin = finDeOracion(texto, hallazgo.indice + hallazgo.largo)
+
+  if (hallazgo.adelantado) {
+    const resto = texto.slice(fin).trim()
+    return resto ? `${apertura} ${resto}` : apertura
+  }
+
+  const inicio = inicioDeClausula(texto, hallazgo.indice)
+  const limpio = `${texto.slice(0, inicio)}${texto.slice(fin)}`
+    .replace(/[ \t]{2,}/g, ' ')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+  return limpio || apertura
 }
