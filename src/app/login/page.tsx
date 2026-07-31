@@ -40,14 +40,31 @@ export default function LoginPage() {
     e.preventDefault()
     setRecuperando(true)
     setError('')
-    const supabase = createClient()
-    await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/auth/callback?next=/reset-password`,
-    })
-    // No se distingue si el correo existe o no (evita filtrar qué correos
-    // están registrados) — siempre se muestra el mismo mensaje de éxito.
-    setRecuperando(false)
-    setRecuperado(true)
+    // Hallazgo real (reporte en vivo, 2026-07-30): antes se llamaba
+    // supabase.auth.resetPasswordForEmail() y se DESCARTABA su error, así
+    // que la pantalla decía "revisa tu correo" aunque el envío fallara. Y
+    // fallaba: ese método usa el SMTP integrado de Supabase (limitado a unos
+    // pocos correos por hora), no Resend, que es el canal que sí funciona en
+    // esta app. Ahora el envío ocurre en /api/recuperar-password vía Resend
+    // y un fallo real de red/servidor sí se muestra.
+    try {
+      const res = await fetch('/api/recuperar-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, origin: window.location.origin }),
+      })
+      setRecuperando(false)
+      if (!res.ok) {
+        setError('No se pudo enviar el correo. Intenta de nuevo en unos minutos.')
+        return
+      }
+      // No se distingue si el correo existe o no (evita filtrar qué correos
+      // están registrados) — siempre se muestra el mismo mensaje de éxito.
+      setRecuperado(true)
+    } catch {
+      setRecuperando(false)
+      setError('Error de conexión. Intenta de nuevo.')
+    }
   }
 
   return (

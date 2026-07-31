@@ -36,12 +36,25 @@ export default function PadresLoginPage() {
     e.preventDefault()
     setRecuperando(true)
     setError('')
-    const supabase = createClient()
-    await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/auth/callback?next=/reset-password`,
-    })
-    setRecuperando(false)
-    setRecuperado(true)
+    // Ver nota en src/app/login/page.tsx: el envío pasó de
+    // resetPasswordForEmail (SMTP integrado de Supabase, con el error
+    // descartado) a /api/recuperar-password, que manda el enlace por Resend.
+    try {
+      const res = await fetch('/api/recuperar-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, origin: window.location.origin }),
+      })
+      setRecuperando(false)
+      if (!res.ok) {
+        setError('No se pudo enviar el correo. Intenta de nuevo en unos minutos.')
+        return
+      }
+      setRecuperado(true)
+    } catch {
+      setRecuperando(false)
+      setError('Error de conexión. Intenta de nuevo.')
+    }
   }
 
   return (
