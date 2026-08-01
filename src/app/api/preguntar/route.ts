@@ -53,6 +53,7 @@ import {
   isSharePointPlainTextContent,
   isSupportedSharePointContentFile,
   normalizeSharePointKey,
+  preferirArchivosDeMateria,
   pushUniqueSharePointName,
   resolverCarpetasExistentes,
   sharePointNameMatchesSubject,
@@ -594,6 +595,15 @@ async function buscarContenido(colegio: ColegioSharePointInput, grado: string, m
     if (permitirCompartidas && indice.length === 0) indice = await construirIndice(driveId, token, 'Owlaris', CARPETA_COMPARTIDA, 'Preparación pruebas nacionales', 'Mineduc', materia)
   }
   if (indice.length === 0) return { contenido: '', archivo: null }
+  // Hallazgo real (QA 2026-07-31, Química): el índice traía un archivo de
+  // Física y se elegía sin más. Si hay material de la materia pedida, el de
+  // otra materia no compite (ver preferirArchivosDeMateria).
+  const indiceDeLaMateria = preferirArchivosDeMateria(indice, materia)
+  if (indiceDeLaMateria.length !== indice.length) {
+    const descartados = indice.filter((d) => !indiceDeLaMateria.includes(d)).map((d) => d.nombre)
+    console.log(`⚠️ Contenido de otra materia descartado para "${materia}": ${descartados.join(', ')}`)
+  }
+  indice = indiceDeLaMateria
   const preguntaLower = pregunta.toLowerCase()
   const palabras = preguntaLower.split(/\s+/).filter(p => p.length > 3)
   let mejorPuntaje = -1, mejorDoc = indice[0]
@@ -606,7 +616,10 @@ async function buscarContenido(colegio: ColegioSharePointInput, grado: string, m
     }
     if (puntaje > mejorPuntaje) { mejorPuntaje = puntaje; mejorDoc = doc }
   }
-  console.log(`✅ Elegido: ${mejorDoc.nombre} (puntaje: ${mejorPuntaje})`)
+  // Se registra también la UBICACIÓN, no solo el nombre: cuando el archivo
+  // elegido no corresponde a la materia, lo que hace falta saber para
+  // arreglarlo es en qué carpeta de SharePoint está colgado.
+  console.log(`✅ Elegido: ${mejorDoc.nombre} (materia: ${materia}, ubicación: ${mejorDoc.tema}, puntaje: ${mejorPuntaje})`)
   const cacheKey = `${colegiosSP.join('|')}/${grado}/${materia}/${mejorDoc.nombre}`
   const cached = cacheContenido.get(cacheKey)
   if (cached && Date.now() - cached.timestamp < CACHE_TTL) return { contenido: cached.contenido, archivo: cached.archivo }

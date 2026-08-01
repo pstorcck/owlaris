@@ -109,6 +109,40 @@ export function sharePointNameMatchesSubject(name: string, subject: string) {
   return subjectWords.length > 0 && subjectWords.every(word => normalizedName.includes(word))
 }
 
+// Hallazgo real (QA semanal en vivo, 2026-07-31, Química — Americano): ante
+// una estequiometría correcta el tutor respondió con una pista genérica de
+// primaria y el adjunto salió como "Owlaris - Física.md". Se probó en sesión
+// NUEVA con Química como primera materia, sin tocar Física, y el adjunto
+// salió igual — así que no es arrastre de contexto entre materias: el índice
+// de contenido de Química contiene un archivo de Física.
+//
+// La causa de fondo es de organización del contenido en SharePoint (un
+// archivo de Física dentro del material que se indexa para Química), y se
+// arregla ahí. Pero el código no debería elegir en silencio un documento que
+// declara pertenecer a OTRA materia: esta función lo evita cuando hay con qué
+// reemplazarlo.
+//
+// Es deliberadamente conservadora, para no romper los casos legítimos:
+//   - Si NINGÚN archivo del índice coincide con la materia pedida, no se
+//     descarta nada (ej. una carpeta de "Ciencias Naturales" cuyos archivos
+//     se llaman "Biología.docx" / "Física.docx" — todos son suyos).
+//   - Los nombres neutros ("Unidad 3.docx") nunca se descartan: no declaran
+//     materia, así que no hay motivo para dudar de ellos.
+// Solo se descarta un archivo que declara OTRA materia cuando además existe
+// al menos uno que sí es de la materia pedida.
+export function preferirArchivosDeMateria<T extends { nombre: string }>(indice: T[], materia: string): T[] {
+  if (indice.length <= 1 || !materia) return indice
+
+  const esDeLaMateria = (nombre: string) => sharePointNameMatchesSubject(nombre, materia)
+  if (!indice.some((doc) => esDeLaMateria(doc.nombre))) return indice
+
+  return indice.filter((doc) => {
+    if (esDeLaMateria(doc.nombre)) return true
+    // Nombre neutro (no declara ninguna materia): se conserva.
+    return inferSubjectFromSharePointName(doc.nombre) === null
+  })
+}
+
 function getRawValues(input: ColegioSharePointInput) {
   const rawValues: string[] = []
   if (typeof input === 'string') {
