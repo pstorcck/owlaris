@@ -73,6 +73,7 @@ import {
   looksLikeMathPracticePrompt,
   normalizeStudentAnswer,
   opCoincideConTexto,
+  pareceEcuacionQuimica,
   solveOperation,
   type MathEvaluation,
 } from '@/lib/mathSafety'
@@ -2199,6 +2200,34 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // Hallazgo real CRÍTICO (QA en vivo, 31/07 y 01/08, Química — Americano,
+    // estequiometría): ante la respuesta CORRECTA (34 g de NH₃) el tutor
+    // contestaba con la plantilla fija de "incorrecto" y su pista de DIVISIÓN,
+    // sin revisar ningún paso.
+    //
+    // La operación con la que se calificaba NO venía de la inferencia (esa ya
+    // se bloqueó para notación química): venía de la etiqueta [OP:] que el
+    // propio modelo escribe y que se guarda en operacion_canonica, y que en un
+    // problema de estequiometría corresponde a UN PASO intermedio (una
+    // conversión, de ahí la división). El alumno responde la cantidad FINAL,
+    // que legítimamente no coincide con ese paso — y el protocolo la declaraba
+    // incorrecta. Como este bloque responde directo, la plantilla reemplazaba
+    // por completo la revisión del procedimiento.
+    //
+    // En un ejercicio con notación de reacción, una etiqueta [OP:] no
+    // representa la respuesta final, así que no puede sostener un veredicto de
+    // "incorrecto" venga de donde venga (etiqueta del modelo, fila pendiente
+    // ya guardada, o inferencia). Se descarta el veredicto y el turno sigue a
+    // la revisión real paso a paso del modelo. Un "correcto" sí se conserva:
+    // ahí el valor del alumno coincide y confirmarlo no le hace daño a nadie.
+    if (evaluacionProtocolo && evaluacionProtocolo.estado === 'incorrecto') {
+      const textoEjercicioActivo = `${pendingMathPrompt || ''}\n${ultimoMensajeAsistente(historial)}`
+      if (pareceEcuacionQuimica(textoEjercicioActivo)) {
+        console.log('⚠️ Veredicto determinístico "incorrecto" descartado: ejercicio con notación química, la etiqueta [OP:] no representa la respuesta final')
+        evaluacionProtocolo = null
+      }
+    }
+
     // Si el protocolo evaluó y tiene resultado definitivo, responder directo
     if (evaluacionProtocolo && evaluacionProtocolo.estado !== 'no_evaluable') {
       const esRespuestaCorrecta = evaluacionProtocolo.estado === 'correcto' || evaluacionProtocolo.estado === 'equivalente'
@@ -3082,6 +3111,17 @@ ${contextoContenido}`
       ? opAlumno
       : null
     let opFinalRespuesta = opGeometriaEnRespuesta || _opExtraidaValida || opInferida || opDesdeAlumno
+    // Ver la nota del descarte de veredicto más arriba (QA 01/08, Química): en
+    // un ejercicio con notación de reacción, la etiqueta [OP:] del modelo es a
+    // lo sumo UN PASO de la conversión, nunca la respuesta final que el alumno
+    // va a escribir. Guardarla en operacion_canonica es lo que dejaba la fila
+    // pendiente envenenada para todos los turnos siguientes. No se guarda: el
+    // ejercicio se revisa paso a paso con el modelo, como cualquier otro
+    // problema que el protocolo determinístico no puede calificar.
+    if (opFinalRespuesta && pareceEcuacionQuimica(respuesta)) {
+      console.log('⚠️ Operación canónica NO guardada: el ejercicio usa notación química, la etiqueta [OP:] no representa la respuesta final')
+      opFinalRespuesta = null
+    }
     let opValidaEnRespuesta = isSafeCanonicalOperation(opFinalRespuesta) ? opFinalRespuesta : null
     // Antes esta rama (la que responde cuando el alumno recién elige un
     // tema, ej. "multiplicaciones") nunca llamaba a resolveMathPracticeFocus

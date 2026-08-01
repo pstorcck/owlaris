@@ -16,6 +16,8 @@
 // plantilla de "incorrecto" reemplazaba la revisión completa del
 // procedimiento.
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import {
   inferCanonicalOperationFromText,
   pareceEcuacionQuimica,
@@ -72,6 +74,33 @@ function main() {
   assert.equal(
     pareceEcuacionQuimica(mencionSuelta), false,
     'una sola fórmula suelta en prosa no debe bloquear la inferencia'
+  )
+
+  // Segunda ronda del QA (01/08): el fix anterior NO bastó. La pista era de
+  // DIVISIÓN y la inferencia bloqueada producía una SUMA ("2+3") — señal de
+  // que la operación con la que se calificaba venía de otro lado: de la
+  // etiqueta [OP:] que escribe el modelo y que se guarda en
+  // operacion_canonica (route.ts:2085 la reinyecta como [OP:] explícito en
+  // cada turno siguiente). En estequiometría esa etiqueta es UN PASO de la
+  // conversión, no la cantidad final que el alumno responde.
+  //
+  // Por eso el guard no puede vivir solo en la inferencia. Se verifica que
+  // route.ts tenga las dos defensas que sí cubren ese camino.
+  const route = readFileSync(join(__dirname, '..', 'src/app/api/preguntar/route.ts'), 'utf8')
+
+  assert.match(
+    route,
+    /estado === 'incorrecto'[\s\S]{0,700}pareceEcuacionQuimica[\s\S]{0,400}evaluacionProtocolo = null/,
+    'route.ts debe descartar el veredicto "incorrecto" del protocolo cuando el ejercicio usa ' +
+    'notación química, venga la operación de donde venga (etiqueta del modelo, fila pendiente ' +
+    'ya guardada o inferencia)'
+  )
+
+  assert.match(
+    route,
+    /opFinalRespuesta && pareceEcuacionQuimica\(respuesta\)[\s\S]{0,400}opFinalRespuesta = null/,
+    'route.ts no debe guardar operacion_canonica para un ejercicio con notación química: ' +
+    'esa fila pendiente es lo que envenenaba todos los turnos siguientes'
   )
 
   console.log('estequiometria-falso-incorrecto smoke passed')
