@@ -1293,11 +1293,56 @@ export function inferRectangleWordProblem(text: string): string | null {
   return tienePerimetro ? `2*(${a}+${b})` : `${a}*${b}`
 }
 
+// Hallazgo real CRÍTICO (QA en vivo, 2026-07-31 y 2026-08-01, Química —
+// Americano, estequiometría): ante la respuesta CORRECTA (34 g de NH₃) el
+// tutor contestaba, palabra por palabra, "Todavía no. Piensa la división
+// como repartir en grupos iguales..." sin revisar ningún paso.
+//
+// La causa: en "N2 + 3H2 -> 2NH3" los subíndices y coeficientes de la
+// ecuación química se leían como una operación ARITMÉTICA. De ahí salía
+// "2+3", que resuelve 5, y contra ese 5 se juzgaba el 34 del alumno. Como el
+// protocolo determinístico responde directo cuando tiene veredicto, la
+// respuesta canónica de "incorrecto" reemplazaba por completo la revisión
+// del procedimiento — por eso no se revisaba ni un paso y el texto era
+// siempre idéntico.
+//
+// Una fórmula química no es una expresión aritmética: de un texto con
+// notación de reacción no debe inferirse ninguna operación. Se exige la
+// flecha de reacción junto a una fórmula, o al menos dos fórmulas, para no
+// confundir un "H2" suelto en prosa con una ecuación real.
+const FLECHA_REACCION = /->|→|⟶|⇌|<=>|<->/
+// Símbolos de elemento reales (los de dos letras primero, para que "Cl" no se
+// lea como "C" + "l"). Usar la lista en vez de "cualquier mayúscula + dígito"
+// evita marcar como química un "punto P2" o un "vértice A1" de geometría.
+const SIMBOLOS_ELEMENTO = 'He|Li|Be|Ne|Na|Mg|Al|Si|Cl|Ar|Ca|Fe|Cu|Zn|Ag|Br|Ba|Pb|Hg|Sn|Ni|Cr|Mn|H|B|C|N|O|F|P|S|K|I'
+// Sin \b al inicio: en "3H2" el coeficiente pega con la fórmula y no hay
+// frontera de palabra donde empieza el símbolo.
+const FORMULA_QUIMICA = new RegExp(`(?:(?:${SIMBOLOS_ELEMENTO})\\d*)+`, 'g')
+
+export function pareceEcuacionQuimica(texto: string): boolean {
+  const limpio = texto || ''
+  if (!limpio) return false
+  // Solo cuentan los tokens con subíndice: "C" o "I" sueltas son una letra
+  // cualquiera del texto, no una fórmula.
+  const formulas = Array.from(limpio.matchAll(FORMULA_QUIMICA))
+    .map((m) => m[0])
+    .filter((token) => /\d/.test(token) && token.length >= 2)
+  if (formulas.length === 0) return false
+  if (FLECHA_REACCION.test(limpio)) return true
+  return new Set(formulas).size >= 2
+}
+
 export function inferCanonicalOperationFromText(text: string): string | null {
   if (!text) return null
 
+  // El [OP:] explícito se respeta siempre: ahí el tutor DECLARÓ la operación
+  // a verificar, y un paso aritmético de estequiometría (2 * 17) es
+  // perfectamente verificable. Lo que no puede hacerse es adivinar una
+  // operación leyendo la notación de la reacción (ver arriba).
   const explicit = extractCanonicalOperation(text)
   if (explicit && isSafeCanonicalOperation(explicit)) return normalizeOperation(explicit)
+
+  if (pareceEcuacionQuimica(text)) return null
 
   const relevantText = selectRelevantMathText(text)
   const normalized = relevantText
