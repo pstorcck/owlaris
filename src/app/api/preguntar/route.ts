@@ -69,6 +69,7 @@ import {
   inferRectangleWordProblem,
   inferSubtractionWordProblem,
   isLikelyNumericSubject,
+  buildConfirmacionPorSustitucion,
   esOperacionCalificable,
   isSafeCanonicalOperation,
   looksLikeMathPracticePrompt,
@@ -76,6 +77,7 @@ import {
   opCoincideConTexto,
   pareceEcuacionQuimica,
   solveOperation,
+  verificarPorSustitucion,
   type MathEvaluation,
 } from '@/lib/mathSafety'
 import {
@@ -2215,6 +2217,37 @@ export async function POST(req: NextRequest) {
           idiomaIngles,
           process.env.WOLFRAM_APP_ID
         )
+      }
+    }
+
+    // Hallazgo real (QA de verificación, 2026-08-03, casos 1 y 2): tras quitar
+    // la operación basura de logaritmos, "log(x) + log(2) = 3" y
+    // "3^(x-2) = 81" dejaron de fallar por plantilla y pasaron a fallar por el
+    // modelo: a la respuesta correcta entregada directa ("500", "6") contestaba
+    // "no llegaste a la respuesta correcta", con una pista válida pero un
+    // veredicto falso. Al no poder resolver esas formas, el protocolo se
+    // abstenía y nadie verificaba nada.
+    //
+    // No hace falta resolver la ecuación para saber si el alumno acertó: basta
+    // sustituir su valor y ver si la satisface. Esto solo puede producir
+    // ACIERTOS — si la sustitución no cuadra no se concluye nada, así que no
+    // puede inventar un "incorrecto" nuevo.
+    if (!evaluacionProtocolo || evaluacionProtocolo.estado === 'no_evaluable') {
+      const valorAlumno = normalizeStudentAnswer(pregunta)
+      if (valorAlumno !== null) {
+        const textoEjercicio = `${pendingMathPrompt || ''}\n${ultimoMensajeAsistente(historial)}`
+        if (verificarPorSustitucion(textoEjercicio, valorAlumno) === true) {
+          console.log('✅ Respuesta confirmada por sustitución en la ecuación del enunciado')
+          evaluacionProtocolo = {
+            estado: 'correcto',
+            feedback: buildConfirmacionPorSustitucion(valorAlumno, idiomaIngles),
+            correctAnswer: valorAlumno,
+            op: null,
+            guardActivado: false,
+            pasoIntermedio: false,
+            procedimientoMostrado: true,
+          }
+        }
       }
     }
 

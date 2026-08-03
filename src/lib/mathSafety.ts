@@ -543,6 +543,91 @@ export function solveOperation(op: string): number | null {
   }
 }
 
+// Hallazgo real (QA de verificación, 2026-08-03, casos 1 y 2): tras quitar la
+// operación basura de logaritmos, "log(x) + log(2) = 3" y "3^(x-2) = 81"
+// dejaron de calificarse mal por plantilla... y pasaron a calificarse mal por
+// el modelo: a la respuesta correcta entregada directa ("500", "6") contestaba
+// "no llegaste a la respuesta correcta", con una pista matemáticamente válida
+// pero un veredicto falso. Al no poder resolver esas formas, el protocolo se
+// abstenía y nadie verificaba nada.
+//
+// No hace falta RESOLVER la ecuación para saber si el alumno acertó: basta
+// SUSTITUIR su valor y comprobar si la satisface. Eso cubre logaritmos,
+// exponenciales y trigonometría sin escribir un solver para cada familia, y
+// es justo lo que el QA pidió: comparar contra la solución real, no contra
+// una operación extraída.
+//
+// Solo puede producir veredictos de ACIERTO. Si la sustitución no cuadra no se
+// concluye nada (puede ser una forma que no sabemos leer), así que este camino
+// nunca puede inventar un "incorrecto".
+const SUBINDICES: Record<string, string> = {
+  '₀': '0', '₁': '1', '₂': '2', '₃': '3', '₄': '4',
+  '₅': '5', '₆': '6', '₇': '7', '₈': '8', '₉': '9',
+}
+
+function aSintaxisMathjs(expr: string): string {
+  let out = expr
+    .replace(/[₀-₉]/g, (c) => SUBINDICES[c] || c)
+    .replace(/×/g, '*')
+    .replace(/÷/g, '/')
+    .replace(/−/g, '-')
+    .replace(/\s+/g, '')
+  // log con base explícita (log3(x), log_3(x)) → LOGB(x,3), protegido del
+  // reemplazo genérico de abajo.
+  out = out.replace(/log_?(\d+)\(([^()]*)\)/gi, (_m, base, arg) => `LOGB(${arg},${base})`)
+  // ln = logaritmo natural, que en mathjs es log()
+  out = out.replace(/\bln\(/gi, 'LN(')
+  // "log" sin base, en notación escolar, es base 10
+  out = out.replace(/\blog\(/gi, 'log10(')
+  return out.replace(/LOGB\(/g, 'log(').replace(/LN\(/g, 'log(')
+}
+
+// Una línea es una ecuación si, al quitarle los tokens matemáticos, no queda
+// ninguna letra suelta: así la prosa del enunciado nunca se confunde con la
+// ecuación.
+function esLineaEcuacion(linea: string): boolean {
+  const resto = linea
+    .replace(/log_?\d*/gi, '')
+    .replace(/\bln\b/gi, '')
+    .replace(/[0-9xX+\-*/^().,=\s₀-₉]/g, '')
+  return resto.length === 0
+}
+
+export function extraerEcuacionConIncognita(texto: string): string | null {
+  for (const linea of (texto || '').split('\n')) {
+    const limpia = linea.trim()
+    if (!limpia.includes('=') || !/x/i.test(limpia)) continue
+    if ((limpia.match(/=/g) || []).length !== 1) continue
+    if (!esLineaEcuacion(limpia)) continue
+    return limpia
+  }
+  return null
+}
+
+export function verificarPorSustitucion(textoEjercicio: string, valorAlumno: number): boolean | null {
+  const ecuacion = extraerEcuacionConIncognita(textoEjercicio)
+  if (!ecuacion) return null
+  const [izquierda, derecha] = ecuacion.split('=')
+  try {
+    const scope = { x: valorAlumno }
+    const a = evaluate(aSintaxisMathjs(izquierda), scope)
+    const b = evaluate(aSintaxisMathjs(derecha), scope)
+    if (typeof a !== 'number' || typeof b !== 'number') return null
+    if (!isFinite(a) || !isFinite(b)) return null
+    const tolerancia = 1e-6 * Math.max(1, Math.abs(a), Math.abs(b))
+    return Math.abs(a - b) <= tolerancia
+  } catch {
+    return null
+  }
+}
+
+export function buildConfirmacionPorSustitucion(valor: number, idiomaIngles: boolean): string {
+  const v = formatNumberForFeedback(valor)
+  return idiomaIngles
+    ? `Correct. You solved it yourself — ${v} satisfies the equation. Now you don't just have the answer, you know how to find it again. Can you explain how you got there?`
+    : `¡Correcto! Lo resolviste tú: ${v} cumple la ecuación. Ahora no solo tienes la respuesta, ya sabes cómo encontrarla otra vez. ¿Puedes explicarme cómo llegaste a ese resultado?`
+}
+
 export function compareAnswers(studentN: number | null, correctN: number | null): string {
   if (studentN === null || correctN === null) return 'no_evaluable'
   if (Math.abs(studentN - correctN) < 0.001) return 'correcto'
