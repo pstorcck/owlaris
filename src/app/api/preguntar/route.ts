@@ -69,6 +69,7 @@ import {
   inferRectangleWordProblem,
   inferSubtractionWordProblem,
   isLikelyNumericSubject,
+  esOperacionCalificable,
   isSafeCanonicalOperation,
   looksLikeMathPracticePrompt,
   normalizeStudentAnswer,
@@ -3139,7 +3140,12 @@ ${contextoContenido}`
       console.log('⚠️ Operación canónica NO guardada: el ejercicio usa notación química, la etiqueta [OP:] no representa la respuesta final')
       opFinalRespuesta = null
     }
-    let opValidaEnRespuesta = isSafeCanonicalOperation(opFinalRespuesta) ? opFinalRespuesta : null
+    // Hallazgo real CRÍTICO (QA en vivo, Matemáticas 5to Bach): "2^(x+1)=16"
+    // pasaba isSafeCanonicalOperation pero el motor NO la resuelve. Se
+    // guardaba igual en operacion_canonica y quedaba sosteniendo veredictos
+    // que nadie podía verificar. Una operación solo sirve de referencia si se
+    // puede resolver; si no, el ejercicio se revisa con el modelo.
+    let opValidaEnRespuesta = esOperacionCalificable(opFinalRespuesta) ? opFinalRespuesta : null
     // Antes esta rama (la que responde cuando el alumno recién elige un
     // tema, ej. "multiplicaciones") nunca llamaba a resolveMathPracticeFocus
     // — se quedaba con el enfoque ya persistido (o "general" si era la

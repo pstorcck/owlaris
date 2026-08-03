@@ -1332,6 +1332,40 @@ export function pareceEcuacionQuimica(texto: string): boolean {
   return new Set(formulas).size >= 2
 }
 
+// Hallazgo real CRÍTICO (QA en vivo, Matemáticas 5to Bach — ecuaciones
+// exponenciales y logarítmicas). Ante el ejercicio "log₃(x) = 4" el alumno
+// respondió "81" (correcto) y recibió: "Todavía no. Primero distribuye la
+// multiplicación dentro del paréntesis y luego sigue despejando x."
+//
+// Cadena reproducida:
+//   1. Del enunciado se infería la operación "(x)=4" — el extractor se comía
+//      el "log₃" y dejaba la basura entre paréntesis.
+//   2. isSafeCanonicalOperation la daba por válida.
+//   3. Esa basura SÍ se puede resolver (da 4), así que el 81 del alumno se
+//      calificaba contra 4 → "incorrecto".
+//   4. buildGuidedMathHint veía "=", "x" y "(" y soltaba la pista de
+//      distribuir el paréntesis, ajena por completo a un logaritmo.
+//
+// Estas funciones (log, ln, raíces, trigonometría) no las resuelve el motor;
+// extraer "la parte aritmética" de una ecuación que las contiene produce una
+// operación que ya no representa el ejercicio. Cuando aparecen, no se infiere
+// nada y el ejercicio se revisa con el modelo.
+const FUNCIONES_NO_SOPORTADAS = /\b(?:log|ln|sen|sin|cos|tan|cot|sec|csc|arcsen|arcsin|arccos|arctan|sqrt|raiz|raíz)\b|√|log\s*[₀-₉]|[₀-₉]/i
+
+export function usaFuncionNoSoportada(texto: string): boolean {
+  return FUNCIONES_NO_SOPORTADAS.test(texto || '')
+}
+
+// Una operación solo sirve como referencia de calificación si además de ser
+// "segura" el motor la puede RESOLVER. Aceptar uma ecuación irresoluble
+// (2^(x+1)=16) la deja entrar al índice y al campo operacion_canonica, donde
+// después sostiene veredictos que nadie puede verificar.
+export function esOperacionCalificable(op: string | null): boolean {
+  if (!op || !isSafeCanonicalOperation(op)) return false
+  if (usaFuncionNoSoportada(op)) return false
+  return solveOperation(op) !== null || solveQuadraticEquation(op) !== null
+}
+
 export function inferCanonicalOperationFromText(text: string): string | null {
   if (!text) return null
 
@@ -1343,6 +1377,10 @@ export function inferCanonicalOperationFromText(text: string): string | null {
   if (explicit && isSafeCanonicalOperation(explicit)) return normalizeOperation(explicit)
 
   if (pareceEcuacionQuimica(text)) return null
+
+  // Ver la nota de FUNCIONES_NO_SOPORTADAS: de "log₃(x) = 4" se extraía
+  // "(x)=4". Antes que una operación equivocada, ninguna.
+  if (usaFuncionNoSoportada(text)) return null
 
   const relevantText = selectRelevantMathText(text)
   const normalized = relevantText
