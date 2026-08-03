@@ -1960,18 +1960,35 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    if (pendingMathId) {
+    // Hallazgo real CRÍTICO (QA en vivo, Filosofía 4to Bach): a una pregunta
+    // conceptual (racionalismo de Descartes vs. empirismo de Locke) el tutor
+    // respondió "No voy a resolver el ejercicio activo por ti... usemos
+    // 0.2 * 50, resuelve hasta llegar a 10" — una pista aritmética de OTRA
+    // materia, sin ninguna relación con lo preguntado.
+    //
+    // La defensa por materia de abajo ya existía, pero fallaba ABIERTA: el
+    // filtro solo se aplicaba "if (materia_uuid)". Cuando la materia no
+    // resuelve a una fila de `materias` (un chip que no está en esa tabla,
+    // como pasó con Filosofía), materia_uuid queda null, el filtro se omitía
+    // y se reutilizaba el ejercicio pendiente de CUALQUIER materia. Justo el
+    // caso en que menos se sabe era el que menos comprobaba. Sin materia
+    // confirmada no se reutiliza ningún pendiente.
+    if (pendingMathId && !materia_uuid) {
+      console.log('⚠️ Ejercicio pendiente ignorado: no se pudo confirmar a qué materia pertenece')
+    }
+
+    if (pendingMathId && materia_uuid) {
       try {
-        let preguntaPendienteQuery = supabase
+        const preguntaPendienteQuery = supabase
           .from('interacciones')
           .select('id, respuesta, operacion_canonica, op_estado, op_evaluada_en, documento_fuente')
           .eq('id', pendingMathId)
           .eq('usuario_id', user.id)
           .eq('op_estado', 'pendiente')
           .is('op_evaluada_en', null)
-        // Defensa adicional: un ejercicio pendiente de otra materia nunca debe
-        // reutilizarse, sin importar qué ID mande el cliente.
-        if (materia_uuid) preguntaPendienteQuery = preguntaPendienteQuery.eq('materia_id', materia_uuid)
+          // Un ejercicio pendiente de otra materia nunca debe reutilizarse,
+          // sin importar qué ID mande el cliente.
+          .eq('materia_id', materia_uuid)
         const { data: preguntaPendiente } = await preguntaPendienteQuery
           .maybeSingle()
 

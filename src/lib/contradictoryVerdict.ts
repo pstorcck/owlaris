@@ -141,6 +141,28 @@ export function detectarVeredictoAutocontradictorio(respuesta: string): boolean 
   return encontrarContradiccion(respuesta) !== null
 }
 
+// Hallazgo real (QA semanal en vivo, Estadística 5to Bach): ante un
+// procedimiento 100% correcto (media, varianza y desviación poblacional) la
+// respuesta ABRIÓ con "Estás cerca. Revisemos qué operación ayuda a avanzar."
+// y a renglón seguido confirmó los 4 pasos y cerró "Tu procedimiento es
+// correcto". Esa apertura NO la escribió el modelo: es una de las frases-guía
+// fijas de pedagogicalGuard.ts, que guardNoFinalAnswer antepone cuando se
+// activa. Confirmar el trabajo YA HECHO por el alumno no es revelarle la
+// respuesta —él la produjo—, así que ese guard no debe intervenir ahí.
+const CONFIRMACIONES_DE_TRABAJO_CORRECTO = [
+  ...CONFIRMACIONES_DE_EXITO,
+  /tu (?:procedimiento|proceso|desarrollo|razonamiento|c[aá]lculo)\s+(?:es|est[aá])\s+correct[oa]/i,
+  /(?:todos\s+)?(?:los|tus)\s+(?:\d+\s+)?pasos\s+(?:est[aá]n|son)\s+correctos/i,
+  /your (?:procedure|process|reasoning|work) is correct/i,
+  /(?:all\s+)?(?:your\s+)?steps are correct/i,
+]
+
+export function respuestaConfirmaAcierto(respuesta: string): boolean {
+  const texto = (respuesta || '').trim()
+  if (!texto) return false
+  return CONFIRMACIONES_DE_TRABAJO_CORRECTO.some((r) => r.test(texto))
+}
+
 // Fin de la oración/párrafo que contiene el anuncio de error.
 function finDeOracion(texto: string, desde: number): number {
   const saltoParrafo = texto.indexOf('\n', desde)
