@@ -353,6 +353,18 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
   const [sidebarAbierto, setSidebarAbierto]   = useState(false)
   const [sidebarColapsado, setSidebarColapsado] = useState(false)
   const [pendingMathId, setPendingMathId]     = useState<string | null>(null)
+  // Hallazgo real (QA de verificación, 2026-08-03): al dejar un ejercicio sin
+  // responder en Matemáticas, cambiar a otra materia y volver, el ejercicio ya
+  // no se retomaba ("¿podrías darme más contexto?"). La causa: pendingMathId
+  // era UN SOLO espacio compartido por todas las materias, y la respuesta de
+  // la otra materia lo sobrescribía con null.
+  //
+  // Ahora cada materia guarda el suyo. La clave es la materia con la que se
+  // hizo la petición — la misma que se envía en materia_id — así que el
+  // identificador siempre queda archivado junto al ejercicio al que pertenece,
+  // y volver a la materia lo recupera.
+  const pendientesPorMateria = useRef<Record<string, string | null>>({})
+  const clavePendiente = (materia: string) => (materia || '').toLowerCase().trim()
   const [modoConversacion, setModoConversacion] = useState(false)
   const [grabando, setGrabando]               = useState(false)
   const [reproduciendo, setReproduciendo]     = useState(false)
@@ -453,6 +465,7 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
     setNivelDificultad(1)
     setAciertosConsec(0)
     setPendingMathId(null)
+    pendientesPorMateria.current = {}
     setPracticaEnfoque('general')
   }
 
@@ -738,7 +751,8 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
           nivel_dificultad: nivelDificultad,
           practica_enfoque: practicaEnfoque,
           aciertos_consecutivos: aciertosConsec,
-          pending_math_interaction_id: pendingMathId,
+          // El pendiente de ESTA materia, no el de la última que se usó.
+          pending_math_interaction_id: pendientesPorMateria.current[clavePendiente(materiaActiva)] ?? null,
           entrada_voz: opciones.fromVoice || false,
           speech_confidence: opciones.speechConfidence ?? null,
         })
@@ -788,8 +802,13 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
         }])
       }
       if (data.materia_sugerida) setMateriaSugerida(data.materia_sugerida)
-      // Punto 2 asesor: conservar pendingMathId si incorrecto, limpiar si correcto o null
-      if ('pending_math_interaction_id' in data) setPendingMathId(data.pending_math_interaction_id)
+      // Punto 2 asesor: conservar pendingMathId si incorrecto, limpiar si correcto o null.
+      // Se archiva bajo la materia de ESTA petición: así la respuesta de otra
+      // materia ya no puede borrar el ejercicio pendiente de la anterior.
+      if ('pending_math_interaction_id' in data) {
+        pendientesPorMateria.current[clavePendiente(materiaActiva)] = data.pending_math_interaction_id
+        setPendingMathId(data.pending_math_interaction_id)
+      }
       if (data.nuevo_estado && data.nuevo_estado !== 'esperando_confirmacion_cambio_materia') setMateriaSugerida('')
 
       setMensajes(prev => [...prev, {
@@ -817,7 +836,22 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
         setError(e instanceof Error && e.message ? e.message : 'Hubo un problema. Intenta de nuevo.')
       }
     }
-    finally { clearTimeout(timeoutId); setCargando(false); inputRef.current?.focus() }
+    // Hallazgo real (QA 2026-07-31 y confirmado en rondas posteriores):
+    // "Enter no dispara el envío tras cambiar de materia; hay que usar el
+    // botón". La causa es de tiempos, no de la tecla: el textarea está
+    // disabled={cargando}, y aquí se llamaba a focus() en el mismo tick que
+    // setCargando(false). React todavía no había re-renderizado, así que el
+    // elemento seguía deshabilitado y un elemento deshabilitado no puede
+    // recibir foco — la llamada se perdía en silencio. El foco se quedaba
+    // donde estuviera (por ejemplo el chip de materia recién pulsado), y
+    // Enter activaba ESE botón en vez de enviar el mensaje.
+    // Se difiere el foco a después del repintado, cuando el textarea ya está
+    // habilitado.
+    finally {
+      clearTimeout(timeoutId)
+      setCargando(false)
+      requestAnimationFrame(() => inputRef.current?.focus())
+    }
   }
 
   // Conversación continua: cuando el búho termina de hablar, reactiva el
