@@ -79,8 +79,19 @@ function main() {
   const route = readFileSync(join(__dirname, '..', 'src/app/api/preguntar/route.ts'), 'utf8')
   assert.match(
     route,
-    /verificarPorSustitucion\(textoEjercicio, valorAlumno\) === true[\s\S]{0,400}estado: 'correcto'/,
+    /verificarPorSustitucion\(textoEjercicio, valorAlumno\) === true[\s\S]{0,600}estado: 'correcto'/,
     'la verificación por sustitución solo debe producir veredictos de acierto'
+  )
+
+  // Ampliación (reprueba QA 03/08): la sustitución también debe poder CORREGIR
+  // un "incorrecto" ya emitido. En logaritmos y exponenciales ese rechazo sale
+  // de un camino que no resuelve la ecuación — el mismo que produjo el falso
+  // negativo original. Si el valor del alumno satisface la ecuación, eso es
+  // prueba matemática de que acertó y gana sobre el veredicto previo.
+  assert.match(
+    route,
+    /evaluacionProtocolo\.estado === 'no_evaluable' \|\|\s*\n?\s*evaluacionProtocolo\.estado === 'incorrecto'/,
+    'un veredicto de "incorrecto" también debe poder corregirse por sustitución'
   )
 
   console.log('verificacion-por-sustitucion smoke passed')

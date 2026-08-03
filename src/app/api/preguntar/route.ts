@@ -2232,12 +2232,27 @@ export async function POST(req: NextRequest) {
     // sustituir su valor y ver si la satisface. Esto solo puede producir
     // ACIERTOS — si la sustitución no cuadra no se concluye nada, así que no
     // puede inventar un "incorrecto" nuevo.
-    if (!evaluacionProtocolo || evaluacionProtocolo.estado === 'no_evaluable') {
+    // Ampliación (QA 03/08, reprueba): la sustitución también manda sobre un
+    // veredicto de "incorrecto" ya emitido. Para logaritmos y exponenciales el
+    // "incorrecto" sale de un camino que no resuelve la ecuación (respaldo
+    // externo), justo el que produjo el falso negativo original: si devuelve
+    // un valor equivocado, el rechazo falso vuelve a pasar sin que nada lo
+    // detenga. Que el valor del alumno SATISFAGA la ecuación es una prueba
+    // matemática de que acertó, así que gana sobre cualquier veredicto
+    // previo. Sigue sin poder inventar aciertos: solo corrige rechazos.
+    if (
+      !evaluacionProtocolo ||
+      evaluacionProtocolo.estado === 'no_evaluable' ||
+      evaluacionProtocolo.estado === 'incorrecto'
+    ) {
+      const veniaDeUnRechazo = evaluacionProtocolo?.estado === 'incorrecto'
       const valorAlumno = normalizeStudentAnswer(pregunta)
       if (valorAlumno !== null) {
         const textoEjercicio = `${pendingMathPrompt || ''}\n${ultimoMensajeAsistente(historial)}`
         if (verificarPorSustitucion(textoEjercicio, valorAlumno) === true) {
-          console.log('✅ Respuesta confirmada por sustitución en la ecuación del enunciado')
+          console.log(veniaDeUnRechazo
+            ? '✅ Veredicto "incorrecto" corregido: la sustitución confirma que la respuesta del alumno satisface la ecuación'
+            : '✅ Respuesta confirmada por sustitución en la ecuación del enunciado')
           evaluacionProtocolo = {
             estado: 'correcto',
             feedback: buildConfirmacionPorSustitucion(valorAlumno, idiomaIngles),
