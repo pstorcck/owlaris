@@ -465,7 +465,16 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
     setNivelDificultad(1)
     setAciertosConsec(0)
     setPendingMathId(null)
-    pendientesPorMateria.current = {}
+    // Hallazgo real (QA 2026-08-04, caso B): aquí se borraba el mapa completo
+    // de ejercicios pendientes, y esta función se ejecuta justo al SELECCIONAR
+    // una materia (el chip del sidebar envía forceEstado 'esperando_materia').
+    // O sea, el borrado ocurría exactamente en el flujo que el arreglo debía
+    // proteger: al volver a Matemáticas el ejercicio ya se había perdido, el
+    // tutor trataba "x = 5" como una afirmación suelta e inventaba otro
+    // ejercicio. Esta función delimita la ventana del REPORTE, no el estado de
+    // los ejercicios: el pendiente sigue vivo del lado del servidor y debe
+    // sobrevivir a un cambio de materia. El borrado se hace ahora solo al
+    // cambiar de GRADO, donde el ejercicio sí deja de aplicar.
     setPracticaEnfoque('general')
   }
 
@@ -1676,6 +1685,10 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
             setSugerencias([])
             setEstadoChat('esperando_materia')
             reiniciarVentanaReporte()
+            // Al cambiar de grado el ejercicio pendiente ya no aplica: es de
+            // otro nivel. Este es el único punto donde el mapa debe vaciarse
+            // (ver la nota en reiniciarVentanaReporte).
+            pendientesPorMateria.current = {}
             await supabase.from('usuarios').update({ grado }).eq('id', usuario.id)
             const res: Response = await fetch('/api/preguntar', {
               method: 'POST',
