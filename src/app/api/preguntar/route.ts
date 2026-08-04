@@ -1905,7 +1905,29 @@ export async function POST(req: NextRequest) {
     let pendingMathDocumentoFuente: string | null = null
     let pendingMathPrompt: string | null = null
 
-    if (!pendingMathId && (isLikelyMathAnswerText(pregunta) || isPendingContextQuestion(pregunta) || isWorkedExampleRequest(pregunta) || isExerciseRecallRequest(pregunta))) {
+    // Hallazgo real CRÍTICO (logs de producción, 2026-08-04): tras tres
+    // intentos fallidos en el cliente, las trazas dieron la causa. Para este
+    // alumno (4to Bachillerato, Matemáticas) materia_uuid es NULL: la materia
+    // no existe como fila en la tabla `materias`, aunque el contenido se
+    // encuentre perfectamente en SharePoint. Los dos síntomas salían de ahí:
+    //
+    //   "Ejercicio pendiente ignorado: no se pudo confirmar a qué materia
+    //    pertenece"      → el guard del fix de Filosofía descartaba el propio
+    //                      ejercicio del alumno.
+    //   "NO recuperado: hay actividad posterior en la misma materia"
+    //                    → sin materia_uuid, el filtro por materia se omitía,
+    //                      así que "actividad posterior" pasaba a significar
+    //                      CUALQUIER interacción, incluida la pregunta que el
+    //                      alumno hizo en la otra materia.
+    //
+    // La solución no es relajar la restricción por materia (eso reabre la fuga
+    // de Filosofía) sino acotar por un dato que SIEMPRE existe:
+    // materia_nombre_snapshot, que se guarda en todas las inserciones. Es el
+    // mismo respaldo que ya usa la consulta de errores más arriba.
+    const materiaSnapshotPendiente = materiaConsultaSharePoint || null
+    const sePuedeAcotarPorMateria = !!materia_uuid || !!materiaSnapshotPendiente
+
+    if (!pendingMathId && sePuedeAcotarPorMateria && (isLikelyMathAnswerText(pregunta) || isPendingContextQuestion(pregunta) || isWorkedExampleRequest(pregunta) || isExerciseRecallRequest(pregunta))) {
       try {
         // Hallazgo real (QA Ronda 4, 2026-07-11): "no entiendo" (parte de
         // isPendingContextQuestion) también aparece dentro de preguntas
@@ -1932,6 +1954,7 @@ export async function POST(req: NextRequest) {
           .order('creado_en', { ascending: false })
           .limit(1)
         if (materia_uuid) pendingQuery = pendingQuery.eq('materia_id', materia_uuid)
+        else pendingQuery = pendingQuery.eq('materia_nombre_snapshot', materiaSnapshotPendiente)
         if (gradoEfectivo) pendingQuery = pendingQuery.eq('grado', gradoEfectivo)
         const { data: latestPendingMath } = await pendingQuery.maybeSingle()
         // Hallazgo real CRÍTICO (QA en vivo, 2026-07-13): esta búsqueda de
@@ -1954,7 +1977,11 @@ export async function POST(req: NextRequest) {
             .eq('usuario_id', user.id)
             .gt('creado_en', latestPendingMath.creado_en)
             .limit(1)
+          // Sin este respaldo, con materia_uuid null el filtro desaparecía y
+          // cualquier interacción en OTRA materia contaba como "actividad
+          // posterior", descartando el ejercicio propio del alumno.
           if (materia_uuid) actividadPosteriorQuery = actividadPosteriorQuery.eq('materia_id', materia_uuid)
+          else actividadPosteriorQuery = actividadPosteriorQuery.eq('materia_nombre_snapshot', materiaSnapshotPendiente)
           const { data: actividadPosterior } = await actividadPosteriorQuery.maybeSingle()
           if (!actividadPosterior) {
             pendingMathId = latestPendingMath.id
@@ -1989,22 +2016,29 @@ export async function POST(req: NextRequest) {
     // y se reutilizaba el ejercicio pendiente de CUALQUIER materia. Justo el
     // caso en que menos se sabe era el que menos comprobaba. Sin materia
     // confirmada no se reutiliza ningún pendiente.
-    if (pendingMathId && !materia_uuid) {
+    // El guard sigue siendo "fallar cerrado": sin poder atribuir el pendiente a
+    // la materia actual, no se reutiliza. Lo que cambia es que ahora la materia
+    // se puede confirmar por NOMBRE cuando no hay fila en `materias` — antes,
+    // ese caso (frecuente: 4to Bachillerato Matemáticas) descartaba el propio
+    // ejercicio del alumno, no solo el de otra materia.
+    if (pendingMathId && !sePuedeAcotarPorMateria) {
       console.log('⚠️ Ejercicio pendiente ignorado: no se pudo confirmar a qué materia pertenece')
     }
 
-    if (pendingMathId && materia_uuid) {
+    if (pendingMathId && sePuedeAcotarPorMateria) {
       try {
-        const preguntaPendienteQuery = supabase
+        let preguntaPendienteQuery = supabase
           .from('interacciones')
           .select('id, respuesta, operacion_canonica, op_estado, op_evaluada_en, documento_fuente')
           .eq('id', pendingMathId)
           .eq('usuario_id', user.id)
           .eq('op_estado', 'pendiente')
           .is('op_evaluada_en', null)
-          // Un ejercicio pendiente de otra materia nunca debe reutilizarse,
-          // sin importar qué ID mande el cliente.
-          .eq('materia_id', materia_uuid)
+        // Un ejercicio pendiente de otra materia nunca debe reutilizarse, sin
+        // importar qué ID mande el cliente. Se acota por uuid si existe y, si
+        // no, por el nombre de materia guardado en la propia fila.
+        if (materia_uuid) preguntaPendienteQuery = preguntaPendienteQuery.eq('materia_id', materia_uuid)
+        else preguntaPendienteQuery = preguntaPendienteQuery.eq('materia_nombre_snapshot', materiaSnapshotPendiente)
         const { data: preguntaPendiente } = await preguntaPendienteQuery
           .maybeSingle()
 

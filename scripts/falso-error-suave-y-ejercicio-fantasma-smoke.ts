@@ -66,18 +66,34 @@ function main() {
 
   assert.match(
     route,
-    /if \(pendingMathId && materia_uuid\) \{/,
+    /if \(pendingMathId && sePuedeAcotarPorMateria\) \{/,
     'la fila de ejercicio pendiente solo debe consultarse con la materia confirmada'
   )
-  assert.doesNotMatch(
-    route,
-    /if \(materia_uuid\) preguntaPendienteQuery = preguntaPendienteQuery\.eq\('materia_id'/,
-    'el filtro por materia ya no puede ser condicional: así es como fallaba abierto'
-  )
+
+  // La materia se confirma por uuid o, si no hay fila en `materias`, por el
+  // nombre guardado en la propia interacción. Sin este respaldo, un alumno
+  // cuya materia no está en esa tabla (caso real: 4to Bachillerato
+  // Matemáticas) perdía su PROPIO ejercicio, no solo el de otra materia.
   assert.match(
     route,
-    /\.eq\('op_estado', 'pendiente'\)[\s\S]{0,400}\.eq\('materia_id', materia_uuid\)/,
-    'la consulta del pendiente debe filtrar SIEMPRE por materia'
+    /const sePuedeAcotarPorMateria = !!materia_uuid \|\| !!materiaSnapshotPendiente/,
+    'debe poder confirmarse la materia por nombre cuando no hay uuid'
+  )
+
+  // Sigue fallando CERRADO: la consulta nunca queda sin filtro de materia.
+  assert.match(
+    route,
+    /if \(materia_uuid\) preguntaPendienteQuery = preguntaPendienteQuery\.eq\('materia_id', materia_uuid\)\s*\n\s*else preguntaPendienteQuery = preguntaPendienteQuery\.eq\('materia_nombre_snapshot', materiaSnapshotPendiente\)/,
+    'la consulta del pendiente debe filtrar SIEMPRE por materia, por uuid o por nombre'
+  )
+
+  // Lo mismo para el chequeo de actividad posterior del respaldo del servidor:
+  // sin filtro, una pregunta hecha en OTRA materia contaba como actividad
+  // posterior y descartaba el ejercicio.
+  assert.match(
+    route,
+    /else actividadPosteriorQuery = actividadPosteriorQuery\.eq\('materia_nombre_snapshot', materiaSnapshotPendiente\)/,
+    'la actividad posterior también debe acotarse por materia cuando no hay uuid'
   )
 
   console.log('falso-error-suave-y-ejercicio-fantasma smoke passed')
