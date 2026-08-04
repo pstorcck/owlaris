@@ -713,10 +713,73 @@ async function leerCarpetasGrado(
   return carpetas
 }
 
-function combinarConAccesosEspeciales(materias: string[], idiomaIngles: boolean, grado: string, incluirCompartidas: boolean) {
+// Hallazgo real (reporte del usuario, 2026-08-04): "se agregaron esas materias
+// pero no debió agregar las otras clases si no existían". Es exacto: las
+// materias normales salen de las carpetas REALES de SharePoint
+// (leerCarpetasGrado), pero Olimpiadas y Mineduc se agregaban por una lista
+// fija según el grado, sin comprobar que hubiera contenido. El alumno elegía
+// "Olimpiadas - Matemática" y chocaba con "no tengo suficiente información".
+//
+// Estas funciones resuelven qué programas especiales existen DE VERDAD,
+// listando sus carpetas. Se cachean porque se consultan en cada carga de
+// materias y su contenido cambia rara vez.
+const cacheProgramas = new Map<string, { materias: string[]; timestamp: number }>()
+
+async function listarMateriasDeCarpeta(carpetasColegio: string[], ...subruta: string[]): Promise<string[]> {
+  const clave = `${carpetasColegio.join('|')}/${subruta.join('/')}`
+  const cached = cacheProgramas.get(clave)
+  if (cached && Date.now() - cached.timestamp < CACHE_TTL) return cached.materias
+
+  const token = await getToken()
+  if (!token) return []
+  const driveId = process.env.SHAREPOINT_DRIVE_ID!
+  const materias: string[] = []
+  for (const carpetaColegio of carpetasColegio) {
+    const hijos = await listarHijos(driveId, token, 'Owlaris', carpetaColegio, ...subruta)
+    hijos
+      .filter((item: ArchivoSharePoint) => item.folder)
+      .forEach((item: ArchivoSharePoint) => pushUniqueSharePointName(materias, item.name))
+    if (materias.length > 0) break
+  }
+  cacheProgramas.set(clave, { materias, timestamp: Date.now() })
+  return materias
+}
+
+// Las carpetas de Olimpiadas se llaman sin tilde ("Matematica"); se traduce al
+// nombre visible que usa el resto de la app.
+const NOMBRE_VISIBLE_OLIMPIADAS: Record<string, string> = Object.fromEntries(
+  Object.entries(MATERIAS_OLIMPIADAS).map(([visible, carpeta]) => [normalizeSharePointKey(carpeta), visible])
+)
+
+async function materiasOlimpiadasDisponibles(carpetasCompartidas: string[]): Promise<string[]> {
+  const carpetas = await listarMateriasDeCarpeta(carpetasCompartidas, 'Olimpiadas de Ciencias')
+  return carpetas
+    .map((carpeta) => NOMBRE_VISIBLE_OLIMPIADAS[normalizeSharePointKey(carpeta)] || null)
+    .filter((materia): materia is string => Boolean(materia))
+}
+
+async function combinarConAccesosEspeciales(
+  materias: string[],
+  idiomaIngles: boolean,
+  grado: string,
+  incluirCompartidas: boolean,
+  carpetasCompartidas: string[] = []
+) {
   const out = Array.from(new Set(materias.filter(Boolean)))
   if (incluirCompartidas) {
-    getSharedSubjectChipsForGrade(grado).forEach(materia => {
+    const permitidosPorGrado = getSharedSubjectChipsForGrade(grado)
+    // Un programa especial solo se ofrece si además de estar permitido para el
+    // grado, tiene contenido cargado. Misma regla que las materias normales.
+    const olimpiadasReales = permitidosPorGrado.includes('Olimpiadas de Ciencias')
+      ? await materiasOlimpiadasDisponibles(carpetasCompartidas)
+      : []
+    const mineducReales = permitidosPorGrado.some((m) => m.startsWith('Mineduc'))
+      ? await listarMateriasDeCarpeta(carpetasCompartidas, 'Preparación pruebas nacionales', 'Mineduc', grado)
+      : []
+
+    permitidosPorGrado.forEach(materia => {
+      if (materia === 'Olimpiadas de Ciencias' && olimpiadasReales.length === 0) return
+      if (materia.startsWith('Mineduc') && mineducReales.length === 0) return
       if (!out.includes(materia)) out.push(materia)
     })
   }
@@ -1342,7 +1405,10 @@ export async function POST(req: NextRequest) {
     }
     const cargarMateriasDisponibles = async (grado: string) => {
       let carpetas = await leerCarpetasGrado(grado, idiomaIngles, carpetasColegio)
-      carpetas = combinarConAccesosEspeciales(carpetas, idiomaIngles, grado, incluirOlimpiadas)
+      carpetas = await combinarConAccesosEspeciales(
+        carpetas, idiomaIngles, grado, incluirOlimpiadas,
+        getSharePointFolderCandidates(colegioSharePoint, { sharedOnly: true })
+      )
       return carpetas
     }
 
@@ -1378,7 +1444,20 @@ export async function POST(req: NextRequest) {
       const disponibles = await cargarMateriasDisponibles(gradoMostrar || perfil.grado || '')
       const materiaSeleccionada = resolverMateriaSeleccionada(pregunta, disponibles, incluirOlimpiadas)
       if (materiaSeleccionada === '__OLIMPIADAS__') {
-        return NextResponse.json({ respuesta: 'Olimpiadas, perfecto. ¿De cuál materia? Matemática, Biología, Física, Química o Ciencias Naturales.', nuevo_estado: 'esperando_materia_olimpiadas', nombre_alumno: nombreAlumno, grado_detectado: gradoMostrar, materias_disponibles: disponibles, tokens: 0 })
+        // La lista de materias de Olimpiadas era un texto fijo con las cinco
+        // posibles, aunque no hubiera contenido de ninguna. Ahora se nombran
+        // solo las que existen de verdad.
+        const olimpiadasReales = await materiasOlimpiadasDisponibles(
+          getSharePointFolderCandidates(colegioSharePoint, { sharedOnly: true })
+        )
+        const nombresVisibles = olimpiadasReales.map((m) => m.replace('Olimpiadas - ', ''))
+        if (nombresVisibles.length === 0) {
+          return NextResponse.json({ respuesta: 'Todavía no hay material de Olimpiadas cargado para tu grado. Elige otra materia y seguimos.', nuevo_estado: 'esperando_materia', nombre_alumno: nombreAlumno, grado_detectado: gradoMostrar, materias_disponibles: disponibles, tokens: 0 })
+        }
+        const listado = nombresVisibles.length === 1
+          ? nombresVisibles[0]
+          : `${nombresVisibles.slice(0, -1).join(', ')} o ${nombresVisibles[nombresVisibles.length - 1]}`
+        return NextResponse.json({ respuesta: `Olimpiadas, perfecto. ¿De cuál materia? ${listado}.`, nuevo_estado: 'esperando_materia_olimpiadas', nombre_alumno: nombreAlumno, grado_detectado: gradoMostrar, materias_disponibles: disponibles, tokens: 0 })
       }
       if (!materiaSeleccionada) {
         return NextResponse.json({
