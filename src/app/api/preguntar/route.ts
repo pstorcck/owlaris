@@ -536,7 +536,23 @@ async function buscarContenido(colegio: ColegioSharePointInput, grado: string, m
       indice = await construirIndice(driveId, token, 'Owlaris', carpetaColegio, 'Olimpiadas de Ciencias', carpetaMateria)
       if (indice.length > 0) break
     }
-  } else {
+    if (indice.length === 0) {
+      console.log(`⚠️ Sin contenido en el programa compartido de Olimpiadas para "${materia}"; se busca como materia normal del grado`)
+    }
+  }
+  // Hallazgo real CRÍTICO (captura del usuario, 2026-08-04): en 5to Primaria
+  // del Colegio Escolaris, "Olimpiadas de Ciencias - Matemática" aparece como
+  // chip junto a "Matemáticas Primaria" o "Science Primaria" — es decir, es una
+  // carpeta REAL dentro del grado del alumno, no el programa compartido. Pero
+  // como su nombre empieza con "Olimpiadas", la búsqueda se desviaba al
+  // programa compartido (.../Olimpiadas de Ciencias/Matematica/Primaria), que
+  // no existe, y se rendía sin mirar nunca la carpeta de la que salió el chip.
+  // El alumno recibía "no tengo suficiente información" sobre contenido que sí
+  // estaba cargado.
+  //
+  // El programa compartido pasa a ser una PREFERENCIA, no un desvío exclusivo:
+  // si no da resultado, se busca como cualquier otra materia del grado.
+  if (indice.length === 0) {
     const buscarEnGrado = async (raizSegs: string[], gradoB: string, materiaB: string) => {
       const buscarPorBusqueda = async () => {
         for (const termino of [materiaB, ...getGradeFolderCandidates(gradoB)]) {

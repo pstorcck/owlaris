@@ -73,6 +73,27 @@ function main() {
     '5to Bachillerato sí puede ver Mineduc (si hay contenido)'
   )
 
+  // 5. Hallazgo real (captura del usuario, 2026-08-04): en 5to Primaria del
+  //    Colegio Escolaris, "Olimpiadas de Ciencias - Matemática" es una carpeta
+  //    REAL del grado del alumno (aparece como chip junto a "Matemáticas
+  //    Primaria" y "Science Primaria"). Pero como el nombre empieza con
+  //    "Olimpiadas", la búsqueda se desviaba al programa compartido —
+  //    .../Olimpiadas de Ciencias/Matematica/Primaria, que no existe — y se
+  //    rendía sin mirar nunca la carpeta de la que salió el chip.
+  //
+  //    El programa compartido debe ser una PREFERENCIA, no un desvío
+  //    exclusivo: si no da resultado, se busca como materia normal del grado.
+  assert.doesNotMatch(
+    route,
+    /if \(materia\.startsWith\('Olimpiadas'\) && permitirCompartidas\) \{[\s\S]{0,1200}\n  \} else \{/,
+    'la rama de Olimpiadas no puede ser excluyente: si no encuentra nada debe seguir la búsqueda normal'
+  )
+  assert.match(
+    route,
+    /Sin contenido en el programa compartido de Olimpiadas[\s\S]{0,1400}if \(indice\.length === 0\) \{\s*\n\s*const buscarEnGrado/,
+    'tras fallar el programa compartido debe ejecutarse la búsqueda normal del grado'
+  )
+
   console.log('programas-especiales-solo-si-existen smoke passed')
 }
 
