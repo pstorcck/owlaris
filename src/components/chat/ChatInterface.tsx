@@ -1861,10 +1861,30 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
                       // poder alcanzarse desde la UI mientras tanto.
                       .filter(mat => !(mat.includes('Conversar') || mat.includes('Conversation') || mat.includes('»')))
                       .map((mat, i) => {
-                      const esOlimpiadas = mat.toLowerCase().includes('olimpiadas') || mat.toLowerCase().includes('olympiad')
+                      // Hallazgo real CRÍTICO (captura del usuario,
+                      // 2026-08-04): esto usaba includes('olimpiadas'), así
+                      // que una materia REAL del grado llamada "Olimpiadas de
+                      // Ciencias - Matemática" también entraba aquí. En vez de
+                      // seleccionarse a sí misma, abría el submenú de cinco
+                      // botones fijos, y ese botón enviaba "Olimpiadas -
+                      // Matemática" — el programa COMPARTIDO, que no existe
+                      // para ese colegio. El alumno nunca podía llegar a su
+                      // propia carpeta, y por eso ningún arreglo del servidor
+                      // cambiaba nada.
+                      //
+                      // El submenú es solo para el chip del PROGRAMA
+                      // compartido, que se llama exactamente "Olimpiadas de
+                      // Ciencias". Cualquier otra materia que mencione
+                      // olimpiadas en su nombre es una materia normal del
+                      // grado y se selecciona como tal.
+                      const claveMat = normalizarNombreMateria(mat)
+                      // Estilo de trofeo para cualquier materia de olimpiadas...
+                      const pareceOlimpiadas = claveMat.includes('olimpiadas') || claveMat.includes('olympiad')
+                      // ...pero el submenú solo para el chip del programa compartido.
+                      const esOlimpiadas = claveMat === 'olimpiadas de ciencias' || claveMat === 'science olympiad'
                       const esActiva = !esOlimpiadas && mismaMateria(mat, materiaAlumno)
-                      const bg = esOlimpiadas ? 'linear-gradient(135deg,#d97706,#b45309)' : (MATERIA_COLORES[mat] || 'linear-gradient(135deg,#7C3AED,#5B21B6)')
-                      const IconMateria = esOlimpiadas ? Trophy : (MATERIA_ICONOS[mat] || GraduationCap)
+                      const bg = pareceOlimpiadas ? 'linear-gradient(135deg,#d97706,#b45309)' : (MATERIA_COLORES[mat] || 'linear-gradient(135deg,#7C3AED,#5B21B6)')
+                      const IconMateria = pareceOlimpiadas ? Trophy : (MATERIA_ICONOS[mat] || GraduationCap)
                       return (
                         <button key={i} className="o-chip"
                           style={esActiva ? {
