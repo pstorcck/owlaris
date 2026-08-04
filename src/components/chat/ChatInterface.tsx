@@ -814,8 +814,22 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
       // Punto 2 asesor: conservar pendingMathId si incorrecto, limpiar si correcto o null.
       // Se archiva bajo la materia de ESTA petición: así la respuesta de otra
       // materia ya no puede borrar el ejercicio pendiente de la anterior.
+      // Hallazgo real (QA 2026-08-04, reprueba del caso B): se archivaba bajo
+      // materiaActiva, que en el turno de CAMBIO de materia todavía es la
+      // materia ANTERIOR — el chip del sidebar solo fuerza el estado, no la
+      // materia. Y ese turno responde con pending_math_interaction_id: null
+      // (route.ts:1425), así que el cambio de materia borraba el pendiente de
+      // la materia que el alumno acababa de dejar. Por eso al volver ya no
+      // existía y el tutor pedía "más contexto".
+      //
+      // Se archiva bajo la materia que el SERVIDOR declara activa para ese
+      // turno: en un cambio, ese null queda guardado bajo la materia nueva
+      // (donde efectivamente no hay ejercicio) y el pendiente de la anterior
+      // se conserva. Cubre igual el cambio por chip y el cambio escribiendo
+      // el nombre de la materia.
       if ('pending_math_interaction_id' in data) {
-        pendientesPorMateria.current[clavePendiente(materiaActiva)] = data.pending_math_interaction_id
+        const materiaDelTurno = data.materia_detectada || materiaActiva
+        pendientesPorMateria.current[clavePendiente(materiaDelTurno)] = data.pending_math_interaction_id
         setPendingMathId(data.pending_math_interaction_id)
       }
       if (data.nuevo_estado && data.nuevo_estado !== 'esperando_confirmacion_cambio_materia') setMateriaSugerida('')

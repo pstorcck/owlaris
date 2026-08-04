@@ -28,12 +28,26 @@ function main() {
     'debe enviarse el ejercicio pendiente de la materia activa, no un valor compartido'
   )
 
-  // 2. Se ARCHIVA bajo la misma clave, para que la respuesta de otra materia
-  //    no pueda pisar el pendiente de la anterior.
+  // 2. LA CONDICIÓN QUE FALLÓ EN LA REPRUEBA: se archiva bajo la materia que
+  //    el SERVIDOR declara activa, no bajo materiaActiva. En el turno de
+  //    cambio de materia, materiaActiva todavía es la ANTERIOR (el chip solo
+  //    fuerza el estado), y ese turno responde pending_math_interaction_id:
+  //    null — así que archivar por materiaActiva borraba el pendiente de la
+  //    materia recién abandonada.
   assert.match(
     chat,
+    /const materiaDelTurno = data\.materia_detectada \|\| materiaActiva/,
+    'el turno debe archivarse bajo la materia que declara el servidor, no bajo materiaActiva'
+  )
+  assert.match(
+    chat,
+    /pendientesPorMateria\.current\[clavePendiente\(materiaDelTurno\)\] = data\.pending_math_interaction_id/,
+    'la respuesta debe archivarse bajo la materia de ese turno'
+  )
+  assert.doesNotMatch(
+    chat,
     /pendientesPorMateria\.current\[clavePendiente\(materiaActiva\)\] = data\.pending_math_interaction_id/,
-    'la respuesta debe archivarse bajo la materia de su propia petición'
+    'archivar por materiaActiva es exactamente lo que borraba el pendiente al cambiar de materia'
   )
 
   // 3. LA CONDICIÓN QUE FALLÓ: reiniciarVentanaReporte NO puede vaciar el
