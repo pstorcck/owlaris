@@ -94,6 +94,35 @@ function main() {
     'tras fallar el programa compartido debe ejecutarse la búsqueda normal del grado'
   )
 
+  // 6. Hallazgo real (reporte del usuario, 2026-08-04): "son varios grados a
+  //    donde se metió esta clase de Olimpiadas y el menú no debería desplegar
+  //    todas las clases si no está el contenido".
+  //
+  //    El menú se armaba listando SUBCARPETAS del grado, sin comprobar que
+  //    tuvieran archivos. Una carpeta vacía —o creada en varios grados "por si
+  //    acaso"— producía un chip igual, y el alumno chocaba con "no tengo
+  //    suficiente información" sobre una materia que el menú le ofreció.
+  assert.match(
+    route,
+    /async function carpetaTieneContenido\(/,
+    'debe existir la comprobación de que una carpeta de materia tiene contenido'
+  )
+  assert.match(
+    route,
+    /carpetasCandidatas\.map\(\(nombre\) =>\s*\n\s*carpetaTieneContenido\(/,
+    'el menú debe comprobar el contenido de cada carpeta candidata'
+  )
+  assert.match(
+    route,
+    /const carpetasMateria = carpetasCandidatas\.filter\(\(_, i\) => conContenido\[i\]\)/,
+    'solo las carpetas con contenido deben llegar al menú'
+  )
+  assert.match(
+    route,
+    /Materias ocultas del menú por no tener contenido/,
+    'debe quedar traza de qué materias se ocultaron y en qué grado'
+  )
+
   console.log('programas-especiales-solo-si-existen smoke passed')
 }
 

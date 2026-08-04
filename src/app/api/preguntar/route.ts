@@ -673,6 +673,44 @@ async function leerConfig(): Promise<string> {
   return contenido
 }
 
+// Hallazgo real (reporte del usuario, 2026-08-04): "son varios grados a donde
+// se metió esta clase de Olimpiadas y el menú no debería desplegar todas las
+// clases si no está el contenido".
+//
+// El menú se armaba listando SUBCARPETAS del grado, sin comprobar que
+// tuvieran archivos dentro. Una carpeta vacía —o creada en varios grados "por
+// si acaso"— producía un chip igual, y el alumno chocaba con "no tengo
+// suficiente información" sobre una materia que el propio menú le ofreció.
+//
+// Se revisa hasta dos niveles porque una materia puede organizar su material
+// en subcarpetas (por unidad o bimestre) en vez de dejar los archivos sueltos.
+const cacheCarpetaConContenido = new Map<string, { tiene: boolean; timestamp: number }>()
+
+async function carpetaTieneContenido(
+  driveId: string,
+  token: string,
+  segs: string[],
+  profundidad = 2
+): Promise<boolean> {
+  const clave = `${segs.join('/')}#${profundidad}`
+  const cached = cacheCarpetaConContenido.get(clave)
+  if (cached && Date.now() - cached.timestamp < CACHE_TTL) return cached.tiene
+
+  const hijos = await listarHijos(driveId, token, ...segs)
+  let tiene = hijos.some((i: ArchivoSharePoint) => i.file && isSupportedSharePointContentFile(i.name))
+  if (!tiene && profundidad > 1) {
+    const subcarpetas = hijos.filter((i: ArchivoSharePoint) => i.folder).map((i: ArchivoSharePoint) => i.name)
+    if (subcarpetas.length > 0) {
+      const resultados = await Promise.all(
+        subcarpetas.map((nombre) => carpetaTieneContenido(driveId, token, [...segs, nombre], profundidad - 1))
+      )
+      tiene = resultados.some(Boolean)
+    }
+  }
+  cacheCarpetaConContenido.set(clave, { tiene, timestamp: Date.now() })
+  return tiene
+}
+
 async function leerCarpetasGrado(
   grado: string,
   idiomaIngles: boolean,
@@ -705,9 +743,22 @@ async function leerCarpetasGrado(
         if (res.ok) {
           const data = await res.json()
           const value = data.value || []
-          const carpetasMateria = value
+          // Una carpeta de materia solo entra al menú si tiene contenido
+          // dentro (ver carpetaTieneContenido). Las comprobaciones van en
+          // paralelo y cacheadas para no agregar latencia perceptible.
+          const carpetasCandidatas: string[] = value
             .filter((i: {folder?:unknown}) => i.folder)
             .map((i: {name:string}) => i.name)
+          const conContenido = await Promise.all(
+            carpetasCandidatas.map((nombre) =>
+              carpetaTieneContenido(driveId, token, ['Owlaris', carpetaColegio, gradoCarpeta, nombre])
+            )
+          )
+          const carpetasVacias = carpetasCandidatas.filter((_, i) => !conContenido[i])
+          if (carpetasVacias.length > 0) {
+            console.log(`⚠️ Materias ocultas del menú por no tener contenido en ${gradoCarpeta}: ${carpetasVacias.join(', ')}`)
+          }
+          const carpetasMateria = carpetasCandidatas.filter((_, i) => conContenido[i])
           const materiasDesdeDocumentos = value
             .filter((i: {file?:unknown; name:string}) => i.file && isSupportedSharePointContentFile(i.name))
             .map((i: {name:string}) => inferSubjectFromSharePointName(i.name))
