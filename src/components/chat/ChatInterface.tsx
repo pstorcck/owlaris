@@ -827,9 +827,22 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
       // (donde efectivamente no hay ejercicio) y el pendiente de la anterior
       // se conserva. Cubre igual el cambio por chip y el cambio escribiendo
       // el nombre de la materia.
-      if ('pending_math_interaction_id' in data) {
-        const materiaDelTurno = data.materia_detectada || materiaActiva
-        pendientesPorMateria.current[clavePendiente(materiaDelTurno)] = data.pending_math_interaction_id
+      // Hallazgo real (QA 2026-08-04, 3er intento): los DOS turnos del
+      // ida-y-vuelta por chip son selecciones de materia, y el servidor
+      // responde a ambos con pending_math_interaction_id: null sin insertar
+      // ninguna fila (route.ts:1395 devuelve temprano). Archivar ese null
+      // borraba el pendiente: primero lo intenté por materiaActiva (borraba el
+      // de la materia que se dejaba) y luego por materia_detectada (borraba el
+      // de la materia a la que se volvía). Las dos veces el borrado ocurría en
+      // el turno de cambio.
+      //
+      // La respuesta de una selección de materia no dice nada sobre el estado
+      // de los ejercicios: no se archiva. Solo los turnos reales de trabajo
+      // actualizan el mapa, bajo su propia materia.
+      const fueSeleccionDeMateria =
+        estadoActivo === 'esperando_materia' || estadoActivo === 'esperando_materia_olimpiadas'
+      if ('pending_math_interaction_id' in data && !fueSeleccionDeMateria) {
+        pendientesPorMateria.current[clavePendiente(materiaActiva)] = data.pending_math_interaction_id
         setPendingMathId(data.pending_math_interaction_id)
       }
       if (data.nuevo_estado && data.nuevo_estado !== 'esperando_confirmacion_cambio_materia') setMateriaSugerida('')

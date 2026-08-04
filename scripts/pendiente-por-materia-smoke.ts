@@ -28,26 +28,27 @@ function main() {
     'debe enviarse el ejercicio pendiente de la materia activa, no un valor compartido'
   )
 
-  // 2. LA CONDICIÓN QUE FALLÓ EN LA REPRUEBA: se archiva bajo la materia que
-  //    el SERVIDOR declara activa, no bajo materiaActiva. En el turno de
-  //    cambio de materia, materiaActiva todavía es la ANTERIOR (el chip solo
-  //    fuerza el estado), y ese turno responde pending_math_interaction_id:
-  //    null — así que archivar por materiaActiva borraba el pendiente de la
-  //    materia recién abandonada.
+  // 2. LA CONDICIÓN QUE FALLÓ TRES VECES: en un turno de SELECCIÓN de materia
+  //    no se archiva nada. Los dos turnos del ida-y-vuelta por chip son
+  //    selecciones, el servidor responde a ambos con
+  //    pending_math_interaction_id: null y sin insertar fila, así que
+  //    archivar ese null borra el pendiente. Da igual bajo qué clave se
+  //    archive: por materiaActiva se borraba el de la materia que se dejaba,
+  //    y por materia_detectada el de la materia a la que se volvía.
   assert.match(
     chat,
-    /const materiaDelTurno = data\.materia_detectada \|\| materiaActiva/,
-    'el turno debe archivarse bajo la materia que declara el servidor, no bajo materiaActiva'
+    /const fueSeleccionDeMateria =\s*\n?\s*estadoActivo === 'esperando_materia' \|\| estadoActivo === 'esperando_materia_olimpiadas'/,
+    'debe distinguirse el turno de selección de materia'
   )
   assert.match(
     chat,
-    /pendientesPorMateria\.current\[clavePendiente\(materiaDelTurno\)\] = data\.pending_math_interaction_id/,
-    'la respuesta debe archivarse bajo la materia de ese turno'
+    /if \('pending_math_interaction_id' in data && !fueSeleccionDeMateria\) \{/,
+    'un turno de selección de materia NO debe tocar el mapa de pendientes'
   )
-  assert.doesNotMatch(
+  assert.match(
     chat,
     /pendientesPorMateria\.current\[clavePendiente\(materiaActiva\)\] = data\.pending_math_interaction_id/,
-    'archivar por materiaActiva es exactamente lo que borraba el pendiente al cambiar de materia'
+    'los turnos reales de trabajo sí archivan bajo su propia materia'
   )
 
   // 3. LA CONDICIÓN QUE FALLÓ: reiniciarVentanaReporte NO puede vaciar el

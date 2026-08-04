@@ -1956,7 +1956,20 @@ export async function POST(req: NextRequest) {
             .limit(1)
           if (materia_uuid) actividadPosteriorQuery = actividadPosteriorQuery.eq('materia_id', materia_uuid)
           const { data: actividadPosterior } = await actividadPosteriorQuery.maybeSingle()
-          if (!actividadPosterior) pendingMathId = latestPendingMath.id
+          if (!actividadPosterior) {
+            pendingMathId = latestPendingMath.id
+            console.log(`✅ Ejercicio pendiente recuperado por el servidor (${pendingMathId})`)
+          } else {
+            console.log('⚠️ Ejercicio pendiente NO recuperado: hay actividad posterior en la misma materia')
+          }
+        } else {
+          // Hallazgo real (QA 2026-08-04): tras tres intentos de arreglo del
+          // lado del cliente, el ida-y-vuelta por chip seguía perdiendo el
+          // ejercicio. Este respaldo del servidor es el camino que NO depende
+          // del navegador, y hasta ahora era mudo: si no recuperaba nada, no
+          // quedaba ninguna traza de por qué. Sin esto, la única forma de
+          // avanzar era suponer.
+          console.log(`⚠️ Ejercicio pendiente NO recuperado: sin fila pendiente reciente (materia_uuid=${materia_uuid || 'null'}, grado=${gradoEfectivo || 'null'})`)
         }
       } catch (error) {
         console.error('No se pudo recuperar OP pendiente reciente:', error)
