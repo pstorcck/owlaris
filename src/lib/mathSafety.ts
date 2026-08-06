@@ -543,6 +543,91 @@ export function solveOperation(op: string): number | null {
   }
 }
 
+// Hallazgo real (QA de verificación, 2026-08-03, casos 1 y 2): tras quitar la
+// operación basura de logaritmos, "log(x) + log(2) = 3" y "3^(x-2) = 81"
+// dejaron de calificarse mal por plantilla... y pasaron a calificarse mal por
+// el modelo: a la respuesta correcta entregada directa ("500", "6") contestaba
+// "no llegaste a la respuesta correcta", con una pista matemáticamente válida
+// pero un veredicto falso. Al no poder resolver esas formas, el protocolo se
+// abstenía y nadie verificaba nada.
+//
+// No hace falta RESOLVER la ecuación para saber si el alumno acertó: basta
+// SUSTITUIR su valor y comprobar si la satisface. Eso cubre logaritmos,
+// exponenciales y trigonometría sin escribir un solver para cada familia, y
+// es justo lo que el QA pidió: comparar contra la solución real, no contra
+// una operación extraída.
+//
+// Solo puede producir veredictos de ACIERTO. Si la sustitución no cuadra no se
+// concluye nada (puede ser una forma que no sabemos leer), así que este camino
+// nunca puede inventar un "incorrecto".
+const SUBINDICES: Record<string, string> = {
+  '₀': '0', '₁': '1', '₂': '2', '₃': '3', '₄': '4',
+  '₅': '5', '₆': '6', '₇': '7', '₈': '8', '₉': '9',
+}
+
+function aSintaxisMathjs(expr: string): string {
+  let out = expr
+    .replace(/[₀-₉]/g, (c) => SUBINDICES[c] || c)
+    .replace(/×/g, '*')
+    .replace(/÷/g, '/')
+    .replace(/−/g, '-')
+    .replace(/\s+/g, '')
+  // log con base explícita (log3(x), log_3(x)) → LOGB(x,3), protegido del
+  // reemplazo genérico de abajo.
+  out = out.replace(/log_?(\d+)\(([^()]*)\)/gi, (_m, base, arg) => `LOGB(${arg},${base})`)
+  // ln = logaritmo natural, que en mathjs es log()
+  out = out.replace(/\bln\(/gi, 'LN(')
+  // "log" sin base, en notación escolar, es base 10
+  out = out.replace(/\blog\(/gi, 'log10(')
+  return out.replace(/LOGB\(/g, 'log(').replace(/LN\(/g, 'log(')
+}
+
+// Una línea es una ecuación si, al quitarle los tokens matemáticos, no queda
+// ninguna letra suelta: así la prosa del enunciado nunca se confunde con la
+// ecuación.
+function esLineaEcuacion(linea: string): boolean {
+  const resto = linea
+    .replace(/log_?\d*/gi, '')
+    .replace(/\bln\b/gi, '')
+    .replace(/[0-9xX+\-*/^().,=\s₀-₉]/g, '')
+  return resto.length === 0
+}
+
+export function extraerEcuacionConIncognita(texto: string): string | null {
+  for (const linea of (texto || '').split('\n')) {
+    const limpia = linea.trim()
+    if (!limpia.includes('=') || !/x/i.test(limpia)) continue
+    if ((limpia.match(/=/g) || []).length !== 1) continue
+    if (!esLineaEcuacion(limpia)) continue
+    return limpia
+  }
+  return null
+}
+
+export function verificarPorSustitucion(textoEjercicio: string, valorAlumno: number): boolean | null {
+  const ecuacion = extraerEcuacionConIncognita(textoEjercicio)
+  if (!ecuacion) return null
+  const [izquierda, derecha] = ecuacion.split('=')
+  try {
+    const scope = { x: valorAlumno }
+    const a = evaluate(aSintaxisMathjs(izquierda), scope)
+    const b = evaluate(aSintaxisMathjs(derecha), scope)
+    if (typeof a !== 'number' || typeof b !== 'number') return null
+    if (!isFinite(a) || !isFinite(b)) return null
+    const tolerancia = 1e-6 * Math.max(1, Math.abs(a), Math.abs(b))
+    return Math.abs(a - b) <= tolerancia
+  } catch {
+    return null
+  }
+}
+
+export function buildConfirmacionPorSustitucion(valor: number, idiomaIngles: boolean): string {
+  const v = formatNumberForFeedback(valor)
+  return idiomaIngles
+    ? `Correct. You solved it yourself — ${v} satisfies the equation. Now you don't just have the answer, you know how to find it again. Can you explain how you got there?`
+    : `¡Correcto! Lo resolviste tú: ${v} cumple la ecuación. Ahora no solo tienes la respuesta, ya sabes cómo encontrarla otra vez. ¿Puedes explicarme cómo llegaste a ese resultado?`
+}
+
 export function compareAnswers(studentN: number | null, correctN: number | null): string {
   if (studentN === null || correctN === null) return 'no_evaluable'
   if (Math.abs(studentN - correctN) < 0.001) return 'correcto'
@@ -1293,11 +1378,94 @@ export function inferRectangleWordProblem(text: string): string | null {
   return tienePerimetro ? `2*(${a}+${b})` : `${a}*${b}`
 }
 
+// Hallazgo real CRÍTICO (QA en vivo, 2026-07-31 y 2026-08-01, Química —
+// Americano, estequiometría): ante la respuesta CORRECTA (34 g de NH₃) el
+// tutor contestaba, palabra por palabra, "Todavía no. Piensa la división
+// como repartir en grupos iguales..." sin revisar ningún paso.
+//
+// La causa: en "N2 + 3H2 -> 2NH3" los subíndices y coeficientes de la
+// ecuación química se leían como una operación ARITMÉTICA. De ahí salía
+// "2+3", que resuelve 5, y contra ese 5 se juzgaba el 34 del alumno. Como el
+// protocolo determinístico responde directo cuando tiene veredicto, la
+// respuesta canónica de "incorrecto" reemplazaba por completo la revisión
+// del procedimiento — por eso no se revisaba ni un paso y el texto era
+// siempre idéntico.
+//
+// Una fórmula química no es una expresión aritmética: de un texto con
+// notación de reacción no debe inferirse ninguna operación. Se exige la
+// flecha de reacción junto a una fórmula, o al menos dos fórmulas, para no
+// confundir un "H2" suelto en prosa con una ecuación real.
+const FLECHA_REACCION = /->|→|⟶|⇌|<=>|<->/
+// Símbolos de elemento reales (los de dos letras primero, para que "Cl" no se
+// lea como "C" + "l"). Usar la lista en vez de "cualquier mayúscula + dígito"
+// evita marcar como química un "punto P2" o un "vértice A1" de geometría.
+const SIMBOLOS_ELEMENTO = 'He|Li|Be|Ne|Na|Mg|Al|Si|Cl|Ar|Ca|Fe|Cu|Zn|Ag|Br|Ba|Pb|Hg|Sn|Ni|Cr|Mn|H|B|C|N|O|F|P|S|K|I'
+// Sin \b al inicio: en "3H2" el coeficiente pega con la fórmula y no hay
+// frontera de palabra donde empieza el símbolo.
+const FORMULA_QUIMICA = new RegExp(`(?:(?:${SIMBOLOS_ELEMENTO})\\d*)+`, 'g')
+
+export function pareceEcuacionQuimica(texto: string): boolean {
+  const limpio = texto || ''
+  if (!limpio) return false
+  // Solo cuentan los tokens con subíndice: "C" o "I" sueltas son una letra
+  // cualquiera del texto, no una fórmula.
+  const formulas = Array.from(limpio.matchAll(FORMULA_QUIMICA))
+    .map((m) => m[0])
+    .filter((token) => /\d/.test(token) && token.length >= 2)
+  if (formulas.length === 0) return false
+  if (FLECHA_REACCION.test(limpio)) return true
+  return new Set(formulas).size >= 2
+}
+
+// Hallazgo real CRÍTICO (QA en vivo, Matemáticas 5to Bach — ecuaciones
+// exponenciales y logarítmicas). Ante el ejercicio "log₃(x) = 4" el alumno
+// respondió "81" (correcto) y recibió: "Todavía no. Primero distribuye la
+// multiplicación dentro del paréntesis y luego sigue despejando x."
+//
+// Cadena reproducida:
+//   1. Del enunciado se infería la operación "(x)=4" — el extractor se comía
+//      el "log₃" y dejaba la basura entre paréntesis.
+//   2. isSafeCanonicalOperation la daba por válida.
+//   3. Esa basura SÍ se puede resolver (da 4), así que el 81 del alumno se
+//      calificaba contra 4 → "incorrecto".
+//   4. buildGuidedMathHint veía "=", "x" y "(" y soltaba la pista de
+//      distribuir el paréntesis, ajena por completo a un logaritmo.
+//
+// Estas funciones (log, ln, raíces, trigonometría) no las resuelve el motor;
+// extraer "la parte aritmética" de una ecuación que las contiene produce una
+// operación que ya no representa el ejercicio. Cuando aparecen, no se infiere
+// nada y el ejercicio se revisa con el modelo.
+const FUNCIONES_NO_SOPORTADAS = /\b(?:log|ln|sen|sin|cos|tan|cot|sec|csc|arcsen|arcsin|arccos|arctan|sqrt|raiz|raíz)\b|√|log\s*[₀-₉]|[₀-₉]/i
+
+export function usaFuncionNoSoportada(texto: string): boolean {
+  return FUNCIONES_NO_SOPORTADAS.test(texto || '')
+}
+
+// Una operación solo sirve como referencia de calificación si además de ser
+// "segura" el motor la puede RESOLVER. Aceptar uma ecuación irresoluble
+// (2^(x+1)=16) la deja entrar al índice y al campo operacion_canonica, donde
+// después sostiene veredictos que nadie puede verificar.
+export function esOperacionCalificable(op: string | null): boolean {
+  if (!op || !isSafeCanonicalOperation(op)) return false
+  if (usaFuncionNoSoportada(op)) return false
+  return solveOperation(op) !== null || solveQuadraticEquation(op) !== null
+}
+
 export function inferCanonicalOperationFromText(text: string): string | null {
   if (!text) return null
 
+  // El [OP:] explícito se respeta siempre: ahí el tutor DECLARÓ la operación
+  // a verificar, y un paso aritmético de estequiometría (2 * 17) es
+  // perfectamente verificable. Lo que no puede hacerse es adivinar una
+  // operación leyendo la notación de la reacción (ver arriba).
   const explicit = extractCanonicalOperation(text)
   if (explicit && isSafeCanonicalOperation(explicit)) return normalizeOperation(explicit)
+
+  if (pareceEcuacionQuimica(text)) return null
+
+  // Ver la nota de FUNCIONES_NO_SOPORTADAS: de "log₃(x) = 4" se extraía
+  // "(x)=4". Antes que una operación equivocada, ninguna.
+  if (usaFuncionNoSoportada(text)) return null
 
   const relevantText = selectRelevantMathText(text)
   const normalized = relevantText

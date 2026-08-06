@@ -11,7 +11,7 @@ import { pareceIdiomaDistinto } from '@/lib/languageDetection'
 import { buscarStaffColegio, buscarSuperadmins, elegirFuenteDestinatariosAlerta, resolverDestinatariosAlerta, type DestinatarioAlerta } from '@/lib/alertaEmergencia'
 import { verificarLimiteFrecuencia } from '@/lib/rateLimit'
 import { isExplicitTableRequest, looksLikeMarkdownTable, sanitizeChatFormatting } from '@/lib/chatFormatting'
-import { detectarMateriaDesdeTexto, esClaseDePracticaDeIngles, isLanguageSwitchRequest, materiaActualEnSistemaCNB, normalizarMateria, resolverMateriaRealDisponible } from '@/lib/materiaDetection'
+import { detectarMateriaDesdeTexto, esClaseDePracticaDeIngles, isLanguageSwitchRequest, materiaActualEnSistemaCNB, materiaParaOfrecerCambio, normalizarMateria, resolverMateriaRealDisponible } from '@/lib/materiaDetection'
 import { isExplicitCourseSwitchRequest } from '@/lib/courseSwitchDetection'
 import { detectarPatronErrores, isReviewMistakesRequest, primeraOperacionValida } from '@/lib/mistakeReview'
 import { limpiarTemaGeneral } from '@/lib/temaGeneral'
@@ -53,6 +53,7 @@ import {
   isSharePointPlainTextContent,
   isSupportedSharePointContentFile,
   normalizeSharePointKey,
+  preferirArchivosDeMateria,
   pushUniqueSharePointName,
   resolverCarpetasExistentes,
   sharePointNameMatchesSubject,
@@ -68,11 +69,15 @@ import {
   inferRectangleWordProblem,
   inferSubtractionWordProblem,
   isLikelyNumericSubject,
+  buildConfirmacionPorSustitucion,
+  esOperacionCalificable,
   isSafeCanonicalOperation,
   looksLikeMathPracticePrompt,
   normalizeStudentAnswer,
   opCoincideConTexto,
+  pareceEcuacionQuimica,
   solveOperation,
+  verificarPorSustitucion,
   type MathEvaluation,
 } from '@/lib/mathSafety'
 import {
@@ -531,7 +536,23 @@ async function buscarContenido(colegio: ColegioSharePointInput, grado: string, m
       indice = await construirIndice(driveId, token, 'Owlaris', carpetaColegio, 'Olimpiadas de Ciencias', carpetaMateria)
       if (indice.length > 0) break
     }
-  } else {
+    if (indice.length === 0) {
+      console.log(`⚠️ Sin contenido en el programa compartido de Olimpiadas para "${materia}"; se busca como materia normal del grado`)
+    }
+  }
+  // Hallazgo real CRÍTICO (captura del usuario, 2026-08-04): en 5to Primaria
+  // del Colegio Escolaris, "Olimpiadas de Ciencias - Matemática" aparece como
+  // chip junto a "Matemáticas Primaria" o "Science Primaria" — es decir, es una
+  // carpeta REAL dentro del grado del alumno, no el programa compartido. Pero
+  // como su nombre empieza con "Olimpiadas", la búsqueda se desviaba al
+  // programa compartido (.../Olimpiadas de Ciencias/Matematica/Primaria), que
+  // no existe, y se rendía sin mirar nunca la carpeta de la que salió el chip.
+  // El alumno recibía "no tengo suficiente información" sobre contenido que sí
+  // estaba cargado.
+  //
+  // El programa compartido pasa a ser una PREFERENCIA, no un desvío exclusivo:
+  // si no da resultado, se busca como cualquier otra materia del grado.
+  if (indice.length === 0) {
     const buscarEnGrado = async (raizSegs: string[], gradoB: string, materiaB: string) => {
       const buscarPorBusqueda = async () => {
         for (const termino of [materiaB, ...getGradeFolderCandidates(gradoB)]) {
@@ -594,6 +615,15 @@ async function buscarContenido(colegio: ColegioSharePointInput, grado: string, m
     if (permitirCompartidas && indice.length === 0) indice = await construirIndice(driveId, token, 'Owlaris', CARPETA_COMPARTIDA, 'Preparación pruebas nacionales', 'Mineduc', materia)
   }
   if (indice.length === 0) return { contenido: '', archivo: null }
+  // Hallazgo real (QA 2026-07-31, Química): el índice traía un archivo de
+  // Física y se elegía sin más. Si hay material de la materia pedida, el de
+  // otra materia no compite (ver preferirArchivosDeMateria).
+  const indiceDeLaMateria = preferirArchivosDeMateria(indice, materia)
+  if (indiceDeLaMateria.length !== indice.length) {
+    const descartados = indice.filter((d) => !indiceDeLaMateria.includes(d)).map((d) => d.nombre)
+    console.log(`⚠️ Contenido de otra materia descartado para "${materia}": ${descartados.join(', ')}`)
+  }
+  indice = indiceDeLaMateria
   const preguntaLower = pregunta.toLowerCase()
   const palabras = preguntaLower.split(/\s+/).filter(p => p.length > 3)
   let mejorPuntaje = -1, mejorDoc = indice[0]
@@ -606,7 +636,10 @@ async function buscarContenido(colegio: ColegioSharePointInput, grado: string, m
     }
     if (puntaje > mejorPuntaje) { mejorPuntaje = puntaje; mejorDoc = doc }
   }
-  console.log(`✅ Elegido: ${mejorDoc.nombre} (puntaje: ${mejorPuntaje})`)
+  // Se registra también la UBICACIÓN, no solo el nombre: cuando el archivo
+  // elegido no corresponde a la materia, lo que hace falta saber para
+  // arreglarlo es en qué carpeta de SharePoint está colgado.
+  console.log(`✅ Elegido: ${mejorDoc.nombre} (materia: ${materia}, ubicación: ${mejorDoc.tema}, puntaje: ${mejorPuntaje})`)
   const cacheKey = `${colegiosSP.join('|')}/${grado}/${materia}/${mejorDoc.nombre}`
   const cached = cacheContenido.get(cacheKey)
   if (cached && Date.now() - cached.timestamp < CACHE_TTL) return { contenido: cached.contenido, archivo: cached.archivo }
@@ -638,6 +671,44 @@ async function leerConfig(): Promise<string> {
   }
   cacheConfig.set('config', { contenido, timestamp: Date.now() })
   return contenido
+}
+
+// Hallazgo real (reporte del usuario, 2026-08-04): "son varios grados a donde
+// se metió esta clase de Olimpiadas y el menú no debería desplegar todas las
+// clases si no está el contenido".
+//
+// El menú se armaba listando SUBCARPETAS del grado, sin comprobar que
+// tuvieran archivos dentro. Una carpeta vacía —o creada en varios grados "por
+// si acaso"— producía un chip igual, y el alumno chocaba con "no tengo
+// suficiente información" sobre una materia que el propio menú le ofreció.
+//
+// Se revisa hasta dos niveles porque una materia puede organizar su material
+// en subcarpetas (por unidad o bimestre) en vez de dejar los archivos sueltos.
+const cacheCarpetaConContenido = new Map<string, { tiene: boolean; timestamp: number }>()
+
+async function carpetaTieneContenido(
+  driveId: string,
+  token: string,
+  segs: string[],
+  profundidad = 2
+): Promise<boolean> {
+  const clave = `${segs.join('/')}#${profundidad}`
+  const cached = cacheCarpetaConContenido.get(clave)
+  if (cached && Date.now() - cached.timestamp < CACHE_TTL) return cached.tiene
+
+  const hijos = await listarHijos(driveId, token, ...segs)
+  let tiene = hijos.some((i: ArchivoSharePoint) => i.file && isSupportedSharePointContentFile(i.name))
+  if (!tiene && profundidad > 1) {
+    const subcarpetas = hijos.filter((i: ArchivoSharePoint) => i.folder).map((i: ArchivoSharePoint) => i.name)
+    if (subcarpetas.length > 0) {
+      const resultados = await Promise.all(
+        subcarpetas.map((nombre) => carpetaTieneContenido(driveId, token, [...segs, nombre], profundidad - 1))
+      )
+      tiene = resultados.some(Boolean)
+    }
+  }
+  cacheCarpetaConContenido.set(clave, { tiene, timestamp: Date.now() })
+  return tiene
 }
 
 async function leerCarpetasGrado(
@@ -672,9 +743,22 @@ async function leerCarpetasGrado(
         if (res.ok) {
           const data = await res.json()
           const value = data.value || []
-          const carpetasMateria = value
+          // Una carpeta de materia solo entra al menú si tiene contenido
+          // dentro (ver carpetaTieneContenido). Las comprobaciones van en
+          // paralelo y cacheadas para no agregar latencia perceptible.
+          const carpetasCandidatas: string[] = value
             .filter((i: {folder?:unknown}) => i.folder)
             .map((i: {name:string}) => i.name)
+          const conContenido = await Promise.all(
+            carpetasCandidatas.map((nombre) =>
+              carpetaTieneContenido(driveId, token, ['Owlaris', carpetaColegio, gradoCarpeta, nombre])
+            )
+          )
+          const carpetasVacias = carpetasCandidatas.filter((_, i) => !conContenido[i])
+          if (carpetasVacias.length > 0) {
+            console.log(`⚠️ Materias ocultas del menú por no tener contenido en ${gradoCarpeta}: ${carpetasVacias.join(', ')}`)
+          }
+          const carpetasMateria = carpetasCandidatas.filter((_, i) => conContenido[i])
           const materiasDesdeDocumentos = value
             .filter((i: {file?:unknown; name:string}) => i.file && isSupportedSharePointContentFile(i.name))
             .map((i: {name:string}) => inferSubjectFromSharePointName(i.name))
@@ -696,10 +780,73 @@ async function leerCarpetasGrado(
   return carpetas
 }
 
-function combinarConAccesosEspeciales(materias: string[], idiomaIngles: boolean, grado: string, incluirCompartidas: boolean) {
+// Hallazgo real (reporte del usuario, 2026-08-04): "se agregaron esas materias
+// pero no debió agregar las otras clases si no existían". Es exacto: las
+// materias normales salen de las carpetas REALES de SharePoint
+// (leerCarpetasGrado), pero Olimpiadas y Mineduc se agregaban por una lista
+// fija según el grado, sin comprobar que hubiera contenido. El alumno elegía
+// "Olimpiadas - Matemática" y chocaba con "no tengo suficiente información".
+//
+// Estas funciones resuelven qué programas especiales existen DE VERDAD,
+// listando sus carpetas. Se cachean porque se consultan en cada carga de
+// materias y su contenido cambia rara vez.
+const cacheProgramas = new Map<string, { materias: string[]; timestamp: number }>()
+
+async function listarMateriasDeCarpeta(carpetasColegio: string[], ...subruta: string[]): Promise<string[]> {
+  const clave = `${carpetasColegio.join('|')}/${subruta.join('/')}`
+  const cached = cacheProgramas.get(clave)
+  if (cached && Date.now() - cached.timestamp < CACHE_TTL) return cached.materias
+
+  const token = await getToken()
+  if (!token) return []
+  const driveId = process.env.SHAREPOINT_DRIVE_ID!
+  const materias: string[] = []
+  for (const carpetaColegio of carpetasColegio) {
+    const hijos = await listarHijos(driveId, token, 'Owlaris', carpetaColegio, ...subruta)
+    hijos
+      .filter((item: ArchivoSharePoint) => item.folder)
+      .forEach((item: ArchivoSharePoint) => pushUniqueSharePointName(materias, item.name))
+    if (materias.length > 0) break
+  }
+  cacheProgramas.set(clave, { materias, timestamp: Date.now() })
+  return materias
+}
+
+// Las carpetas de Olimpiadas se llaman sin tilde ("Matematica"); se traduce al
+// nombre visible que usa el resto de la app.
+const NOMBRE_VISIBLE_OLIMPIADAS: Record<string, string> = Object.fromEntries(
+  Object.entries(MATERIAS_OLIMPIADAS).map(([visible, carpeta]) => [normalizeSharePointKey(carpeta), visible])
+)
+
+async function materiasOlimpiadasDisponibles(carpetasCompartidas: string[]): Promise<string[]> {
+  const carpetas = await listarMateriasDeCarpeta(carpetasCompartidas, 'Olimpiadas de Ciencias')
+  return carpetas
+    .map((carpeta) => NOMBRE_VISIBLE_OLIMPIADAS[normalizeSharePointKey(carpeta)] || null)
+    .filter((materia): materia is string => Boolean(materia))
+}
+
+async function combinarConAccesosEspeciales(
+  materias: string[],
+  idiomaIngles: boolean,
+  grado: string,
+  incluirCompartidas: boolean,
+  carpetasCompartidas: string[] = []
+) {
   const out = Array.from(new Set(materias.filter(Boolean)))
   if (incluirCompartidas) {
-    getSharedSubjectChipsForGrade(grado).forEach(materia => {
+    const permitidosPorGrado = getSharedSubjectChipsForGrade(grado)
+    // Un programa especial solo se ofrece si además de estar permitido para el
+    // grado, tiene contenido cargado. Misma regla que las materias normales.
+    const olimpiadasReales = permitidosPorGrado.includes('Olimpiadas de Ciencias')
+      ? await materiasOlimpiadasDisponibles(carpetasCompartidas)
+      : []
+    const mineducReales = permitidosPorGrado.some((m) => m.startsWith('Mineduc'))
+      ? await listarMateriasDeCarpeta(carpetasCompartidas, 'Preparación pruebas nacionales', 'Mineduc', grado)
+      : []
+
+    permitidosPorGrado.forEach(materia => {
+      if (materia === 'Olimpiadas de Ciencias' && olimpiadasReales.length === 0) return
+      if (materia.startsWith('Mineduc') && mineducReales.length === 0) return
       if (!out.includes(materia)) out.push(materia)
     })
   }
@@ -1325,7 +1472,10 @@ export async function POST(req: NextRequest) {
     }
     const cargarMateriasDisponibles = async (grado: string) => {
       let carpetas = await leerCarpetasGrado(grado, idiomaIngles, carpetasColegio)
-      carpetas = combinarConAccesosEspeciales(carpetas, idiomaIngles, grado, incluirOlimpiadas)
+      carpetas = await combinarConAccesosEspeciales(
+        carpetas, idiomaIngles, grado, incluirOlimpiadas,
+        getSharePointFolderCandidates(colegioSharePoint, { sharedOnly: true })
+      )
       return carpetas
     }
 
@@ -1361,7 +1511,20 @@ export async function POST(req: NextRequest) {
       const disponibles = await cargarMateriasDisponibles(gradoMostrar || perfil.grado || '')
       const materiaSeleccionada = resolverMateriaSeleccionada(pregunta, disponibles, incluirOlimpiadas)
       if (materiaSeleccionada === '__OLIMPIADAS__') {
-        return NextResponse.json({ respuesta: 'Olimpiadas, perfecto. ¿De cuál materia? Matemática, Biología, Física, Química o Ciencias Naturales.', nuevo_estado: 'esperando_materia_olimpiadas', nombre_alumno: nombreAlumno, grado_detectado: gradoMostrar, materias_disponibles: disponibles, tokens: 0 })
+        // La lista de materias de Olimpiadas era un texto fijo con las cinco
+        // posibles, aunque no hubiera contenido de ninguna. Ahora se nombran
+        // solo las que existen de verdad.
+        const olimpiadasReales = await materiasOlimpiadasDisponibles(
+          getSharePointFolderCandidates(colegioSharePoint, { sharedOnly: true })
+        )
+        const nombresVisibles = olimpiadasReales.map((m) => m.replace('Olimpiadas - ', ''))
+        if (nombresVisibles.length === 0) {
+          return NextResponse.json({ respuesta: 'Todavía no hay material de Olimpiadas cargado para tu grado. Elige otra materia y seguimos.', nuevo_estado: 'esperando_materia', nombre_alumno: nombreAlumno, grado_detectado: gradoMostrar, materias_disponibles: disponibles, tokens: 0 })
+        }
+        const listado = nombresVisibles.length === 1
+          ? nombresVisibles[0]
+          : `${nombresVisibles.slice(0, -1).join(', ')} o ${nombresVisibles[nombresVisibles.length - 1]}`
+        return NextResponse.json({ respuesta: `Olimpiadas, perfecto. ¿De cuál materia? ${listado}.`, nuevo_estado: 'esperando_materia_olimpiadas', nombre_alumno: nombreAlumno, grado_detectado: gradoMostrar, materias_disponibles: disponibles, tokens: 0 })
       }
       if (!materiaSeleccionada) {
         return NextResponse.json({
@@ -1434,8 +1597,17 @@ export async function POST(req: NextRequest) {
         // 8"; "Biología" es exclusiva de Grado 10 ahí). Se resuelve contra
         // la materia real disponible del alumno antes de ofrecerla.
         const materiasDisponiblesParaAviso: string[] = Array.isArray(body.materias_disponibles) ? body.materias_disponibles : []
-        const materiaParaOfrecer = resolverMateriaRealDisponible(materiaDetectada, materiasDisponiblesParaAviso)
-        return NextResponse.json({ respuesta: 'Estamos en ' + materia_id + '. "' + pregunta.trim() + '" parece un tema de ' + materiaParaOfrecer + '. ¿Quieres seguir con ' + materia_id + ' o cambiar a ' + materiaParaOfrecer + '?', nuevo_estado: 'esperando_confirmacion_cambio_materia', materia_sugerida: materiaParaOfrecer, tokens: 0 })
+        // Hallazgo real (reporte del usuario, 2026-08-04, Ciencias 3ero
+        // Básico): se ofrecía cambiar a "Física" por una pregunta de velocidad
+        // y tiempo, aunque en ese grado no existe la clase de Física y aunque
+        // Ciencias Naturales cubre ese tema. materiaParaOfrecerCambio devuelve
+        // null en ambos casos y el turno sigue normal, respondiendo en la
+        // materia elegida.
+        const materiaParaOfrecer = materiaParaOfrecerCambio(materiaDetectada, materia_id, materiasDisponiblesParaAviso)
+        if (materiaParaOfrecer) {
+          return NextResponse.json({ respuesta: 'Estamos en ' + materia_id + '. "' + pregunta.trim() + '" parece un tema de ' + materiaParaOfrecer + '. ¿Quieres seguir con ' + materia_id + ' o cambiar a ' + materiaParaOfrecer + '?', nuevo_estado: 'esperando_confirmacion_cambio_materia', materia_sugerida: materiaParaOfrecer, tokens: 0 })
+        }
+        console.log(`⚠️ Cambio de materia NO ofrecido: "${materiaDetectada}" no está disponible para el alumno o es una rama de ${materia_id}`)
       }
     }
 
@@ -1888,7 +2060,29 @@ export async function POST(req: NextRequest) {
     let pendingMathDocumentoFuente: string | null = null
     let pendingMathPrompt: string | null = null
 
-    if (!pendingMathId && (isLikelyMathAnswerText(pregunta) || isPendingContextQuestion(pregunta) || isWorkedExampleRequest(pregunta) || isExerciseRecallRequest(pregunta))) {
+    // Hallazgo real CRÍTICO (logs de producción, 2026-08-04): tras tres
+    // intentos fallidos en el cliente, las trazas dieron la causa. Para este
+    // alumno (4to Bachillerato, Matemáticas) materia_uuid es NULL: la materia
+    // no existe como fila en la tabla `materias`, aunque el contenido se
+    // encuentre perfectamente en SharePoint. Los dos síntomas salían de ahí:
+    //
+    //   "Ejercicio pendiente ignorado: no se pudo confirmar a qué materia
+    //    pertenece"      → el guard del fix de Filosofía descartaba el propio
+    //                      ejercicio del alumno.
+    //   "NO recuperado: hay actividad posterior en la misma materia"
+    //                    → sin materia_uuid, el filtro por materia se omitía,
+    //                      así que "actividad posterior" pasaba a significar
+    //                      CUALQUIER interacción, incluida la pregunta que el
+    //                      alumno hizo en la otra materia.
+    //
+    // La solución no es relajar la restricción por materia (eso reabre la fuga
+    // de Filosofía) sino acotar por un dato que SIEMPRE existe:
+    // materia_nombre_snapshot, que se guarda en todas las inserciones. Es el
+    // mismo respaldo que ya usa la consulta de errores más arriba.
+    const materiaSnapshotPendiente = materiaConsultaSharePoint || null
+    const sePuedeAcotarPorMateria = !!materia_uuid || !!materiaSnapshotPendiente
+
+    if (!pendingMathId && sePuedeAcotarPorMateria && (isLikelyMathAnswerText(pregunta) || isPendingContextQuestion(pregunta) || isWorkedExampleRequest(pregunta) || isExerciseRecallRequest(pregunta))) {
       try {
         // Hallazgo real (QA Ronda 4, 2026-07-11): "no entiendo" (parte de
         // isPendingContextQuestion) también aparece dentro de preguntas
@@ -1915,6 +2109,7 @@ export async function POST(req: NextRequest) {
           .order('creado_en', { ascending: false })
           .limit(1)
         if (materia_uuid) pendingQuery = pendingQuery.eq('materia_id', materia_uuid)
+        else pendingQuery = pendingQuery.eq('materia_nombre_snapshot', materiaSnapshotPendiente)
         if (gradoEfectivo) pendingQuery = pendingQuery.eq('grado', gradoEfectivo)
         const { data: latestPendingMath } = await pendingQuery.maybeSingle()
         // Hallazgo real CRÍTICO (QA en vivo, 2026-07-13): esta búsqueda de
@@ -1937,16 +2132,55 @@ export async function POST(req: NextRequest) {
             .eq('usuario_id', user.id)
             .gt('creado_en', latestPendingMath.creado_en)
             .limit(1)
+          // Sin este respaldo, con materia_uuid null el filtro desaparecía y
+          // cualquier interacción en OTRA materia contaba como "actividad
+          // posterior", descartando el ejercicio propio del alumno.
           if (materia_uuid) actividadPosteriorQuery = actividadPosteriorQuery.eq('materia_id', materia_uuid)
+          else actividadPosteriorQuery = actividadPosteriorQuery.eq('materia_nombre_snapshot', materiaSnapshotPendiente)
           const { data: actividadPosterior } = await actividadPosteriorQuery.maybeSingle()
-          if (!actividadPosterior) pendingMathId = latestPendingMath.id
+          if (!actividadPosterior) {
+            pendingMathId = latestPendingMath.id
+            console.log(`✅ Ejercicio pendiente recuperado por el servidor (${pendingMathId})`)
+          } else {
+            console.log('⚠️ Ejercicio pendiente NO recuperado: hay actividad posterior en la misma materia')
+          }
+        } else {
+          // Hallazgo real (QA 2026-08-04): tras tres intentos de arreglo del
+          // lado del cliente, el ida-y-vuelta por chip seguía perdiendo el
+          // ejercicio. Este respaldo del servidor es el camino que NO depende
+          // del navegador, y hasta ahora era mudo: si no recuperaba nada, no
+          // quedaba ninguna traza de por qué. Sin esto, la única forma de
+          // avanzar era suponer.
+          console.log(`⚠️ Ejercicio pendiente NO recuperado: sin fila pendiente reciente (materia_uuid=${materia_uuid || 'null'}, grado=${gradoEfectivo || 'null'})`)
         }
       } catch (error) {
         console.error('No se pudo recuperar OP pendiente reciente:', error)
       }
     }
 
-    if (pendingMathId) {
+    // Hallazgo real CRÍTICO (QA en vivo, Filosofía 4to Bach): a una pregunta
+    // conceptual (racionalismo de Descartes vs. empirismo de Locke) el tutor
+    // respondió "No voy a resolver el ejercicio activo por ti... usemos
+    // 0.2 * 50, resuelve hasta llegar a 10" — una pista aritmética de OTRA
+    // materia, sin ninguna relación con lo preguntado.
+    //
+    // La defensa por materia de abajo ya existía, pero fallaba ABIERTA: el
+    // filtro solo se aplicaba "if (materia_uuid)". Cuando la materia no
+    // resuelve a una fila de `materias` (un chip que no está en esa tabla,
+    // como pasó con Filosofía), materia_uuid queda null, el filtro se omitía
+    // y se reutilizaba el ejercicio pendiente de CUALQUIER materia. Justo el
+    // caso en que menos se sabe era el que menos comprobaba. Sin materia
+    // confirmada no se reutiliza ningún pendiente.
+    // El guard sigue siendo "fallar cerrado": sin poder atribuir el pendiente a
+    // la materia actual, no se reutiliza. Lo que cambia es que ahora la materia
+    // se puede confirmar por NOMBRE cuando no hay fila en `materias` — antes,
+    // ese caso (frecuente: 4to Bachillerato Matemáticas) descartaba el propio
+    // ejercicio del alumno, no solo el de otra materia.
+    if (pendingMathId && !sePuedeAcotarPorMateria) {
+      console.log('⚠️ Ejercicio pendiente ignorado: no se pudo confirmar a qué materia pertenece')
+    }
+
+    if (pendingMathId && sePuedeAcotarPorMateria) {
       try {
         let preguntaPendienteQuery = supabase
           .from('interacciones')
@@ -1955,9 +2189,11 @@ export async function POST(req: NextRequest) {
           .eq('usuario_id', user.id)
           .eq('op_estado', 'pendiente')
           .is('op_evaluada_en', null)
-        // Defensa adicional: un ejercicio pendiente de otra materia nunca debe
-        // reutilizarse, sin importar qué ID mande el cliente.
+        // Un ejercicio pendiente de otra materia nunca debe reutilizarse, sin
+        // importar qué ID mande el cliente. Se acota por uuid si existe y, si
+        // no, por el nombre de materia guardado en la propia fila.
         if (materia_uuid) preguntaPendienteQuery = preguntaPendienteQuery.eq('materia_id', materia_uuid)
+        else preguntaPendienteQuery = preguntaPendienteQuery.eq('materia_nombre_snapshot', materiaSnapshotPendiente)
         const { data: preguntaPendiente } = await preguntaPendienteQuery
           .maybeSingle()
 
@@ -2183,6 +2419,80 @@ export async function POST(req: NextRequest) {
           idiomaIngles,
           process.env.WOLFRAM_APP_ID
         )
+      }
+    }
+
+    // Hallazgo real (QA de verificación, 2026-08-03, casos 1 y 2): tras quitar
+    // la operación basura de logaritmos, "log(x) + log(2) = 3" y
+    // "3^(x-2) = 81" dejaron de fallar por plantilla y pasaron a fallar por el
+    // modelo: a la respuesta correcta entregada directa ("500", "6") contestaba
+    // "no llegaste a la respuesta correcta", con una pista válida pero un
+    // veredicto falso. Al no poder resolver esas formas, el protocolo se
+    // abstenía y nadie verificaba nada.
+    //
+    // No hace falta resolver la ecuación para saber si el alumno acertó: basta
+    // sustituir su valor y ver si la satisface. Esto solo puede producir
+    // ACIERTOS — si la sustitución no cuadra no se concluye nada, así que no
+    // puede inventar un "incorrecto" nuevo.
+    // Ampliación (QA 03/08, reprueba): la sustitución también manda sobre un
+    // veredicto de "incorrecto" ya emitido. Para logaritmos y exponenciales el
+    // "incorrecto" sale de un camino que no resuelve la ecuación (respaldo
+    // externo), justo el que produjo el falso negativo original: si devuelve
+    // un valor equivocado, el rechazo falso vuelve a pasar sin que nada lo
+    // detenga. Que el valor del alumno SATISFAGA la ecuación es una prueba
+    // matemática de que acertó, así que gana sobre cualquier veredicto
+    // previo. Sigue sin poder inventar aciertos: solo corrige rechazos.
+    if (
+      !evaluacionProtocolo ||
+      evaluacionProtocolo.estado === 'no_evaluable' ||
+      evaluacionProtocolo.estado === 'incorrecto'
+    ) {
+      const veniaDeUnRechazo = evaluacionProtocolo?.estado === 'incorrecto'
+      const valorAlumno = normalizeStudentAnswer(pregunta)
+      if (valorAlumno !== null) {
+        const textoEjercicio = `${pendingMathPrompt || ''}\n${ultimoMensajeAsistente(historial)}`
+        if (verificarPorSustitucion(textoEjercicio, valorAlumno) === true) {
+          console.log(veniaDeUnRechazo
+            ? '✅ Veredicto "incorrecto" corregido: la sustitución confirma que la respuesta del alumno satisface la ecuación'
+            : '✅ Respuesta confirmada por sustitución en la ecuación del enunciado')
+          evaluacionProtocolo = {
+            estado: 'correcto',
+            feedback: buildConfirmacionPorSustitucion(valorAlumno, idiomaIngles),
+            correctAnswer: valorAlumno,
+            op: null,
+            guardActivado: false,
+            pasoIntermedio: false,
+            procedimientoMostrado: true,
+          }
+        }
+      }
+    }
+
+    // Hallazgo real CRÍTICO (QA en vivo, 31/07 y 01/08, Química — Americano,
+    // estequiometría): ante la respuesta CORRECTA (34 g de NH₃) el tutor
+    // contestaba con la plantilla fija de "incorrecto" y su pista de DIVISIÓN,
+    // sin revisar ningún paso.
+    //
+    // La operación con la que se calificaba NO venía de la inferencia (esa ya
+    // se bloqueó para notación química): venía de la etiqueta [OP:] que el
+    // propio modelo escribe y que se guarda en operacion_canonica, y que en un
+    // problema de estequiometría corresponde a UN PASO intermedio (una
+    // conversión, de ahí la división). El alumno responde la cantidad FINAL,
+    // que legítimamente no coincide con ese paso — y el protocolo la declaraba
+    // incorrecta. Como este bloque responde directo, la plantilla reemplazaba
+    // por completo la revisión del procedimiento.
+    //
+    // En un ejercicio con notación de reacción, una etiqueta [OP:] no
+    // representa la respuesta final, así que no puede sostener un veredicto de
+    // "incorrecto" venga de donde venga (etiqueta del modelo, fila pendiente
+    // ya guardada, o inferencia). Se descarta el veredicto y el turno sigue a
+    // la revisión real paso a paso del modelo. Un "correcto" sí se conserva:
+    // ahí el valor del alumno coincide y confirmarlo no le hace daño a nadie.
+    if (evaluacionProtocolo && evaluacionProtocolo.estado === 'incorrecto') {
+      const textoEjercicioActivo = `${pendingMathPrompt || ''}\n${ultimoMensajeAsistente(historial)}`
+      if (pareceEcuacionQuimica(textoEjercicioActivo)) {
+        console.log('⚠️ Veredicto determinístico "incorrecto" descartado: ejercicio con notación química, la etiqueta [OP:] no representa la respuesta final')
+        evaluacionProtocolo = null
       }
     }
 
@@ -3069,7 +3379,23 @@ ${contextoContenido}`
       ? opAlumno
       : null
     let opFinalRespuesta = opGeometriaEnRespuesta || _opExtraidaValida || opInferida || opDesdeAlumno
-    let opValidaEnRespuesta = isSafeCanonicalOperation(opFinalRespuesta) ? opFinalRespuesta : null
+    // Ver la nota del descarte de veredicto más arriba (QA 01/08, Química): en
+    // un ejercicio con notación de reacción, la etiqueta [OP:] del modelo es a
+    // lo sumo UN PASO de la conversión, nunca la respuesta final que el alumno
+    // va a escribir. Guardarla en operacion_canonica es lo que dejaba la fila
+    // pendiente envenenada para todos los turnos siguientes. No se guarda: el
+    // ejercicio se revisa paso a paso con el modelo, como cualquier otro
+    // problema que el protocolo determinístico no puede calificar.
+    if (opFinalRespuesta && pareceEcuacionQuimica(respuesta)) {
+      console.log('⚠️ Operación canónica NO guardada: el ejercicio usa notación química, la etiqueta [OP:] no representa la respuesta final')
+      opFinalRespuesta = null
+    }
+    // Hallazgo real CRÍTICO (QA en vivo, Matemáticas 5to Bach): "2^(x+1)=16"
+    // pasaba isSafeCanonicalOperation pero el motor NO la resuelve. Se
+    // guardaba igual en operacion_canonica y quedaba sosteniendo veredictos
+    // que nadie podía verificar. Una operación solo sirve de referencia si se
+    // puede resolver; si no, el ejercicio se revisa con el modelo.
+    let opValidaEnRespuesta = esOperacionCalificable(opFinalRespuesta) ? opFinalRespuesta : null
     // Antes esta rama (la que responde cuando el alumno recién elige un
     // tema, ej. "multiplicaciones") nunca llamaba a resolveMathPracticeFocus
     // — se quedaba con el enfoque ya persistido (o "general" si era la

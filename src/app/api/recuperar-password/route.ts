@@ -55,11 +55,18 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true })
     }
 
-    // Se arma el enlace contra NUESTRO callback en vez de usar
+    // Se arma el enlace contra NUESTRAS pantallas en vez de usar
     // properties.action_link: así el flujo no depende de la configuración de
-    // "Redirect URLs" del proyecto ni del tipo de flow (PKCE/implícito), y
-    // el callback verifica el token con verifyOtp del lado del servidor.
-    const enlace = `${origen}/auth/callback?token_hash=${encodeURIComponent(data.properties.hashed_token)}&type=recovery&next=/reset-password`
+    // "Redirect URLs" del proyecto ni del tipo de flow (PKCE/implícito).
+    //
+    // Hallazgo real (logs de producción, 2026-07-31): antes apuntaba a
+    // /auth/callback, que canjeaba el token al ABRIRSE — y un escáner de
+    // correo lo abría (HEAD) un segundo antes que la persona, quemando el
+    // token de un solo uso; el clic real caía en /login?error=enlace_invalido.
+    // Ahora apunta a la pantalla, que solo muestra el formulario: el token se
+    // canjea recién al ENVIAR la contraseña nueva (/api/reset-password), algo
+    // que ningún prefetch hace.
+    const enlace = `${origen}/reset-password?token_hash=${encodeURIComponent(data.properties.hashed_token)}&type=recovery`
 
     if (!process.env.RESEND_API_KEY) {
       console.error('recuperar-password: falta RESEND_API_KEY, no se puede enviar el correo')

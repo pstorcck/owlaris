@@ -353,6 +353,18 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
   const [sidebarAbierto, setSidebarAbierto]   = useState(false)
   const [sidebarColapsado, setSidebarColapsado] = useState(false)
   const [pendingMathId, setPendingMathId]     = useState<string | null>(null)
+  // Hallazgo real (QA de verificación, 2026-08-03): al dejar un ejercicio sin
+  // responder en Matemáticas, cambiar a otra materia y volver, el ejercicio ya
+  // no se retomaba ("¿podrías darme más contexto?"). La causa: pendingMathId
+  // era UN SOLO espacio compartido por todas las materias, y la respuesta de
+  // la otra materia lo sobrescribía con null.
+  //
+  // Ahora cada materia guarda el suyo. La clave es la materia con la que se
+  // hizo la petición — la misma que se envía en materia_id — así que el
+  // identificador siempre queda archivado junto al ejercicio al que pertenece,
+  // y volver a la materia lo recupera.
+  const pendientesPorMateria = useRef<Record<string, string | null>>({})
+  const clavePendiente = (materia: string) => (materia || '').toLowerCase().trim()
   const [modoConversacion, setModoConversacion] = useState(false)
   const [grabando, setGrabando]               = useState(false)
   const [reproduciendo, setReproduciendo]     = useState(false)
@@ -453,6 +465,16 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
     setNivelDificultad(1)
     setAciertosConsec(0)
     setPendingMathId(null)
+    // Hallazgo real (QA 2026-08-04, caso B): aquí se borraba el mapa completo
+    // de ejercicios pendientes, y esta función se ejecuta justo al SELECCIONAR
+    // una materia (el chip del sidebar envía forceEstado 'esperando_materia').
+    // O sea, el borrado ocurría exactamente en el flujo que el arreglo debía
+    // proteger: al volver a Matemáticas el ejercicio ya se había perdido, el
+    // tutor trataba "x = 5" como una afirmación suelta e inventaba otro
+    // ejercicio. Esta función delimita la ventana del REPORTE, no el estado de
+    // los ejercicios: el pendiente sigue vivo del lado del servidor y debe
+    // sobrevivir a un cambio de materia. El borrado se hace ahora solo al
+    // cambiar de GRADO, donde el ejercicio sí deja de aplicar.
     setPracticaEnfoque('general')
   }
 
@@ -738,7 +760,8 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
           nivel_dificultad: nivelDificultad,
           practica_enfoque: practicaEnfoque,
           aciertos_consecutivos: aciertosConsec,
-          pending_math_interaction_id: pendingMathId,
+          // El pendiente de ESTA materia, no el de la última que se usó.
+          pending_math_interaction_id: pendientesPorMateria.current[clavePendiente(materiaActiva)] ?? null,
           entrada_voz: opciones.fromVoice || false,
           speech_confidence: opciones.speechConfidence ?? null,
         })
@@ -788,8 +811,40 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
         }])
       }
       if (data.materia_sugerida) setMateriaSugerida(data.materia_sugerida)
-      // Punto 2 asesor: conservar pendingMathId si incorrecto, limpiar si correcto o null
-      if ('pending_math_interaction_id' in data) setPendingMathId(data.pending_math_interaction_id)
+      // Punto 2 asesor: conservar pendingMathId si incorrecto, limpiar si correcto o null.
+      // Se archiva bajo la materia de ESTA petición: así la respuesta de otra
+      // materia ya no puede borrar el ejercicio pendiente de la anterior.
+      // Hallazgo real (QA 2026-08-04, reprueba del caso B): se archivaba bajo
+      // materiaActiva, que en el turno de CAMBIO de materia todavía es la
+      // materia ANTERIOR — el chip del sidebar solo fuerza el estado, no la
+      // materia. Y ese turno responde con pending_math_interaction_id: null
+      // (route.ts:1425), así que el cambio de materia borraba el pendiente de
+      // la materia que el alumno acababa de dejar. Por eso al volver ya no
+      // existía y el tutor pedía "más contexto".
+      //
+      // Se archiva bajo la materia que el SERVIDOR declara activa para ese
+      // turno: en un cambio, ese null queda guardado bajo la materia nueva
+      // (donde efectivamente no hay ejercicio) y el pendiente de la anterior
+      // se conserva. Cubre igual el cambio por chip y el cambio escribiendo
+      // el nombre de la materia.
+      // Hallazgo real (QA 2026-08-04, 3er intento): los DOS turnos del
+      // ida-y-vuelta por chip son selecciones de materia, y el servidor
+      // responde a ambos con pending_math_interaction_id: null sin insertar
+      // ninguna fila (route.ts:1395 devuelve temprano). Archivar ese null
+      // borraba el pendiente: primero lo intenté por materiaActiva (borraba el
+      // de la materia que se dejaba) y luego por materia_detectada (borraba el
+      // de la materia a la que se volvía). Las dos veces el borrado ocurría en
+      // el turno de cambio.
+      //
+      // La respuesta de una selección de materia no dice nada sobre el estado
+      // de los ejercicios: no se archiva. Solo los turnos reales de trabajo
+      // actualizan el mapa, bajo su propia materia.
+      const fueSeleccionDeMateria =
+        estadoActivo === 'esperando_materia' || estadoActivo === 'esperando_materia_olimpiadas'
+      if ('pending_math_interaction_id' in data && !fueSeleccionDeMateria) {
+        pendientesPorMateria.current[clavePendiente(materiaActiva)] = data.pending_math_interaction_id
+        setPendingMathId(data.pending_math_interaction_id)
+      }
       if (data.nuevo_estado && data.nuevo_estado !== 'esperando_confirmacion_cambio_materia') setMateriaSugerida('')
 
       setMensajes(prev => [...prev, {
@@ -817,7 +872,22 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
         setError(e instanceof Error && e.message ? e.message : 'Hubo un problema. Intenta de nuevo.')
       }
     }
-    finally { clearTimeout(timeoutId); setCargando(false); inputRef.current?.focus() }
+    // Hallazgo real (QA 2026-07-31 y confirmado en rondas posteriores):
+    // "Enter no dispara el envío tras cambiar de materia; hay que usar el
+    // botón". La causa es de tiempos, no de la tecla: el textarea está
+    // disabled={cargando}, y aquí se llamaba a focus() en el mismo tick que
+    // setCargando(false). React todavía no había re-renderizado, así que el
+    // elemento seguía deshabilitado y un elemento deshabilitado no puede
+    // recibir foco — la llamada se perdía en silencio. El foco se quedaba
+    // donde estuviera (por ejemplo el chip de materia recién pulsado), y
+    // Enter activaba ESE botón en vez de enviar el mensaje.
+    // Se difiere el foco a después del repintado, cuando el textarea ya está
+    // habilitado.
+    finally {
+      clearTimeout(timeoutId)
+      setCargando(false)
+      requestAnimationFrame(() => inputRef.current?.focus())
+    }
   }
 
   // Conversación continua: cuando el búho termina de hablar, reactiva el
@@ -1642,6 +1712,10 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
             setSugerencias([])
             setEstadoChat('esperando_materia')
             reiniciarVentanaReporte()
+            // Al cambiar de grado el ejercicio pendiente ya no aplica: es de
+            // otro nivel. Este es el único punto donde el mapa debe vaciarse
+            // (ver la nota en reiniciarVentanaReporte).
+            pendientesPorMateria.current = {}
             await supabase.from('usuarios').update({ grado }).eq('id', usuario.id)
             const res: Response = await fetch('/api/preguntar', {
               method: 'POST',
@@ -1787,10 +1861,30 @@ export default function ChatInterface({ usuario, materiasDisponibles: materiasIn
                       // poder alcanzarse desde la UI mientras tanto.
                       .filter(mat => !(mat.includes('Conversar') || mat.includes('Conversation') || mat.includes('»')))
                       .map((mat, i) => {
-                      const esOlimpiadas = mat.toLowerCase().includes('olimpiadas') || mat.toLowerCase().includes('olympiad')
+                      // Hallazgo real CRÍTICO (captura del usuario,
+                      // 2026-08-04): esto usaba includes('olimpiadas'), así
+                      // que una materia REAL del grado llamada "Olimpiadas de
+                      // Ciencias - Matemática" también entraba aquí. En vez de
+                      // seleccionarse a sí misma, abría el submenú de cinco
+                      // botones fijos, y ese botón enviaba "Olimpiadas -
+                      // Matemática" — el programa COMPARTIDO, que no existe
+                      // para ese colegio. El alumno nunca podía llegar a su
+                      // propia carpeta, y por eso ningún arreglo del servidor
+                      // cambiaba nada.
+                      //
+                      // El submenú es solo para el chip del PROGRAMA
+                      // compartido, que se llama exactamente "Olimpiadas de
+                      // Ciencias". Cualquier otra materia que mencione
+                      // olimpiadas en su nombre es una materia normal del
+                      // grado y se selecciona como tal.
+                      const claveMat = normalizarNombreMateria(mat)
+                      // Estilo de trofeo para cualquier materia de olimpiadas...
+                      const pareceOlimpiadas = claveMat.includes('olimpiadas') || claveMat.includes('olympiad')
+                      // ...pero el submenú solo para el chip del programa compartido.
+                      const esOlimpiadas = claveMat === 'olimpiadas de ciencias' || claveMat === 'science olympiad'
                       const esActiva = !esOlimpiadas && mismaMateria(mat, materiaAlumno)
-                      const bg = esOlimpiadas ? 'linear-gradient(135deg,#d97706,#b45309)' : (MATERIA_COLORES[mat] || 'linear-gradient(135deg,#7C3AED,#5B21B6)')
-                      const IconMateria = esOlimpiadas ? Trophy : (MATERIA_ICONOS[mat] || GraduationCap)
+                      const bg = pareceOlimpiadas ? 'linear-gradient(135deg,#d97706,#b45309)' : (MATERIA_COLORES[mat] || 'linear-gradient(135deg,#7C3AED,#5B21B6)')
+                      const IconMateria = pareceOlimpiadas ? Trophy : (MATERIA_ICONOS[mat] || GraduationCap)
                       return (
                         <button key={i} className="o-chip"
                           style={esActiva ? {

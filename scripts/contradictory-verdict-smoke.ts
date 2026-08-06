@@ -39,6 +39,68 @@ function main() {
   const menormasTarde = 'Vamos a repasar con calma el concepto de reacciones químicas balanceadas, cómo se identifican los reactivos limitantes, qué papel juega la estequiometría en la vida real, y por qué es tan importante dominarla antes del examen final de la unidad. '.repeat(2) + 'Dicho esto, hay un error en un ejercicio anterior que ya corregiste.'
   assert.equal(detectarVeredictoAutocontradictorio(menormasTarde), false)
 
+  // Hallazgo real (QA semanal en vivo, 2026-07-31, Física — Americano,
+  // trabajo-energía): el patrón reapareció por dos huecos a la vez. El
+  // modelo anunció el error con palabras que no estaban cubiertas ("Aquí
+  // está el único error") y lo hizo DENTRO del Paso 3 (carácter 309), fuera
+  // de la ventana de apertura — y acto seguido confirmó que el despeje del
+  // alumno estaba bien.
+  const casoFisicaTrabajoEnergia = [
+    'Vamos a revisar tu procedimiento paso a paso.',
+    '',
+    'Paso 1: Calculaste el trabajo neto como W = F·d = 25 N × 4 m = 100 J. Correcto, esa es la definición de trabajo para una fuerza constante.',
+    '',
+    'Paso 2: Aplicaste el teorema trabajo-energía, W = ΔEc = ½mv². Bien planteado.',
+    '',
+    'Paso 3: Aquí está el único error. Despejaste v = √(2W/m) = √50 ≈ 7.07 m/s, está bien.',
+    '',
+    'Tu respuesta final de 7.07 m/s es correcta.',
+  ].join('\n')
+
+  assert.ok(
+    casoFisicaTrabajoEnergia.indexOf('Aquí está el único error') > 260,
+    'el caso debe tener el anuncio FUERA de la ventana de apertura, que es lo que falló'
+  )
+  assert.equal(
+    detectarVeredictoAutocontradictorio(casoFisicaTrabajoEnergia), true,
+    'debe detectar el anuncio de error contradicho aunque aparezca a mitad del desglose'
+  )
+
+  const fisicaReparado = repararVeredictoAutocontradictorio(casoFisicaTrabajoEnergia, false)
+  assert.doesNotMatch(fisicaReparado, /único error/i, 'no debe conservar el anuncio de error desmentido')
+  // Lo que NO debe pasar: que reparar se coma los pasos anteriores. Con el
+  // corte desde el inicio que hacía la versión previa, Paso 1 y Paso 2
+  // desaparecían enteros.
+  assert.match(fisicaReparado, /Paso 1: Calculaste el trabajo neto/, 'debe conservar el Paso 1')
+  assert.match(fisicaReparado, /Paso 2: Aplicaste el teorema/, 'debe conservar el Paso 2')
+  assert.match(fisicaReparado, /Paso 3: Despejaste v/, 'debe conservar el Paso 3 sin la frase del error')
+  assert.match(fisicaReparado, /7\.07 m\/s es correcta/, 'debe conservar el veredicto final correcto')
+
+  // Una corrección REAL a mitad del desglose no es contradicción: el modelo
+  // encontró un error, lo enmendó, y por eso lo que sigue ya está bien. Este
+  // caso no debe tocarse — es el comportamiento deseado.
+  const correccionLegitima = [
+    'Vamos a revisar tu procedimiento paso a paso.',
+    '',
+    'Paso 1: El planteamiento del trabajo neto W = F·d = 100 J es correcto y está bien justificado.',
+    '',
+    'Paso 2: El teorema trabajo-energía quedó bien escrito, sin problemas hasta aquí.',
+    '',
+    'Paso 3: Aquí está el único error. Deberías haber usado √(2W/m) y no √(W/m); corrigiendo queda v = 7.07 m/s.',
+  ].join('\n')
+  assert.equal(
+    detectarVeredictoAutocontradictorio(correccionLegitima), false,
+    'una corrección real (con "deberías"/"corrigiendo") no debe tratarse como contradicción'
+  )
+
+  // "Está bien" es una confirmación débil: sirve pegada al anuncio, pero no
+  // debe disparar el guard cuando aparece lejos y referida a otra cosa.
+  const errorGenuinoConEstaBien = 'Hay un error en tu proceso: revisa el paso 2 con calma, porque el signo cambia al despejar. Cuando termines, fíjate si el planteamiento inicial está bien.'
+  assert.equal(
+    detectarVeredictoAutocontradictorio(errorGenuinoConEstaBien), false,
+    '"está bien" lejos del anuncio y sobre otra cosa no es una contradicción'
+  )
+
   console.log('contradictory-verdict smoke passed')
 }
 

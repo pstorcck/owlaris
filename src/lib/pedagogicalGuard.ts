@@ -1,3 +1,5 @@
+import { respuestaConfirmaAcierto } from './contradictoryVerdict'
+
 type GuardOptions = {
   pregunta: string
   tipoPregunta: 'crisis' | 'formativa' | 'academica'
@@ -302,6 +304,23 @@ export function buildWelcomeMessage(idiomaIngles: boolean): string {
 
 export function guardNoFinalAnswer(text: string, options: GuardOptions): { text: string; guardActivado: boolean } {
   if (!text || !shouldGuideWithoutFinalAnswer(options)) {
+    return { text, guardActivado: false }
+  }
+
+  // Hallazgo real (QA semanal en vivo, Estadística 5to Bach): ante un
+  // procedimiento 100% correcto, la respuesta abrió con "Estás cerca.
+  // Revisemos qué operación ayuda a avanzar." y acto seguido confirmó los 4
+  // pasos y cerró "Tu procedimiento es correcto". Esa apertura sale de
+  // GUIA_SIN_ANUNCIO_ES, que este guard antepone al activarse: el resultado
+  // es exactamente el patrón contradictorio que se venía persiguiendo, en
+  // variante suave, y por eso "reducía pero no eliminaba" pese a los ajustes
+  // de prompt — no lo generaba el modelo.
+  //
+  // Cuando la respuesta CONFIRMA el trabajo que el alumno ya hizo, no hay
+  // nada que proteger: la respuesta final la produjo él, no se la estamos
+  // entregando. Recortarla y anteponerle una frase de "todavía te falta" solo
+  // siembra una duda falsa sobre su propio acierto.
+  if (respuestaConfirmaAcierto(text)) {
     return { text, guardActivado: false }
   }
 

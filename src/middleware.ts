@@ -1,24 +1,15 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
+import { esRutaPublica } from '@/lib/rutasPublicas'
 
 export async function middleware(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request })
 
   const { pathname } = request.nextUrl
 
-  // Rutas completamente públicas — sin verificar sesión
-  // Hallazgo real (funcionalidad solicitada, 2026-07-13): recuperar
-  // contraseña necesita /auth/callback (recibe el código del enlace del
-  // correo ANTES de que exista sesión) y /reset-password (la página donde
-  // se establece la nueva contraseña, ya con sesión de recuperación) como
-  // rutas públicas — sin esto, el middleware redirige a /login antes de
-  // que el código pueda intercambiarse por una sesión.
-  if (pathname === '/signup' ||
-      pathname === '/login' ||
-      pathname === '/padres/login' ||
-      pathname === '/reset-password' ||
-      pathname.startsWith('/auth/callback') ||
-      pathname.startsWith('/api/signup')) {
+  // Rutas completamente públicas — sin verificar sesión. La lista vive en
+  // src/lib/rutasPublicas.ts para poder cubrirla con un test de regresión.
+  if (esRutaPublica(pathname)) {
     return supabaseResponse
   }
 
