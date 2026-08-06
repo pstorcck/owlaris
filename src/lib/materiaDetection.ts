@@ -164,6 +164,50 @@ const CATEGORIA_A_PALABRAS_CLASE_MATERIA: Record<string, string[]> = {
   'Inglés': ['english', 'ingl'],
 }
 
+// Hallazgo real (reporte del usuario, 2026-08-04, Ciencias 3ero Básico): el
+// alumno eligió Ciencias por el chip, preguntó sobre velocidad y tiempo, y el
+// tutor le ofreció cambiarse a "Física" — una clase que en 3ero Básico ni
+// siquiera existe en su colegio. Dos motivos independientes, los dos aquí:
+//
+// 1. resolverMateriaRealDisponible ofrecía la categoría detectada aunque NO
+//    estuviera entre las materias del alumno (el `|| categoriaDetectada` del
+//    final). Ofrecer un cambio a algo que no existe nunca es correcto.
+// 2. Ciencias Naturales es la materia PARAGUAS: Física, Química y Biología son
+//    ramas suyas, sobre todo en básicos. Que una pregunta de velocidad
+//    "parezca de Física" no es motivo para sacar al alumno de Ciencias — el
+//    tema está cubierto ahí.
+const PARAGUAS_CIENCIAS = /(?:ciencias?\s+naturales?|natural\s+science|^\s*ciencias?\s*$|\bscience\b)/i
+const RAMAS_DE_CIENCIAS = ['Física', 'Química', 'Biología']
+
+export function esMateriaParaguasDeCiencias(materia: string): boolean {
+  const texto = (materia || '').toLowerCase()
+  // "Ciencias Sociales" contiene "ciencias" pero no es la materia paraguas de
+  // las ciencias naturales.
+  if (/social/i.test(texto)) return false
+  return PARAGUAS_CIENCIAS.test(texto)
+}
+
+// ¿Ofrecer este cambio de materia tiene sentido? Devuelve la materia real que
+// se debe ofrecer, o null si no hay que ofrecer nada.
+export function materiaParaOfrecerCambio(
+  categoriaDetectada: string,
+  materiaActual: string,
+  materiasDisponibles: string[]
+): string | null {
+  // Una rama de ciencias dentro de la materia paraguas no es un cambio.
+  if (esMateriaParaguasDeCiencias(materiaActual) && RAMAS_DE_CIENCIAS.includes(categoriaDetectada)) {
+    return null
+  }
+  const resuelta = resolverMateriaRealDisponible(categoriaDetectada, materiasDisponibles)
+  // Sin lista de materias no se puede comprobar nada; se conserva el
+  // comportamiento anterior en vez de bloquear todos los cambios.
+  if (!Array.isArray(materiasDisponibles) || materiasDisponibles.length === 0) return resuelta
+  // Si lo que se iba a ofrecer no está entre las materias del alumno, no se
+  // ofrece: esa clase no existe para él.
+  const existe = materiasDisponibles.some((m) => m === resuelta || normalizarMateria(m) === normalizarMateria(resuelta))
+  return existe ? resuelta : null
+}
+
 export function resolverMateriaRealDisponible(categoriaDetectada: string, materiasDisponibles: string[]): string {
   if (!Array.isArray(materiasDisponibles) || materiasDisponibles.length === 0) return categoriaDetectada
   const exacta = materiasDisponibles.find((m) => normalizarMateria(m) === categoriaDetectada)

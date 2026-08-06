@@ -11,7 +11,7 @@ import { pareceIdiomaDistinto } from '@/lib/languageDetection'
 import { buscarStaffColegio, buscarSuperadmins, elegirFuenteDestinatariosAlerta, resolverDestinatariosAlerta, type DestinatarioAlerta } from '@/lib/alertaEmergencia'
 import { verificarLimiteFrecuencia } from '@/lib/rateLimit'
 import { isExplicitTableRequest, looksLikeMarkdownTable, sanitizeChatFormatting } from '@/lib/chatFormatting'
-import { detectarMateriaDesdeTexto, esClaseDePracticaDeIngles, isLanguageSwitchRequest, materiaActualEnSistemaCNB, normalizarMateria, resolverMateriaRealDisponible } from '@/lib/materiaDetection'
+import { detectarMateriaDesdeTexto, esClaseDePracticaDeIngles, isLanguageSwitchRequest, materiaActualEnSistemaCNB, materiaParaOfrecerCambio, normalizarMateria, resolverMateriaRealDisponible } from '@/lib/materiaDetection'
 import { isExplicitCourseSwitchRequest } from '@/lib/courseSwitchDetection'
 import { detectarPatronErrores, isReviewMistakesRequest, primeraOperacionValida } from '@/lib/mistakeReview'
 import { limpiarTemaGeneral } from '@/lib/temaGeneral'
@@ -1597,8 +1597,17 @@ export async function POST(req: NextRequest) {
         // 8"; "Biología" es exclusiva de Grado 10 ahí). Se resuelve contra
         // la materia real disponible del alumno antes de ofrecerla.
         const materiasDisponiblesParaAviso: string[] = Array.isArray(body.materias_disponibles) ? body.materias_disponibles : []
-        const materiaParaOfrecer = resolverMateriaRealDisponible(materiaDetectada, materiasDisponiblesParaAviso)
-        return NextResponse.json({ respuesta: 'Estamos en ' + materia_id + '. "' + pregunta.trim() + '" parece un tema de ' + materiaParaOfrecer + '. ¿Quieres seguir con ' + materia_id + ' o cambiar a ' + materiaParaOfrecer + '?', nuevo_estado: 'esperando_confirmacion_cambio_materia', materia_sugerida: materiaParaOfrecer, tokens: 0 })
+        // Hallazgo real (reporte del usuario, 2026-08-04, Ciencias 3ero
+        // Básico): se ofrecía cambiar a "Física" por una pregunta de velocidad
+        // y tiempo, aunque en ese grado no existe la clase de Física y aunque
+        // Ciencias Naturales cubre ese tema. materiaParaOfrecerCambio devuelve
+        // null en ambos casos y el turno sigue normal, respondiendo en la
+        // materia elegida.
+        const materiaParaOfrecer = materiaParaOfrecerCambio(materiaDetectada, materia_id, materiasDisponiblesParaAviso)
+        if (materiaParaOfrecer) {
+          return NextResponse.json({ respuesta: 'Estamos en ' + materia_id + '. "' + pregunta.trim() + '" parece un tema de ' + materiaParaOfrecer + '. ¿Quieres seguir con ' + materia_id + ' o cambiar a ' + materiaParaOfrecer + '?', nuevo_estado: 'esperando_confirmacion_cambio_materia', materia_sugerida: materiaParaOfrecer, tokens: 0 })
+        }
+        console.log(`⚠️ Cambio de materia NO ofrecido: "${materiaDetectada}" no está disponible para el alumno o es una rama de ${materia_id}`)
       }
     }
 
